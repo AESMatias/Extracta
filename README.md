@@ -18,7 +18,7 @@ It is built to run on a **2 GB RAM server**: documents are processed one at a ti
 service has a memory limit and PDFs are deleted as soon as they are processed.
 
 > **Status:** under construction, step by step. Working today: configuration, the minimal web
-> app (`/health`), the extraction schema, the Supabase database and streaming upload storage. Detailed progress lives in
+> app (`/health`), the extraction schema, the Supabase database, streaming upload storage and PDF text extraction. Detailed progress lives in
 > the [roadmap](02-DOCS/wiki/ftd/idp-mvp.md).
 
 ---
@@ -117,7 +117,7 @@ flowchart LR
 |---|---|---|
 | Web / UI | Flask 3.1 + Jinja2, gunicorn | Upload, status, CSV export |
 | Queue | Celery 5.6 + Redis 8 | Background processing, temporary results |
-| Text extraction | pdfplumber | Text from digital PDFs |
+| Text extraction | pdfplumber | Text from digital PDFs (scanned PDFs need OCR, not in the MVP) |
 | LLM | Gemini (`google-genai`), optional OpenAI | Classify and extract structured data |
 | Validation | Pydantic v2, pydantic-settings | Output schema and configuration |
 | Database | Supabase (PostgreSQL 17) + SQLAlchemy 2 + psycopg 3 | Storage (persistent mode) |
@@ -323,8 +323,8 @@ pdf_process_pipeline/
 │   ├── schemas.py           ✅ DocumentSchema: what the LLM must return
 │   ├── db.py, models.py     ✅ Supabase connection and documents table (RLS on)
 │   ├── storage.py           ✅ Streaming upload to /tmp_uploads
-│   ├── pdf_text.py          ⏳ Text extraction with pdfplumber
-│   ├── llm/                 ⬜ Common interface + Gemini + OpenAI + selector
+│   ├── pdf_text.py          ✅ Text extraction with pdfplumber
+│   ├── llm/                 ⏳ Common interface + Gemini + OpenAI + selector
 │   ├── tasks.py             ⬜ Celery task (extract → LLM → save → delete PDF)
 │   ├── export.py            ⬜ Individual and unified CSV
 │   └── web/                 ⬜ Routes, Jinja2 templates, JS and charts
