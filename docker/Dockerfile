@@ -8,6 +8,7 @@ FROM python:3.12-slim AS builder
 
 ENV POETRY_VERSION=2.5.1 \
     POETRY_VIRTUALENVS_IN_PROJECT=true \
+    POETRY_VIRTUALENVS_OPTIONS_NO_PIP=true \
     POETRY_NO_INTERACTION=1 \
     PIP_NO_CACHE_DIR=1
 
@@ -46,9 +47,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:${PATH}"
 
+# No package installer at runtime: pip is not needed to run the app, and the copy in the base
+# image bundles libraries with known vulnerabilities (found by Trivy). The venv is created
+# without pip (POETRY_VIRTUALENVS_OPTIONS_NO_PIP above).
 # Unprivileged user; the uploads dir is created here so the named volume
 # mounted on it inherits this ownership.
-RUN useradd --create-home --uid 1000 appuser \
+RUN python -m pip uninstall --yes --quiet pip \
+    && useradd --create-home --uid 1000 appuser \
     && mkdir /tmp_uploads \
     && chown appuser:appuser /tmp_uploads
 
