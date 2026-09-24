@@ -5,12 +5,12 @@ description: The non-negotiable principles every rsc-sdd phase obeys.
 tags: [sdd, constitution]
 timestamp: 2026-09-24T00:00:00Z
 topic: sdd
-version: v2.0.0
+version: v2.1.0
 ---
 
 # pdf_process_pipeline (IDP) — Constitution
 
-> Version: v2.0.0 · Ratified: 2026-09-24 · Last amended: 2026-09-24
+> Version: v2.1.0 · Ratified: 2026-09-24 · Last amended: 2026-09-24
 > The non-negotiable principles every rsc-sdd phase obeys. Stack mechanics live in the
 > installed stack skills (`python`, `docker`, `redis`, `supabase`, `postgresdb`); this file
 > ratifies the principle and points at the detail.
@@ -36,8 +36,8 @@ version: v2.0.0
 
 7. All code, identifiers and inline comments are in English. Explanations to the user are in
    Spanish.
-8. Commit messages carry a gitmoji + Conventional Commits (`✨ feat(scope): subject`).
-   Enforced by `.rsc/gitmoji-guard.mjs`.
+~~8. Commit messages carry a gitmoji + Conventional Commits (`✨ feat(scope): subject`).
+   Enforced by `.rsc/gitmoji-guard.mjs`.~~ (superseded by 20)
 
 ## 4. Branching & shipping
 
@@ -81,6 +81,13 @@ version: v2.0.0
 19. No secret is ever committed. Secrets load from the root `.env` (gitignored), which Docker
     Compose reads; `.env.sample` documents every variable with empty or placeholder values.
 
+## 10. Amendments v2.1.0
+
+20. Commit messages carry a gitmoji + Conventional Commits, and the subject is a descriptive
+    sentence starting with an imperative verb that says what the change does
+    (`✨ feat(config): add validated settings loaded from .env`). Commits are referred to by
+    that description, never by hash alone. Gitmoji enforced by `.rsc/gitmoji-guard.mjs`.
+
 ## Definition of Done (the merge bar `verify` runs against)
 
 A change ships only when ALL hold:
@@ -89,7 +96,7 @@ A change ships only when ALL hold:
 - [ ] Ruff format + lint clean (principle 4).
 - [ ] mypy passes (principle 5).
 - [ ] Tests pass; coverage ≥ 70% on changed code (principle 6).
-- [ ] English code, gitmoji commit (principles 7-8).
+- [ ] English code; gitmoji commit with a descriptive imperative subject (principles 7, 20).
 - [ ] On a branch, authored by the human (principles 9-10).
 - [ ] No secret committed; `.env.sample` updated for new variables (principle 19).
 - [ ] RAM/disk rules intact: concurrency 1, memory limits, streaming, cleanup (principles 12-15).
@@ -102,3 +109,4 @@ A change ships only when ALL hold:
 |------|---------|--------|-----|
 | 2026-09-24 | v1.0.0 | Ratified initial constitution. | Project kickoff. |
 | 2026-09-24 | v2.0.0 | Struck 2 → 18: OpenAI SDK replaced by a provider-agnostic LLM layer, Gemini Flash by default. Struck 11 → 19: secrets in root `.env`. | Owner prefers Gemini credits and a model switchable from `.env`; Compose reads root `.env`. |
+| 2026-09-24 | v2.1.0 | Struck 8 → 20: commit subjects must be descriptive imperative sentences; commits referenced by description, not hash. | Owner reviews step by step and a bare hash tells nothing. |
