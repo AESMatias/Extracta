@@ -20,7 +20,7 @@ service has a memory limit and PDFs are deleted as soon as they are processed.
 > **Status:** under construction, step by step. Working today: configuration, the minimal web
 > app (`/health`), the extraction schema, the Supabase database, streaming upload storage, PDF text extraction, LLM
 > extraction with Gemini (≈ USD 0.0006 per invoice) and the Celery worker that processes each PDF
-> in persistent or ephemeral mode. Detailed progress lives in
+> in persistent or ephemeral mode, and CSV export. Detailed progress lives in
 > the [roadmap](02-DOCS/wiki/ftd/idp-mvp.md).
 
 ---
@@ -79,8 +79,10 @@ In both modes the PDF is deleted from disk when its task finishes.
 ### Export and visualize
 
 - **Live table and charts** (Chart.js) as each document finishes.
-- **Individual CSV**: one document (its line items as rows).
-- **Unified CSV**: the whole batch, one row per document.
+- **Individual CSV**: one document; invoices, receipts, orders and quotes get one row per line item.
+- **Unified CSV**: the whole batch, one row per document, always with the same 64 columns (derived
+  from the schema), so exports from different batches can be stacked in a spreadsheet.
+- Both are UTF-8 with BOM (accents display correctly in Excel) and streamed row by row.
 
 ---
 
@@ -328,8 +330,8 @@ pdf_process_pipeline/
 │   ├── pdf_text.py          ✅ Text extraction with pdfplumber
 │   ├── llm/                 ✅ Common interface + Gemini + OpenAI + selector
 │   ├── tasks.py             ✅ Celery task (extract → LLM → save → delete PDF)
-│   ├── export.py            ⏳ Individual and unified CSV
-│   └── web/                 ⬜ Routes, Jinja2 templates, JS and charts
+│   ├── export.py            ✅ Individual and unified CSV
+│   └── web/                 ⏳ Routes, Jinja2 templates, JS and charts
 ├── tests/                   Tests (pytest)
 ├── docker/Dockerfile        Multi-stage image: builder → dev → runtime
 ├── docker-compose.yml       web + worker + redis with memory limits

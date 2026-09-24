@@ -45,8 +45,8 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
 | 8 | PDF text extraction | `app/pdf_text.py` + test | Text extracted from a sample PDF | ✅ Add page-by-page PDF text extraction with an LLM character cap |
 | 9 | LLM layer | `app/llm/{base,gemini,openai,factory}.py` + tests | Factory picks provider from `.env`; Gemini returns a `DocumentSchema` | ✅ Add provider-agnostic LLM extraction with Gemini and optional OpenAI |
 | 10 | Celery task | `app/tasks.py` + test | `save_to_db` true → row in Supabase; false → no DB call; both return the data (Redis backend, TTL); PDF deleted in every outcome | ✅ Add Celery document processing task with persistent and ephemeral modes |
-| 11 | CSV export | `app/export.py` + test | Individual (one doc, line items as rows) and unified (one row per doc) CSV; formula injection escaped | ⏳ next |
-| 12 | Web routes | `app/web/routes.py` + tests | `POST /upload` (+ `save_to_db`) → task ids; `GET /tasks/<id>` → status + result; `POST /export/csv/individual` and `/unified` stream CSV | ⬜ |
+| 11 | CSV export | `app/export.py` + test | Individual (one doc, line items as rows) and unified (one row per doc) CSV; formula injection escaped | ✅ Add individual and unified CSV export with formula injection protection |
+| 12 | Web routes | `app/web/routes.py` + tests | `POST /upload` (+ `save_to_db`) → task ids; `GET /tasks/<id>` → status + result; `POST /export/csv/individual` and `/unified` stream CSV | ⏳ next |
 | 13 | UI | `app/web/templates/`, `app/web/static/` | Dropzone + mode toggle + polling + results table + Chart.js charts + both CSV buttons | ⬜ |
 | 14 | Verify | — | ruff, mypy, pytest ≥ 70% coverage all green; Trivy re-scan | ⬜ |
 | 15 | End-to-end + merge | — | Batch of real PDFs in both modes under the 2 GB limits; merged to `main` | ⬜ |
@@ -102,6 +102,13 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
   82 MiB / 384 MiB, redis 7 MiB / 128 MiB. Retries only `LLMTransientError` and
   `OperationalError` (10 s, 20 s, 40 s backoff, max 3) and keeps the PDF only while a retry is
   pending.
+- Step 11: TDD red → green: 17 export tests (121 total, 96% coverage; `export.py` 99%); ruff
+  and mypy clean. Individual CSV: one row per line item for commercial documents (24 columns
+  for an invoice), one row otherwise. Unified CSV: 64 columns derived from `DocumentSchema`,
+  identical for every batch. UTF-8 with BOM; text starting with `= + - @ TAB CR` is prefixed
+  with `'`, numbers never are (negative amounts stay numeric). Request payloads are validated
+  (`ExportItem`, `UnifiedExportRequest`: 1 to 500 documents). Both exports are generators.
+  Known limit: spreadsheets may drop leading zeros of numeric-looking text such as "004512".
 
 ## How to run the quality gates
 
@@ -116,5 +123,5 @@ docker run --rm --env-file .env -v "$PWD":/src -w /src pdf-process-pipeline:dev 
 
 ## Next
 
-Step 11 — `app/export.py`: individual CSV (one document, line items as rows) and unified CSV
-(one row per document) from validated `DocumentSchema` data, escaping formula injection.
+Step 12 — `app/web/routes.py`: Flask blueprint with `POST /upload` (streaming, `save_to_db`),
+`GET /tasks/<id>` (status + result from Redis) and the two streamed CSV endpoints.
