@@ -79,10 +79,17 @@ In both modes the PDF is deleted from disk when its task finishes.
 ### Export and visualize
 
 - **Live table and charts** (Chart.js) as each document finishes.
-- **Individual CSV**: one document; invoices, receipts, orders and quotes get one row per line item.
-- **Unified CSV**: the whole batch, one row per document, always with the same 64 columns (derived
+- **Three export formats**, each for one document or for the whole batch:
+
+| Format | Best for | Details |
+|---|---|---|
+| **CSV** | Any tool, databases, scripts | UTF-8 with BOM (accents display in Excel), streamed row by row |
+| **XLSX** | Excel, Google Sheets, LibreOffice | Numbers and dates keep their type (sum, filter, sort), leading zeros such as `004512` survive, bold frozen header with filters |
+| **JSON** | Other systems and APIs | The original nested structure, one object per document |
+
+- **Individual** export: one document; invoices, receipts, orders and quotes get one row per line item.
+- **Unified** export: the whole batch, one row per document, always with the same 64 columns (derived
   from the schema), so exports from different batches can be stacked in a spreadsheet.
-- Both are UTF-8 with BOM (accents display correctly in Excel) and streamed row by row.
 
 ---
 
@@ -102,7 +109,7 @@ flowchart LR
     K -. "deletes PDF" .-> V
     B -- "GET /tasks/{id} (polling)" --> W
     W -- "status + result" --> R
-    B -- "POST /export/csv/*" --> W
+    B -- "POST /export/{csv,xlsx,json}/*" --> W
 ```
 
 **Life of a document:**
@@ -119,7 +126,8 @@ flowchart LR
 
 | Piece | Technology | Role |
 |---|---|---|
-| Web / UI | Flask 3.1 + Jinja2, gunicorn | Upload, status, CSV export |
+| Web / UI | Flask 3.1 + Jinja2, gunicorn | Upload, status, export |
+| Export | csv (stdlib), XlsxWriter, json | CSV, XLSX and JSON downloads |
 | Queue | Celery 5.6 + Redis 8 | Background processing, temporary results |
 | Text extraction | pdfplumber | Text from digital PDFs (scanned PDFs need OCR, not in the MVP) |
 | LLM | Gemini (`google-genai`), optional OpenAI | Classify and extract structured data |
@@ -134,8 +142,8 @@ flowchart LR
 |---|---|---|---|
 | `POST` | `/upload` | multipart: `files` (1–50 PDFs), `save_to_db` (`true`/`false`, default `false`) | `202` `{"save_to_db", "tasks": [{"task_id", "filename"}], "rejected": [{"filename", "error"}]}` |
 | `GET` | `/tasks/<task_id>` | — | `{"task_id", "status": "pending"\|"processing"\|"completed"\|"failed", "result"?, "error"?}`; `404` if the task is not yours |
-| `POST` | `/export/csv/individual` | JSON `{"filename", "document"}` | CSV download (UTF-8 with BOM) |
-| `POST` | `/export/csv/unified` | JSON `{"items": [{"filename", "document"}, …]}` (1–500) | CSV download |
+| `POST` | `/export/{csv\|xlsx\|json}/individual` | JSON `{"filename", "document"}` | File download in that format |
+| `POST` | `/export/{csv\|xlsx\|json}/unified` | JSON `{"items": [{"filename", "document"}, …]}` (1–500) | File download in that format |
 | `GET` | `/health` | — | `{"status": "ok"}` |
 
 ```bash
@@ -349,7 +357,7 @@ pdf_process_pipeline/
 │   ├── pdf_text.py          ✅ Text extraction with pdfplumber
 │   ├── llm/                 ✅ Common interface + Gemini + OpenAI + selector
 │   ├── tasks.py             ✅ Celery task (extract → LLM → save → delete PDF)
-│   ├── export.py            ✅ Individual and unified CSV
+│   ├── export.py            ✅ Individual and unified export: CSV, XLSX, JSON
 │   ├── celery_app.py        ✅ Celery app shared by web (enqueue) and worker (run)
 │   └── web/                 ✅ HTTP API + task ownership · ⏳ Jinja2 page, JS and charts
 ├── tests/                   Tests (pytest)
@@ -397,7 +405,8 @@ pdf_process_pipeline/
   Supabase's public REST API cannot read it; the app connects as the table owner.
 - **Privacy**: only the last 4 digits of bank accounts are stored; ephemeral mode never writes
   to the database.
-- **CSV**: cells starting with `=`, `+`, `-` or `@` are escaped (spreadsheet formula injection).
+- **Exports**: CSV text cells starting with `=`, `+`, `-` or `@` are escaped, and XLSX writes text as
+  plain string cells, so a malicious PDF cannot inject spreadsheet formulas.
 - **Vulnerabilities**: dependencies scanned with [Trivy](https://trivy.dev) (0 CVEs in
   `poetry.lock`); the base image is reviewed on every release
   ([logged decision](02-DOCS/wiki/sdd/decisions.md)).

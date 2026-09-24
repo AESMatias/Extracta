@@ -1,6 +1,7 @@
 import csv
 import inspect
 import io
+import json
 from typing import Any
 
 import pytest
@@ -11,8 +12,12 @@ from app.export import (
     ExportItem,
     UnifiedExportRequest,
     individual_csv,
+    individual_json,
+    individual_xlsx,
     unified_columns,
     unified_csv,
+    unified_json,
+    unified_xlsx,
 )
 from app.schemas import DocumentSchema
 
@@ -187,3 +192,67 @@ def test_request_is_capped() -> None:
 
     with pytest.raises(ValidationError):
         UnifiedExportRequest.model_validate({"items": [item] * (MAX_EXPORT_ITEMS + 1)})
+
+
+# --------------------------------------------------------------------------- XLSX
+
+
+def workbook(data: bytes) -> Any:
+    from openpyxl import load_workbook
+
+    return load_workbook(io.BytesIO(data))
+
+
+def test_individual_xlsx_keeps_numbers_dates_and_leading_zeros() -> None:
+    sheet = workbook(individual_xlsx(INVOICE, filename="factura.pdf")).active
+
+    header = [cell.value for cell in sheet[1]]
+    first = dict(zip(header, [cell.value for cell in sheet[2]], strict=True))
+    assert sheet.max_row == 3  # header + 2 line items
+    assert first["total_amount"] == 119000  # a real number: Excel can sum it
+    assert first["issue_date"].date().isoformat() == "2026-08-15"  # a real date
+    assert first["document_number"] == "004512"  # text: leading zeros survive (unlike CSV)
+    assert first["line_item.description"] == "Consultoría"
+    assert sheet.freeze_panes == "A2"  # header stays visible while scrolling
+    assert sheet.auto_filter.ref is not None  # filter buttons on the header
+
+
+def test_xlsx_stores_formula_like_text_as_plain_text() -> None:
+    evil = doc({"document_type": "other", "summary": '=HYPERLINK("http://evil")'})
+
+    sheet = workbook(individual_xlsx(evil, filename="a.pdf")).active
+
+    cell = sheet.cell(row=2, column=5)  # summary
+    assert cell.value == '=HYPERLINK("http://evil")'  # exact text, no quote prefix needed
+    assert cell.data_type == "s"  # a string cell, never a formula
+
+
+def test_unified_xlsx_has_the_same_columns_as_the_csv() -> None:
+    items = [ExportItem(filename="a.pdf", document=INVOICE), ExportItem(filename="b.pdf", document=BANK)]
+
+    sheet = workbook(unified_xlsx(items)).active
+
+    assert [cell.value for cell in sheet[1]] == unified_columns()
+    assert sheet.max_row == 3
+    assert sheet.cell(row=3, column=unified_columns().index("bank_statement.closing_balance") + 1).value == -50.5
+
+
+# --------------------------------------------------------------------------- JSON
+
+
+def test_individual_json_round_trips_to_the_schema() -> None:
+    data = json.loads(individual_json(ExportItem(filename="factura.pdf", document=INVOICE)))
+
+    assert data["filename"] == "factura.pdf"
+    assert DocumentSchema.model_validate(data["document"]) == INVOICE
+    assert "Consultoría" in individual_json(ExportItem(filename="a.pdf", document=INVOICE)).decode()  # not \\u00ed
+
+
+def test_unified_json_lists_every_document() -> None:
+    items = [ExportItem(filename="a.pdf", document=INVOICE), ExportItem(filename="b.pdf", document=BANK)]
+
+    data = json.loads(unified_json(items))
+
+    assert data["count"] == 2
+    assert [item["filename"] for item in data["items"]] == ["a.pdf", "b.pdf"]
+    assert "exported_at" in data

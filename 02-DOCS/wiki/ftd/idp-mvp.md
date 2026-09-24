@@ -45,7 +45,7 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
 | 8 | PDF text extraction | `app/pdf_text.py` + test | Text extracted from a sample PDF | ✅ Add page-by-page PDF text extraction with an LLM character cap |
 | 9 | LLM layer | `app/llm/{base,gemini,openai,factory}.py` + tests | Factory picks provider from `.env`; Gemini returns a `DocumentSchema` | ✅ Add provider-agnostic LLM extraction with Gemini and optional OpenAI |
 | 10 | Celery task | `app/tasks.py` + test | `save_to_db` true → row in Supabase; false → no DB call; both return the data (Redis backend, TTL); PDF deleted in every outcome | ✅ Add Celery document processing task with persistent and ephemeral modes |
-| 11 | CSV export | `app/export.py` + test | Individual (one doc, line items as rows) and unified (one row per doc) CSV; formula injection escaped | ✅ Add individual and unified CSV export with formula injection protection |
+| 11 | Export (CSV, XLSX, JSON) | `app/export.py` + test | Individual (one doc, line items as rows) and unified (one row per doc) in CSV, XLSX and JSON; formula injection blocked | ✅ Add individual and unified CSV export with formula injection protection |
 | 12 | Web routes | `app/web/routes.py` + tests | `POST /upload` (+ `save_to_db`) → task ids; `GET /tasks/<id>` → status + result; `POST /export/csv/individual` and `/unified` stream CSV | ✅ Add the HTTP API with per-browser task ownership |
 | 13 | UI | `app/web/templates/`, `app/web/static/` | Dropzone + mode toggle + polling + results table + Chart.js charts + both CSV buttons | ⏳ next |
 | 14 | Verify | — | ruff, mypy, pytest ≥ 70% coverage all green; Trivy re-scan | ⬜ |
@@ -120,6 +120,13 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
   columns; persistent mode wrote both rows to Supabase (deleted after); `/tmp_uploads` empty;
   web 104 MiB / 384, worker 144 MiB / 768. Also fixed a compose bug: web and worker built the
   same image concurrently.
+- Step 11b (added after step 12): XLSX and JSON exports next to CSV. `export.py` now builds one
+  table of typed values and writes it as CSV (streamed), XLSX (XlsxWriter: typed numbers and
+  dates, text via `write_string` so formulas never run, frozen header, filters) or JSON (nested,
+  `ensure_ascii=False`). Routes generalized to `/export/{csv|xlsx|json}/{individual|unified}`.
+  164 unit tests, 96% coverage. Real downloads from the stack: XLSX detected as "Microsoft Excel
+  2007+", `004512` kept as text, totals numeric, dates typed. `openpyxl` added to the dev group
+  only, to read the files back in tests.
 
 ## How to run the quality gates
 

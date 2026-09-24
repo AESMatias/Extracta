@@ -14,6 +14,7 @@ dependencies = [
     "psycopg[binary]>=3.3.6,<4",
     # Default LLM provider (Gemini).
     "google-genai>=2.25.0,<3",
+    "xlsxwriter (>=3.2,<4)",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +30,7 @@ pytest = "^9.1.1"
 pytest-cov = "^7.1.0"
 ruff = "^0.16.8"
 mypy = "^2.3.1"
+openpyxl = ">=3.1,<4"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

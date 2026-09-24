@@ -1,4 +1,4 @@
-"""HTTP API: upload PDFs, poll task status, download CSV exports."""
+"""HTTP API: upload PDFs, poll task status, download exports (CSV, XLSX, JSON)."""
 
 import re
 import secrets
@@ -12,7 +12,16 @@ from flask import Blueprint, Response, current_app, request, session, stream_wit
 from pydantic import ValidationError
 
 from app.config import Settings
-from app.export import ExportItem, UnifiedExportRequest, individual_csv, unified_csv
+from app.export import (
+    ExportItem,
+    UnifiedExportRequest,
+    individual_csv,
+    individual_json,
+    individual_xlsx,
+    unified_csv,
+    unified_json,
+    unified_xlsx,
+)
 from app.schemas import summarize_validation_error
 from app.storage import UploadError, delete_file, display_name, save_stream
 from app.web.ownership import TaskOwnership
@@ -113,29 +122,35 @@ def task_status(task_id: str) -> Body:
     return body, 200
 
 
-# --------------------------------------------------------------------------- CSV export
+# --------------------------------------------------------------------------- export (CSV, XLSX, JSON)
+
+_XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+_MIMETYPES = {"csv": "text/csv", "xlsx": _XLSX_MIME, "json": "application/json"}
 
 
 def _attachment(filename: str) -> str:
     # ASCII fallback for old clients, plus the exact UTF-8 name (RFC 6266) for modern browsers.
-    ascii_name = re.sub(r"_+", "_", re.sub(r"[^A-Za-z0-9.-]", "_", filename)).strip("_") or "export.csv"
+    ascii_name = re.sub(r"_+", "_", re.sub(r"[^A-Za-z0-9.-]", "_", filename)).strip("_") or "export"
     return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"
 
 
-def _csv_response(chunks: Iterator[str], filename: str) -> Response:
-    return Response(
-        stream_with_context(chunks),  # streamed row by row, never built in memory
-        mimetype="text/csv",
-        headers={"Content-Disposition": _attachment(filename)},
-    )
+def _download(content: Iterator[str] | bytes, fmt: str, filename: str) -> Response:
+    body = stream_with_context(content) if isinstance(content, Iterator) else content  # CSV streams row by row
+    return Response(body, mimetype=_MIMETYPES[fmt], headers={"Content-Disposition": _attachment(filename)})
 
 
 def _invalid(exc: ValidationError) -> Body:
     return {"error": "Invalid document data.", "details": summarize_validation_error(exc)}, 400
 
 
-@api.post("/export/csv/individual")
-def export_individual() -> Response | Body:
+def _not_found() -> Body:
+    return {"error": "Unknown export format. Use csv, xlsx or json."}, 404
+
+
+@api.post("/export/<fmt>/individual")
+def export_individual(fmt: str) -> Response | Body:
+    if fmt not in _MIMETYPES:
+        return _not_found()
     payload = request.get_json(silent=True)
     if payload is None:
         return {"error": "Send the document as a JSON body."}, 400
@@ -145,11 +160,20 @@ def export_individual() -> Response | Body:
         return _invalid(exc)
 
     stem = re.sub(r"\.pdf$", "", display_name(item.filename), flags=re.IGNORECASE) or "document"
-    return _csv_response(individual_csv(item.document, filename=item.filename), f"{stem}.csv")
+    content: Iterator[str] | bytes
+    if fmt == "csv":
+        content = individual_csv(item.document, filename=item.filename)
+    elif fmt == "xlsx":
+        content = individual_xlsx(item.document, filename=item.filename)
+    else:
+        content = individual_json(item)
+    return _download(content, fmt, f"{stem}.{fmt}")
 
 
-@api.post("/export/csv/unified")
-def export_unified() -> Response | Body:
+@api.post("/export/<fmt>/unified")
+def export_unified(fmt: str) -> Response | Body:
+    if fmt not in _MIMETYPES:
+        return _not_found()
     payload = request.get_json(silent=True)
     if payload is None:
         return {"error": "Send the documents as a JSON body."}, 400
@@ -158,8 +182,15 @@ def export_unified() -> Response | Body:
     except ValidationError as exc:
         return _invalid(exc)
 
+    content: Iterator[str] | bytes
+    if fmt == "csv":
+        content = unified_csv(export.items)
+    elif fmt == "xlsx":
+        content = unified_xlsx(export.items)
+    else:
+        content = unified_json(export.items)
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    return _csv_response(unified_csv(export.items), f"documents-{stamp}.csv")
+    return _download(content, fmt, f"documents-{stamp}.{fmt}")
 
 
 @api.app_errorhandler(413)

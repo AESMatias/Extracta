@@ -190,7 +190,7 @@ def test_session_cookie_is_protected(client: FlaskClient, make_pdf: MakePdf) -> 
 
 
 def rows_of(response: Any) -> list[dict[str, str]]:
-    return list(csv.DictReader(io.StringIO(response.get_data(as_text=True).removeprefix("﻿"))))
+    return list(csv.DictReader(io.StringIO(response.get_data(as_text=True).removeprefix("\ufeff"))))
 
 
 def test_individual_csv_download(client: FlaskClient) -> None:
@@ -239,3 +239,32 @@ def test_export_does_not_need_a_session(app: Flask) -> None:
     response = fresh.post("/export/csv/individual", json={"filename": "a.pdf", "document": INVOICE_DOC})
 
     assert response.status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("fmt", "mimetype", "extension"),
+    [
+        ("csv", "text/csv", ".csv"),
+        ("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xlsx"),
+        ("json", "application/json", ".json"),
+    ],
+)
+def test_every_format_downloads_with_its_type_and_extension(
+    client: FlaskClient, fmt: str, mimetype: str, extension: str
+) -> None:
+    requests = [
+        (f"/export/{fmt}/individual", {"filename": "a.pdf", "document": INVOICE_DOC}),
+        (f"/export/{fmt}/unified", {"items": [{"filename": "a.pdf", "document": INVOICE_DOC}]}),
+    ]
+    for url, payload in requests:
+        response = client.post(url, json=payload)
+        assert response.get_data()  # read the (possibly streamed) body before the next request
+        assert response.status_code == 200
+        assert response.mimetype == mimetype
+        assert f'{extension}"' in response.headers["Content-Disposition"]
+
+
+def test_unknown_export_format_is_404(client: FlaskClient) -> None:
+    response = client.post("/export/pdf/individual", json={"filename": "a.pdf", "document": INVOICE_DOC})
+
+    assert response.status_code == 404
