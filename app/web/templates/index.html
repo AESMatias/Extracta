@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Extracta · Intelligent Document Processing</title>
+  <link rel="stylesheet" href="{{ url_for('ui.static', filename='app.css') }}">
+  <script defer src="{{ chart_js.src }}" integrity="{{ chart_js.integrity }}" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script type="module" src="{{ url_for('ui.static', filename='app.js') }}"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar__inner">
+      <h1 class="brand">Extracta</h1>
+      <p class="tagline">Upload PDFs and get their data as tables, charts, CSV, Excel or JSON.</p>
+    </div>
+  </header>
+
+  <main id="app" class="layout"
+        data-max-upload-mb="{{ max_upload_mb }}"
+        data-max-files="{{ max_files }}"
+        data-result-ttl-minutes="{{ result_ttl_minutes }}">
+
+    <section class="card" aria-labelledby="upload-title">
+      <h2 id="upload-title" class="card__title"><span class="step">1</span> Upload documents</h2>
+
+      <form id="upload-form" novalidate>
+        <label id="dropzone" class="dropzone" for="file-input">
+          <input id="file-input" class="visually-hidden" type="file" name="files" accept="application/pdf,.pdf" multiple>
+          <span class="dropzone__icon" aria-hidden="true">⇪</span>
+          <span class="dropzone__title">Drag PDFs here or <span class="link">browse your files</span></span>
+          <span class="dropzone__hint">Up to {{ max_files }} files, {{ max_upload_mb }} MB each. Digital PDFs only: scanned documents are not supported yet.</span>
+        </label>
+
+        <ul id="selected-files" class="file-list" aria-label="Selected files"></ul>
+
+        <fieldset class="modes">
+          <legend class="modes__legend">Processing mode</legend>
+          <label class="mode">
+            <input type="radio" name="save_to_db" value="false" checked>
+            <span class="mode__text">
+              <strong>Process only</strong>
+              <span class="muted">Nothing is saved. Results expire after {{ result_ttl_minutes }} minutes: export them before.</span>
+            </span>
+          </label>
+          <label class="mode">
+            <input type="radio" name="save_to_db" value="true">
+            <span class="mode__text">
+              <strong>Save to database</strong>
+              <span class="muted">Results are also stored in Supabase.</span>
+            </span>
+          </label>
+        </fieldset>
+
+        <div class="actions">
+          <button id="upload-button" type="submit" class="button button--primary" disabled>Upload and process</button>
+          <button id="clear-selection" type="button" class="button button--ghost" hidden>Clear selection</button>
+        </div>
+      </form>
+
+      <p id="message" class="message" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="card" aria-labelledby="results-title">
+      <div class="card__header">
+        <h2 id="results-title" class="card__title"><span class="step">2</span> Results</h2>
+        <p id="batch-summary" class="muted" aria-live="polite">No documents yet.</p>
+      </div>
+
+      <p id="ttl-notice" class="notice" hidden></p>
+
+      <div class="table-wrap">
+        <table class="results">
+          <thead>
+            <tr>
+              <th scope="col">File</th>
+              <th scope="col">Status</th>
+              <th scope="col">Type</th>
+              <th scope="col">Details</th>
+              <th scope="col">Download</th>
+            </tr>
+          </thead>
+          <tbody id="results-body">
+            <tr class="results__empty"><td colspan="5">Uploaded documents will appear here.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="export-all" role="group" aria-labelledby="export-all-label">
+        <span id="export-all-label" class="export-all__label">Download all completed documents:</span>
+        <button type="button" class="button button--small" data-export-all="csv" disabled>CSV</button>
+        <button type="button" class="button button--small" data-export-all="xlsx" disabled>Excel (XLSX)</button>
+        <button type="button" class="button button--small" data-export-all="json" disabled>JSON</button>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="charts-title">
+      <h2 id="charts-title" class="card__title"><span class="step">3</span> Charts</h2>
+      <p id="charts-empty" class="muted">Charts appear when the first document is completed.</p>
+      <div id="charts" class="charts" hidden>
+        <figure class="chart">
+          <figcaption>Documents by type</figcaption>
+          <div class="chart__canvas"><canvas id="type-chart" role="img" aria-label="Number of documents by type"></canvas></div>
+        </figure>
+        <figure class="chart">
+          <figcaption>Total amount by currency <span class="muted">(invoices, receipts, orders, quotes)</span></figcaption>
+          <div class="chart__canvas"><canvas id="amount-chart" role="img" aria-label="Total amount by currency"></canvas></div>
+        </figure>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer muted">Extracta · data is extracted by an LLM and may contain errors: review it before use.</footer>
+</body>
+</html>
