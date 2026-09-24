@@ -4,7 +4,7 @@ from typing import Protocol
 
 from pydantic import ValidationError
 
-from app.schemas import DocumentSchema
+from app.schemas import DocumentSchema, summarize_validation_error
 
 SYSTEM_PROMPT = (
     "You are a document data extraction engine. You receive the text of one PDF document, "
@@ -51,5 +51,6 @@ def parse_response(raw: str | None) -> DocumentSchema:
         return DocumentSchema.model_validate_json(raw)  # validate the LLM's JSON string against DocumentSchema
     except ValidationError as exc:
         # Report where and why it failed, never the values: they are document content.
-        problems = "; ".join(f"{'.'.join(str(p) for p in err['loc']) or 'root'}: {err['type']}" for err in exc.errors())
-        raise LLMExtractionError(f"LLM output does not match DocumentSchema ({problems})") from None
+        raise LLMExtractionError(
+            f"LLM output does not match DocumentSchema ({summarize_validation_error(exc)})"
+        ) from None

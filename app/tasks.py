@@ -1,4 +1,4 @@
-"""Celery app and the background task that processes one uploaded PDF.
+"""The background task that processes one uploaded PDF (the Celery app lives in app/celery_app.py).
 
 Pipeline: extract text -> LLM -> save to Supabase only if `save_to_db` -> return the data.
 Celery stores the returned data in the Redis result backend for RESULT_TTL_SECONDS, in both
@@ -13,35 +13,16 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from celery import Celery, Task
+from celery import Task
 from sqlalchemy.exc import OperationalError
 
-from app.config import Settings, get_settings
+from app.celery_app import PROCESS_DOCUMENT_TASK, celery_app
+from app.config import get_settings
 from app.db import session_scope
 from app.llm import DocumentExtractor, LLMTransientError, build_extractor
 from app.models import Document
 from app.pdf_text import extract_text
 from app.storage import delete_file
-
-
-def celery_config(settings: Settings) -> dict[str, Any]:
-    return {
-        "broker_url": settings.celery_broker_url,
-        "result_backend": settings.celery_result_backend,
-        "result_expires": settings.result_ttl_seconds,  # ephemeral data disappears from Redis after this
-        "task_track_started": True,  # reports STARTED, so the UI can show "Processing"
-        "task_acks_late": True,  # a task is removed from the queue only after it finishes
-        "worker_prefetch_multiplier": 1,  # never reserve more than the task in progress
-        "task_serializer": "json",
-        "result_serializer": "json",
-        "accept_content": ["json"],  # never unpickle messages
-        "broker_connection_retry_on_startup": True,
-    }
-
-
-celery_app = Celery("pdf_process_pipeline")
-# A callable is evaluated lazily: .env is read when Celery first needs its config, not on import.
-celery_app.add_defaults(lambda: celery_config(get_settings()))
 
 
 @lru_cache
@@ -89,7 +70,7 @@ class ProcessDocumentTask(Task):  # type: ignore[misc]
         return int(min(10 * 2**retries, 300))
 
 
-@celery_app.task(bind=True, base=ProcessDocumentTask, name="process_document")
+@celery_app.task(bind=True, base=ProcessDocumentTask, name=PROCESS_DOCUMENT_TASK)
 def process_document(self: ProcessDocumentTask, file_path: str, filename: str, save_to_db: bool) -> dict[str, Any]:
     settings = get_settings()
     path = Path(file_path)

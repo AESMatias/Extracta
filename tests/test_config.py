@@ -14,6 +14,8 @@ ENV_VARS = (
     "CELERY_BROKER_URL",
     "CELERY_RESULT_BACKEND",
     "RESULT_TTL_SECONDS",
+    "SECRET_KEY",
+    "SESSION_COOKIE_SECURE",
     "UPLOAD_DIR",
     "MAX_UPLOAD_MB",
 )
@@ -30,6 +32,7 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def valid_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://user:secret@db.example.com:5432/app")
+    monkeypatch.setenv("SECRET_KEY", "k" * 32)
 
 
 def load() -> Settings:
@@ -45,6 +48,7 @@ def test_loads_defaults_with_minimal_valid_env(valid_env: None) -> None:
     assert settings.celery_broker_url == "redis://redis:6379/0"
     assert settings.celery_result_backend == "redis://redis:6379/1"  # results apart from the queue
     assert settings.result_ttl_seconds == 3600
+    assert settings.session_cookie_secure is False  # True in production, behind HTTPS
     assert settings.upload_dir == Path("/tmp_uploads")
     assert settings.max_upload_mb == 50
     assert settings.max_upload_bytes == 50 * 1024 * 1024
@@ -52,6 +56,7 @@ def test_loads_defaults_with_minimal_valid_env(valid_env: None) -> None:
 
 def test_gemini_provider_requires_gemini_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@h:5432/d")
+    monkeypatch.setenv("SECRET_KEY", "k" * 32)
 
     with pytest.raises(ValidationError, match="GEMINI_API_KEY"):
         load()
@@ -92,6 +97,7 @@ def test_unknown_provider_is_rejected(valid_env: None, monkeypatch: pytest.Monke
 
 def test_database_url_is_required(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+    monkeypatch.setenv("SECRET_KEY", "k" * 32)
 
     with pytest.raises(ValidationError, match="database_url"):
         load()
@@ -109,7 +115,8 @@ def test_secrets_are_not_exposed_in_repr(valid_env: None) -> None:
     text = repr(load())
 
     assert "test-gemini-key" not in text
-    assert "secret" not in text
+    assert "secret@" not in text
+    assert "k" * 32 not in text
 
 
 def test_get_settings_builds_once(valid_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -144,4 +151,18 @@ def test_result_ttl_must_be_positive(valid_env: None, monkeypatch: pytest.Monkey
     monkeypatch.setenv("RESULT_TTL_SECONDS", value)
 
     with pytest.raises(ValidationError, match="result_ttl_seconds"):
+        load()
+
+
+def test_secret_key_is_required(valid_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SECRET_KEY")
+
+    with pytest.raises(ValidationError, match="secret_key"):
+        load()
+
+
+def test_secret_key_must_be_long(valid_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SECRET_KEY", "too-short")
+
+    with pytest.raises(ValidationError, match="secret_key"):
         load()

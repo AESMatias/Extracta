@@ -13,6 +13,7 @@ def settings() -> Settings:
         _env_file=None,  # type: ignore[call-arg]
         gemini_api_key=SecretStr("test-gemini-key"),
         database_url=SecretStr("postgresql+psycopg://user:secret@db.example.com:5432/app"),
+        secret_key=SecretStr("k" * 32),
     )
 
 
@@ -46,6 +47,7 @@ def test_without_arguments_uses_environment_settings(monkeypatch: pytest.MonkeyP
     monkeypatch.chdir(tmp_path)  # no real .env file here
     monkeypatch.setenv("GEMINI_API_KEY", "env-gemini-key")
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://u:p@h:5432/d")
+    monkeypatch.setenv("SECRET_KEY", "k" * 32)
     get_settings.cache_clear()
 
     try:

@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     celery_result_backend: str = "redis://redis:6379/1"  # task results live apart from the queue
     result_ttl_seconds: int = Field(default=3600, gt=0)  # how long results stay in Redis (ephemeral mode)
 
+    # Signs the session cookie that ties each browser to its own tasks. Generate with:
+    #   python -c "import secrets; print(secrets.token_urlsafe(48))"
+    secret_key: SecretStr = Field(min_length=32)
+    session_cookie_secure: bool = False  # set to true in production (HTTPS only)
+
     upload_dir: Path = Path("/tmp_uploads")
     max_upload_mb: int = Field(default=50, gt=0)
 

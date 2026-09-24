@@ -220,6 +220,7 @@ def settings_for(provider: str, **keys: str) -> Settings:
         "llm_provider": provider,
         "llm_model": "some-model",
         "database_url": SecretStr("postgresql+psycopg://u:p@h:5432/d"),
+        "secret_key": SecretStr("k" * 32),
         **{name: SecretStr(value) for name, value in keys.items()},
     }
     return Settings(_env_file=None, **values)  # type: ignore[call-arg]

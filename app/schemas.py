@@ -17,7 +17,7 @@ from datetime import date
 from enum import StrEnum
 from typing import Annotated, Any, Self
 
-from pydantic import BaseModel, BeforeValidator, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, Field, ValidationError, model_validator
 
 # Shared guidance repeated in descriptions so the LLM sees it next to each field.
 _ANY_LANGUAGE = "Extract it regardless of the document's language; keep names as written."
@@ -227,3 +227,12 @@ class DocumentSchema(BaseModel):
         """The type-specific data of this document, or None for 'other'."""
         name = SECTION_BY_TYPE.get(self.document_type)
         return getattr(self, name) if name else None
+
+
+def summarize_validation_error(exc: ValidationError) -> str:
+    """Where and why validation failed, e.g. 'commercial.issuer.name: missing'.
+
+    Never includes the submitted values: they are document content and must not reach logs
+    or error responses.
+    """
+    return "; ".join(f"{'.'.join(str(p) for p in err['loc']) or 'root'}: {err['type']}" for err in exc.errors())

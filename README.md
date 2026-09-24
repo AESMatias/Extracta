@@ -20,7 +20,7 @@ service has a memory limit and PDFs are deleted as soon as they are processed.
 > **Status:** under construction, step by step. Working today: configuration, the minimal web
 > app (`/health`), the extraction schema, the Supabase database, streaming upload storage, PDF text extraction, LLM
 > extraction with Gemini (≈ USD 0.0006 per invoice) and the Celery worker that processes each PDF
-> in persistent or ephemeral mode, and CSV export. Detailed progress lives in
+> in persistent or ephemeral mode, CSV export and the HTTP API. The browser UI is next. Detailed progress lives in
 > the [roadmap](02-DOCS/wiki/ftd/idp-mvp.md).
 
 ---
@@ -128,6 +128,23 @@ flowchart LR
 | Containers | Docker Compose | The whole system, with memory limits |
 | Dependencies | Poetry | Reproducible `pyproject.toml` + `poetry.lock` |
 
+### HTTP API
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| `POST` | `/upload` | multipart: `files` (1–50 PDFs), `save_to_db` (`true`/`false`, default `false`) | `202` `{"save_to_db", "tasks": [{"task_id", "filename"}], "rejected": [{"filename", "error"}]}` |
+| `GET` | `/tasks/<task_id>` | — | `{"task_id", "status": "pending"\|"processing"\|"completed"\|"failed", "result"?, "error"?}`; `404` if the task is not yours |
+| `POST` | `/export/csv/individual` | JSON `{"filename", "document"}` | CSV download (UTF-8 with BOM) |
+| `POST` | `/export/csv/unified` | JSON `{"items": [{"filename", "document"}, …]}` (1–500) | CSV download |
+| `GET` | `/health` | — | `{"status": "ok"}` |
+
+```bash
+curl -c cookies.txt -F "files=@invoice.pdf" -F "save_to_db=false" http://localhost:8000/upload
+curl -b cookies.txt http://localhost:8000/tasks/<task_id>
+```
+
+The session cookie matters: `/tasks/<id>` only answers the browser (cookie) that uploaded the file.
+
 ---
 
 ## Built for 2 GB of RAM
@@ -205,6 +222,8 @@ if something is missing, the app refuses to start and says what is missing.
 | `RESULT_TTL_SECONDS` | `3600` | How long results stay in Redis; ephemeral data exists only there and in the browser |
 | `UPLOAD_DIR` | `/tmp_uploads` | Volume shared by web and worker |
 | `MAX_UPLOAD_MB` | `50` | Maximum size per PDF |
+| `SECRET_KEY` | — | **Required**, ≥ 32 chars: signs the session cookie that ties tasks to a browser. Generate with `python3 -c "import secrets; print(secrets.token_urlsafe(48))"` |
+| `SESSION_COOKIE_SECURE` | `false` | `true` in production (HTTPS only) |
 
 ### Which Supabase connection string?
 
@@ -331,7 +350,8 @@ pdf_process_pipeline/
 │   ├── llm/                 ✅ Common interface + Gemini + OpenAI + selector
 │   ├── tasks.py             ✅ Celery task (extract → LLM → save → delete PDF)
 │   ├── export.py            ✅ Individual and unified CSV
-│   └── web/                 ⏳ Routes, Jinja2 templates, JS and charts
+│   ├── celery_app.py        ✅ Celery app shared by web (enqueue) and worker (run)
+│   └── web/                 ✅ HTTP API + task ownership · ⏳ Jinja2 page, JS and charts
 ├── tests/                   Tests (pytest)
 ├── docker/Dockerfile        Multi-stage image: builder → dev → runtime
 ├── docker-compose.yml       web + worker + redis with memory limits
@@ -368,6 +388,11 @@ pdf_process_pipeline/
 - **Secrets** only in `.env` (ignored by git and by `.dockerignore`, so it never enters the
   image); settings use `SecretStr` so secrets never show up in logs.
 - **Non-root container**: the app runs as `appuser`.
+- **Task ownership** (no user accounts yet): each browser gets a random owner token in a signed
+  session cookie (`HttpOnly`, `SameSite=Lax`, `Secure` in production) and only that browser can
+  read its tasks; any other request for a task id gets `404`. Ownership expires with the results.
+- **No access logs of task URLs**: gunicorn runs without an access log, so task ids do not end up
+  in log files.
 - **Supabase**: the `documents` table has Row Level Security enabled (no policies), so
   Supabase's public REST API cannot read it; the app connects as the table owner.
 - **Privacy**: only the last 4 digits of bank accounts are stored; ephemeral mode never writes

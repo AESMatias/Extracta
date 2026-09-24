@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 from pydantic import SecretStr
 
+from app import celery_app as celery_module
 from app import tasks
 from app.config import Settings
 from app.llm import LLMExtractionError, LLMTransientError
@@ -55,6 +56,7 @@ def settings(tmp_path: Path) -> Settings:
         _env_file=None,  # type: ignore[call-arg]
         gemini_api_key=SecretStr("test"),
         database_url=SecretStr("postgresql+psycopg://u:p@h:5432/d"),
+        secret_key=SecretStr("k" * 32),
         upload_dir=tmp_path / "uploads",
     )
 
@@ -69,6 +71,7 @@ def env(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> Callable[..., Fa
         yield session
 
     monkeypatch.setattr(tasks, "get_settings", lambda: settings)
+    monkeypatch.setattr(celery_module, "get_settings", lambda: settings)  # Celery's lazy config
     monkeypatch.setattr(tasks, "session_scope", fake_session_scope)
     monkeypatch.setattr(tasks.process_document, "retry_backoff_seconds", lambda retries: 0)
 
@@ -199,7 +202,7 @@ def test_retry_backoff_grows_and_is_capped() -> None:
 
 
 def test_celery_is_configured_for_a_small_server(settings: Settings) -> None:
-    conf = tasks.celery_config(settings)
+    conf = celery_module.celery_config(settings)
 
     assert conf["broker_url"] == settings.celery_broker_url
     assert conf["result_backend"] == settings.celery_result_backend

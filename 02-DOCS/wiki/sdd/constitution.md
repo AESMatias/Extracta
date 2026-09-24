@@ -5,12 +5,12 @@ description: The non-negotiable principles every rsc-sdd phase obeys.
 tags: [sdd, constitution]
 timestamp: 2026-09-24T00:00:00Z
 topic: sdd
-version: v2.4.0
+version: v2.5.0
 ---
 
 # pdf_process_pipeline (IDP) — Constitution
 
-> Version: v2.4.0 · Ratified: 2026-09-24 · Last amended: 2026-09-24
+> Version: v2.5.0 · Ratified: 2026-09-24 · Last amended: 2026-09-24
 > The non-negotiable principles every rsc-sdd phase obeys. Stack mechanics live in the
 > installed stack skills (`python`, `docker`, `redis`, `supabase`, `postgresdb`); this file
 > ratifies the principle and points at the detail.
@@ -114,6 +114,13 @@ version: v2.4.0
     description, never by hash alone. The rsc gitmoji guard is disabled locally
     (`.rsc/.no-gitmoji`).
 
+## 14. Amendments v2.5.0
+
+26. A task's status and result are served only to the browser session that uploaded it (owner
+    token in the signed session cookie, owner sets in Redis). Any other request gets 404, the
+    same answer as for an unknown id. The session cookie is HttpOnly and SameSite=Lax, and
+    Secure in production. `SECRET_KEY` is required (≥ 32 characters).
+
 ## Definition of Done (the merge bar `verify` runs against)
 
 A change ships only when ALL hold:
@@ -128,6 +135,7 @@ A change ships only when ALL hold:
 - [ ] RAM/disk rules intact: concurrency 1, memory limits, streaming, cleanup (principles 12-14, 21-22).
 - [ ] UI floor met where UI changed (principle 16).
 - [ ] CSV exports escaped and validated (principle 23).
+- [ ] Task data readable only by its owner session (principle 26).
 - [ ] Significant decisions logged (principle 17).
 
 ## Amendment log (append-only)
@@ -140,3 +148,4 @@ A change ships only when ALL hold:
 | 2026-09-24 | v2.2.0 | Struck 15 → 21 (delete PDF in all outcomes); added 22 (ephemeral mode) and 23 (safe CSV export). | New feature: ephemeral processing and CSV export. |
 | 2026-09-24 | v2.3.0 | Struck 7 → 24: every repository artifact in English; Spanish only in the chat. | Owner clarified after a README was written in Spanish. |
 | 2026-09-24 | v2.4.0 | Struck 20 → 25: no emoji in commit messages; Conventional Commits only. | Owner prefers a more serious history. |
+| 2026-09-24 | v2.5.0 | Added 26: task results only for the owning browser session. | Close the "anyone with the task id" gap without user accounts. |

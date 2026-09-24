@@ -46,8 +46,8 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
 | 9 | LLM layer | `app/llm/{base,gemini,openai,factory}.py` + tests | Factory picks provider from `.env`; Gemini returns a `DocumentSchema` | ✅ Add provider-agnostic LLM extraction with Gemini and optional OpenAI |
 | 10 | Celery task | `app/tasks.py` + test | `save_to_db` true → row in Supabase; false → no DB call; both return the data (Redis backend, TTL); PDF deleted in every outcome | ✅ Add Celery document processing task with persistent and ephemeral modes |
 | 11 | CSV export | `app/export.py` + test | Individual (one doc, line items as rows) and unified (one row per doc) CSV; formula injection escaped | ✅ Add individual and unified CSV export with formula injection protection |
-| 12 | Web routes | `app/web/routes.py` + tests | `POST /upload` (+ `save_to_db`) → task ids; `GET /tasks/<id>` → status + result; `POST /export/csv/individual` and `/unified` stream CSV | ⏳ next |
-| 13 | UI | `app/web/templates/`, `app/web/static/` | Dropzone + mode toggle + polling + results table + Chart.js charts + both CSV buttons | ⬜ |
+| 12 | Web routes | `app/web/routes.py` + tests | `POST /upload` (+ `save_to_db`) → task ids; `GET /tasks/<id>` → status + result; `POST /export/csv/individual` and `/unified` stream CSV | ✅ Add the HTTP API with per-browser task ownership |
+| 13 | UI | `app/web/templates/`, `app/web/static/` | Dropzone + mode toggle + polling + results table + Chart.js charts + both CSV buttons | ⏳ next |
 | 14 | Verify | — | ruff, mypy, pytest ≥ 70% coverage all green; Trivy re-scan | ⬜ |
 | 15 | End-to-end + merge | — | Batch of real PDFs in both modes under the 2 GB limits; merged to `main` | ⬜ |
 
@@ -109,6 +109,17 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
   with `'`, numbers never are (negative amounts stay numeric). Request payloads are validated
   (`ExportItem`, `UnifiedExportRequest`: 1 to 500 documents). Both exports are generators.
   Known limit: spreadsheets may drop leading zeros of numeric-looking text such as "004512".
+- Step 12: TDD red → green: 21 web tests + 16 queue/ownership tests (155 unit tests total, 96%
+  coverage); ruff and mypy clean. Tasks are tied to the browser: a random owner token in the
+  signed session cookie (HttpOnly, SameSite=Lax) and `task-owner:<token>` sets in Redis db 1
+  expiring with the results; any other browser gets 404. The Celery app moved to
+  `app/celery_app.py`, so the web process enqueues by task name without importing pdfplumber,
+  the LLM SDKs or SQLAlchemy. Real HTTP run against the stack: upload of 2 PDFs + 1 fake → 202,
+  2 tasks, fake rejected; invoice pending → processing → completed in 3.2 s, contract in 1.9 s;
+  Bob's requests for Alice's tasks → 404 and 404; individual CSV 1 row, unified CSV 2 rows × 64
+  columns; persistent mode wrote both rows to Supabase (deleted after); `/tmp_uploads` empty;
+  web 104 MiB / 384, worker 144 MiB / 768. Also fixed a compose bug: web and worker built the
+  same image concurrently.
 
 ## How to run the quality gates
 
@@ -123,5 +134,5 @@ docker run --rm --env-file .env -v "$PWD":/src -w /src pdf-process-pipeline:dev 
 
 ## Next
 
-Step 12 — `app/web/routes.py`: Flask blueprint with `POST /upload` (streaming, `save_to_db`),
-`GET /tasks/<id>` (status + result from Redis) and the two streamed CSV endpoints.
+Step 13 — UI: Jinja2 page with a dropzone, the persistent/ephemeral toggle, live status polling,
+a results table, Chart.js charts and both CSV buttons.
