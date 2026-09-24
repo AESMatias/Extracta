@@ -18,8 +18,9 @@ It is built to run on a **2 GB RAM server**: documents are processed one at a ti
 service has a memory limit and PDFs are deleted as soon as they are processed.
 
 > **Status:** under construction, step by step. Working today: configuration, the minimal web
-> app (`/health`), the extraction schema, the Supabase database, streaming upload storage, PDF text extraction and LLM
-> extraction with Gemini (≈ USD 0.0006 per invoice). Detailed progress lives in
+> app (`/health`), the extraction schema, the Supabase database, streaming upload storage, PDF text extraction, LLM
+> extraction with Gemini (≈ USD 0.0006 per invoice) and the Celery worker that processes each PDF
+> in persistent or ephemeral mode. Detailed progress lives in
 > the [roadmap](02-DOCS/wiki/ftd/idp-mvp.md).
 
 ---
@@ -161,7 +162,7 @@ You do not need Python or Poetry on your machine: everything runs in containers.
 git clone <repo-url>
 cd pdf_process_pipeline
 cp .env.sample .env        # then fill in GEMINI_API_KEY and DATABASE_URL
-docker compose up --build web redis
+docker compose up --build
 ```
 
 Open <http://localhost:8000/health> → `{"status": "ok"}`.
@@ -172,13 +173,11 @@ Create the table in Supabase (once; running it again is safe):
 docker compose run --rm --no-deps web python -m app.db
 ```
 
-> The `worker` service will start with `docker compose up --build` once `app/tasks.py`
-> exists (step 10 of the roadmap).
-
 Useful commands:
 
 ```bash
-docker compose logs -f web      # follow logs
+docker compose logs -f web      # follow web logs
+docker compose logs -f worker   # follow the worker processing documents
 docker compose ps               # status and health of each service
 docker stats --no-stream        # real memory usage
 docker compose down             # stop everything
@@ -199,7 +198,9 @@ if something is missing, the app refuses to start and says what is missing.
 | `GEMINI_API_KEY` | — | Required when `LLM_PROVIDER=gemini` |
 | `OPENAI_API_KEY` | — | Required when `LLM_PROVIDER=openai` |
 | `DATABASE_URL` | `postgresql://postgres.<ref>:<pass>@aws-0-<region>.pooler.supabase.com:5432/postgres` | Supabase connection (paste it as shown; the app switches it to the psycopg 3 driver) |
-| `CELERY_BROKER_URL` | `redis://redis:6379/0` | Redis inside Compose |
+| `CELERY_BROKER_URL` | `redis://redis:6379/0` | Task queue (Redis inside Compose) |
+| `CELERY_RESULT_BACKEND` | `redis://redis:6379/1` | Where task results (the extracted JSON) are kept |
+| `RESULT_TTL_SECONDS` | `3600` | How long results stay in Redis; ephemeral data exists only there and in the browser |
 | `UPLOAD_DIR` | `/tmp_uploads` | Volume shared by web and worker |
 | `MAX_UPLOAD_MB` | `50` | Maximum size per PDF |
 
@@ -326,8 +327,8 @@ pdf_process_pipeline/
 │   ├── storage.py           ✅ Streaming upload to /tmp_uploads
 │   ├── pdf_text.py          ✅ Text extraction with pdfplumber
 │   ├── llm/                 ✅ Common interface + Gemini + OpenAI + selector
-│   ├── tasks.py             ⏳ Celery task (extract → LLM → save → delete PDF)
-│   ├── export.py            ⬜ Individual and unified CSV
+│   ├── tasks.py             ✅ Celery task (extract → LLM → save → delete PDF)
+│   ├── export.py            ⏳ Individual and unified CSV
 │   └── web/                 ⬜ Routes, Jinja2 templates, JS and charts
 ├── tests/                   Tests (pytest)
 ├── docker/Dockerfile        Multi-stage image: builder → dev → runtime

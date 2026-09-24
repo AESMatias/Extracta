@@ -12,6 +12,8 @@ ENV_VARS = (
     "OPENAI_API_KEY",
     "DATABASE_URL",
     "CELERY_BROKER_URL",
+    "CELERY_RESULT_BACKEND",
+    "RESULT_TTL_SECONDS",
     "UPLOAD_DIR",
     "MAX_UPLOAD_MB",
 )
@@ -41,6 +43,8 @@ def test_loads_defaults_with_minimal_valid_env(valid_env: None) -> None:
     assert settings.llm_provider == "gemini"
     assert settings.llm_model == "gemini-3.1-flash-lite"
     assert settings.celery_broker_url == "redis://redis:6379/0"
+    assert settings.celery_result_backend == "redis://redis:6379/1"  # results apart from the queue
+    assert settings.result_ttl_seconds == 3600
     assert settings.upload_dir == Path("/tmp_uploads")
     assert settings.max_upload_mb == 50
     assert settings.max_upload_bytes == 50 * 1024 * 1024
@@ -133,3 +137,11 @@ def test_database_url_uses_the_psycopg3_driver(valid_env: None, monkeypatch: pyt
     url = load().database_url.get_secret_value()
 
     assert url == "postgresql+psycopg://user:secret@host:5432/db"
+
+
+@pytest.mark.parametrize("value", ["0", "-1"])
+def test_result_ttl_must_be_positive(valid_env: None, monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("RESULT_TTL_SECONDS", value)
+
+    with pytest.raises(ValidationError, match="result_ttl_seconds"):
+        load()

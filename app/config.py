@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     # SecretStr hides the password if the settings are ever logged or printed.
     database_url: SecretStr
     celery_broker_url: str = "redis://redis:6379/0"
+    celery_result_backend: str = "redis://redis:6379/1"  # task results live apart from the queue
+    result_ttl_seconds: int = Field(default=3600, gt=0)  # how long results stay in Redis (ephemeral mode)
 
     upload_dir: Path = Path("/tmp_uploads")
     max_upload_mb: int = Field(default=50, gt=0)

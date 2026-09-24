@@ -44,8 +44,8 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
 | 7 | Streaming upload storage | `app/storage.py` + test | Large file written in chunks; RAM stays flat | ✅ Add streaming PDF upload storage with size and header checks |
 | 8 | PDF text extraction | `app/pdf_text.py` + test | Text extracted from a sample PDF | ✅ Add page-by-page PDF text extraction with an LLM character cap |
 | 9 | LLM layer | `app/llm/{base,gemini,openai,factory}.py` + tests | Factory picks provider from `.env`; Gemini returns a `DocumentSchema` | ✅ Add provider-agnostic LLM extraction with Gemini and optional OpenAI |
-| 10 | Celery task | `app/tasks.py` + test | `save_to_db` true → row in Supabase; false → no DB call; both return the data (Redis backend, TTL); PDF deleted in every outcome | ⏳ next |
-| 11 | CSV export | `app/export.py` + test | Individual (one doc, line items as rows) and unified (one row per doc) CSV; formula injection escaped | ⬜ |
+| 10 | Celery task | `app/tasks.py` + test | `save_to_db` true → row in Supabase; false → no DB call; both return the data (Redis backend, TTL); PDF deleted in every outcome | ✅ Add Celery document processing task with persistent and ephemeral modes |
+| 11 | CSV export | `app/export.py` + test | Individual (one doc, line items as rows) and unified (one row per doc) CSV; formula injection escaped | ⏳ next |
 | 12 | Web routes | `app/web/routes.py` + tests | `POST /upload` (+ `save_to_db`) → task ids; `GET /tasks/<id>` → status + result; `POST /export/csv/individual` and `/unified` stream CSV | ⬜ |
 | 13 | UI | `app/web/templates/`, `app/web/static/` | Dropzone + mode toggle + polling + results table + Chart.js charts + both CSV buttons | ⬜ |
 | 14 | Verify | — | ruff, mypy, pytest ≥ 70% coverage all green; Trivy re-scan | ⬜ |
@@ -94,6 +94,14 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
   invoice. Every provider output goes through `parse_response()` (Pydantic); rate limits,
   5xx and network errors raise `LLMTransientError` (retry), everything else
   `LLMExtractionError` (fail). The dev image now installs all extras so OpenAI is tested.
+- Step 10: TDD red → green: 9 task tests run through `apply()` (104 unit tests total, 96%
+  coverage; `tasks.py` 98%); ruff and mypy clean. Real end to end with web + worker + redis and
+  the real Gemini and Supabase: ephemeral run PENDING → STARTED → SUCCESS in 4.5 s, no row in
+  Supabase; persistent run in 7.8 s with the row saved (then deleted); both results in Redis
+  with a ~3600 s TTL; `/tmp_uploads` empty afterwards. Memory: worker 171 MiB / 768 MiB, web
+  82 MiB / 384 MiB, redis 7 MiB / 128 MiB. Retries only `LLMTransientError` and
+  `OperationalError` (10 s, 20 s, 40 s backoff, max 3) and keeps the PDF only while a retry is
+  pending.
 
 ## How to run the quality gates
 
@@ -108,6 +116,5 @@ docker run --rm --env-file .env -v "$PWD":/src -w /src pdf-process-pipeline:dev 
 
 ## Next
 
-Step 10 — `app/tasks.py`: Celery app with the Redis result backend (TTL) and the
-`process_document` task: extract text → LLM → save only if `save_to_db` → return the data →
-delete the PDF in `finally`; retry only `LLMTransientError`.
+Step 11 — `app/export.py`: individual CSV (one document, line items as rows) and unified CSV
+(one row per document) from validated `DocumentSchema` data, escaping formula injection.
