@@ -11,13 +11,20 @@ branch: feat/project-skeleton
 
 A web UI where a user uploads many PDFs at once; a single Celery worker processes them one by
 one (2 GB RAM server), extracts text with `pdfplumber`, turns it into a validated
-`DocumentSchema` with an LLM (Gemini by default, switchable via `.env`), saves it to Supabase
-and deletes the PDF. The owner is learning Flask, so work advances one reviewed step at a time.
+`DocumentSchema` with an LLM (Gemini by default, switchable via `.env`) and deletes the PDF.
+
+On upload the user picks a mode: **persistent** (save to Supabase) or **ephemeral** (never touch
+the database). In both modes the task returns the extracted data, Celery keeps it in the Redis
+result backend for a limited time, and the browser renders it as tables and charts. Two buttons
+export CSV: one document, or the whole batch merged. The owner is learning Flask, so work
+advances one reviewed step at a time.
 
 ## Scope
 
-- In: Flask + Jinja2 UI, streaming uploads, Celery + Redis queue, Supabase storage,
-  provider-agnostic LLM layer, Docker Compose with memory limits, tests.
+- In: Flask + Jinja2 UI, streaming uploads, Celery + Redis queue (+ Redis result backend with
+  TTL), persistent/ephemeral toggle, Supabase storage (persistent mode only), provider-agnostic
+  LLM layer, individual and unified CSV export, live charts (Chart.js), Docker Compose with
+  memory limits, tests.
 - Not now: authentication, multi-tenant users, OCR for scanned PDFs, VPS deployment (a later
   feature).
 
@@ -33,15 +40,16 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
 | 3 | Settings | `app/config.py` + test | Missing/invalid `.env` values fail at startup with a clear error | ✅ Add validated settings loaded from .env |
 | 4 | Flask app factory + health check | `app/__init__.py` + test | Full image builds; `docker compose up web redis` → `GET /health` 200 | ✅ Add Flask app factory with a health check endpoint |
 | 5 | Extraction schema | `app/schemas.py` + test | `DocumentSchema` validates/rejects sample payloads | ✅ Add multi-type extraction schema for the LLM |
-| 6 | Database | `app/db.py`, `app/models.py` + test | `documents` table created in Supabase; insert/read round-trip | ⏳ next |
+| 6 | Database | `app/db.py`, `app/models.py` + test | `documents` table (persistent mode) created in Supabase with RLS on; insert/read round-trip | ⏳ next |
 | 7 | Streaming upload storage | `app/storage.py` + test | Large file written in chunks; RAM stays flat | ⬜ |
 | 8 | PDF text extraction | `app/pdf_text.py` + test | Text extracted from a sample PDF | ⬜ |
 | 9 | LLM layer | `app/llm/{base,gemini,openai,factory}.py` + tests | Factory picks provider from `.env`; Gemini returns a `DocumentSchema` | ⬜ |
-| 10 | Celery task | `app/tasks.py` + test | extract → LLM → save → delete PDF; status transitions recorded | ⬜ |
-| 11 | Web routes | `app/web/routes.py` + tests | Upload returns task ids; status endpoint returns JSON | ⬜ |
-| 12 | UI | `app/web/templates/`, `app/web/static/` | Dropzone + polling + results table in the browser | ⬜ |
-| 13 | Verify | — | ruff, mypy, pytest ≥ 70% coverage all green | ⬜ |
-| 14 | End-to-end + merge | — | Batch of real PDFs processed under the 2 GB limits; merged to `main` | ⬜ |
+| 10 | Celery task | `app/tasks.py` + test | `save_to_db` true → row in Supabase; false → no DB call; both return the data (Redis backend, TTL); PDF deleted in every outcome | ⬜ |
+| 11 | CSV export | `app/export.py` + test | Individual (one doc, line items as rows) and unified (one row per doc) CSV; formula injection escaped | ⬜ |
+| 12 | Web routes | `app/web/routes.py` + tests | `POST /upload` (+ `save_to_db`) → task ids; `GET /tasks/<id>` → status + result; `POST /export/csv/individual` and `/unified` stream CSV | ⬜ |
+| 13 | UI | `app/web/templates/`, `app/web/static/` | Dropzone + mode toggle + polling + results table + Chart.js charts + both CSV buttons | ⬜ |
+| 14 | Verify | — | ruff, mypy, pytest ≥ 70% coverage all green; Trivy re-scan | ⬜ |
+| 15 | End-to-end + merge | — | Batch of real PDFs in both modes under the 2 GB limits; merged to `main` | ⬜ |
 
 ## Evidence
 

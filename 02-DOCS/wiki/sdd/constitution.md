@@ -5,12 +5,12 @@ description: The non-negotiable principles every rsc-sdd phase obeys.
 tags: [sdd, constitution]
 timestamp: 2026-09-24T00:00:00Z
 topic: sdd
-version: v2.1.0
+version: v2.2.0
 ---
 
 # pdf_process_pipeline (IDP) — Constitution
 
-> Version: v2.1.0 · Ratified: 2026-09-24 · Last amended: 2026-09-24
+> Version: v2.2.0 · Ratified: 2026-09-24 · Last amended: 2026-09-24
 > The non-negotiable principles every rsc-sdd phase obeys. Stack mechanics live in the
 > installed stack skills (`python`, `docker`, `redis`, `supabase`, `postgresdb`); this file
 > ratifies the principle and points at the detail.
@@ -56,8 +56,8 @@ version: v2.1.0
 13. Every Compose service declares `deploy.resources.limits.memory`; the sum stays ≤ 1.5 GB.
 14. Uploads are streamed to the `/tmp_uploads` volume in chunks; a full file is never held
     in RAM.
-15. The worker deletes the PDF from `/tmp_uploads` immediately after its data is saved to
-    the database.
+~~15. The worker deletes the PDF from `/tmp_uploads` immediately after its data is saved to
+    the database.~~ (superseded by 21)
 
 ## 7. UX / accessibility floor
 
@@ -88,6 +88,16 @@ version: v2.1.0
     (`✨ feat(config): add validated settings loaded from .env`). Commits are referred to by
     that description, never by hash alone. Gitmoji enforced by `.rsc/gitmoji-guard.mjs`.
 
+## 11. Amendments v2.2.0
+
+21. The worker deletes the PDF from `/tmp_uploads` when its task finishes — after success or
+    after the final failed attempt — whether or not the data was saved to the database
+    (`finally` block). Only a pending retry may keep the file.
+22. Ephemeral mode (`save_to_db=false`) never writes document data to PostgreSQL. Results live
+    only in the Redis result backend and expire after a configured TTL.
+23. Every CSV export escapes cells that start with `=`, `+`, `-`, `@`, tab or carriage return
+    (CSV/formula injection), and exported data is validated against `DocumentSchema` first.
+
 ## Definition of Done (the merge bar `verify` runs against)
 
 A change ships only when ALL hold:
@@ -99,8 +109,9 @@ A change ships only when ALL hold:
 - [ ] English code; gitmoji commit with a descriptive imperative subject (principles 7, 20).
 - [ ] On a branch, authored by the human (principles 9-10).
 - [ ] No secret committed; `.env.sample` updated for new variables (principle 19).
-- [ ] RAM/disk rules intact: concurrency 1, memory limits, streaming, cleanup (principles 12-15).
+- [ ] RAM/disk rules intact: concurrency 1, memory limits, streaming, cleanup (principles 12-14, 21-22).
 - [ ] UI floor met where UI changed (principle 16).
+- [ ] CSV exports escaped and validated (principle 23).
 - [ ] Significant decisions logged (principle 17).
 
 ## Amendment log (append-only)
@@ -110,3 +121,4 @@ A change ships only when ALL hold:
 | 2026-09-24 | v1.0.0 | Ratified initial constitution. | Project kickoff. |
 | 2026-09-24 | v2.0.0 | Struck 2 → 18: OpenAI SDK replaced by a provider-agnostic LLM layer, Gemini Flash by default. Struck 11 → 19: secrets in root `.env`. | Owner prefers Gemini credits and a model switchable from `.env`; Compose reads root `.env`. |
 | 2026-09-24 | v2.1.0 | Struck 8 → 20: commit subjects must be descriptive imperative sentences; commits referenced by description, not hash. | Owner reviews step by step and a bare hash tells nothing. |
+| 2026-09-24 | v2.2.0 | Struck 15 → 21 (delete PDF in all outcomes); added 22 (ephemeral mode) and 23 (safe CSV export). | New feature: ephemeral processing and CSV export. |
