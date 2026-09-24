@@ -31,8 +31,8 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
 | 1 | Base configuration | `pyproject.toml`, `docker-compose.yml`, `.env.sample` | `docker compose config` OK | ✅ Add Poetry config, Docker Compose stack and env sample |
 | 2 | Docker image | `docker/Dockerfile`, `.dockerignore`, `poetry.lock` | Dependency stage builds and imports; Trivy scan reviewed | ✅ Add multi-stage Dockerfile, .dockerignore and poetry.lock |
 | 3 | Settings | `app/config.py` + test | Missing/invalid `.env` values fail at startup with a clear error | ✅ Add validated settings loaded from .env |
-| 4 | Flask app factory + health check | `app/__init__.py` + test | Full image builds; `docker compose up web redis` → `GET /health` 200 | ⏳ next |
-| 5 | Extraction schema | `app/schemas.py` + test | `DocumentSchema` validates/rejects sample payloads | ⬜ |
+| 4 | Flask app factory + health check | `app/__init__.py` + test | Full image builds; `docker compose up web redis` → `GET /health` 200 | ✅ Add Flask app factory with a health check endpoint |
+| 5 | Extraction schema | `app/schemas.py` + test | `DocumentSchema` validates/rejects sample payloads | ⏳ next |
 | 6 | Database | `app/db.py`, `app/models.py` + test | `documents` table created in Supabase; insert/read round-trip | ⬜ |
 | 7 | Streaming upload storage | `app/storage.py` + test | Large file written in chunks; RAM stays flat | ⬜ |
 | 8 | PDF text extraction | `app/pdf_text.py` + test | Text extracted from a sample PDF | ⬜ |
@@ -55,6 +55,10 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
 - Step 3: TDD red (`ModuleNotFoundError: app`) → green: 11 tests pass, `app/config.py` 100%
   coverage; ruff format/check clean; mypy clean. Added a `dev` Docker stage (pytest, ruff,
   mypy) so gates run without local Python.
+- Step 4: TDD red (`cannot import name 'create_app'`) → green: 16 tests, 100% coverage; ruff
+  and mypy clean. Runtime image 396 MB builds; `docker compose up -d web redis` with the real
+  `.env` → both `healthy`, `GET /health` → `200 {"status":"ok"}`, web runs as `appuser`,
+  memory web 82 MiB / 384 MiB, redis 6 MiB / 128 MiB.
 
 ## How to run the quality gates
 
@@ -67,5 +71,4 @@ docker run --rm -v "$PWD":/src -w /src pdf-process-pipeline:dev mypy app tests
 
 ## Next
 
-Step 4 — `app/__init__.py`: Flask app factory with `GET /health`; first full image build and
-`docker compose up web redis`.
+Step 5 — `app/schemas.py`: `DocumentSchema` (Pydantic) the LLM must fill.
