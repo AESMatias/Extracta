@@ -38,4 +38,8 @@ class RedisTaskOwnership:
         pipe.execute()
 
     def owns(self, owner: str, task_id: str) -> bool:
-        return bool(self._client.sismember(self._key(owner), task_id))
+        if not self._client.sismember(self._key(owner), task_id):
+            return False
+        # Sliding expiry: while the owner keeps polling, a long queue cannot make it lose access.
+        self._client.expire(self._key(owner), self._ttl)
+        return True
