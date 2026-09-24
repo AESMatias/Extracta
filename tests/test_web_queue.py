@@ -94,3 +94,22 @@ def test_redis_ownership_ignores_empty_batches() -> None:
     RedisTaskOwnership(redis, ttl_seconds=60).add("owner-a", [])
 
     assert redis.sets == {}
+
+
+def test_ownership_ttl_is_refreshed_while_the_owner_keeps_polling() -> None:
+    # A long queue can outlast the TTL set at upload time; an active owner must not lose access.
+    redis = FakeRedis()
+    ownership = RedisTaskOwnership(redis, ttl_seconds=3600)
+    ownership.add("owner-a", ["t1"])
+    redis.ttls["task-owner:owner-a"] = 5  # almost expired
+
+    assert ownership.owns("owner-a", "t1")
+    assert redis.ttls["task-owner:owner-a"] == 3600
+
+
+def test_checking_a_foreign_task_does_not_extend_anything() -> None:
+    redis = FakeRedis()
+    ownership = RedisTaskOwnership(redis, ttl_seconds=3600)
+
+    assert not ownership.owns("owner-b", "t1")
+    assert redis.ttls == {}
