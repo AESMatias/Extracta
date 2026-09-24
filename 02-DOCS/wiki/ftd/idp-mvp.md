@@ -41,8 +41,8 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
 | 4 | Flask app factory + health check | `app/__init__.py` + test | Full image builds; `docker compose up web redis` → `GET /health` 200 | ✅ Add Flask app factory with a health check endpoint |
 | 5 | Extraction schema | `app/schemas.py` + test | `DocumentSchema` validates/rejects sample payloads | ✅ Add multi-type extraction schema for the LLM |
 | 6 | Database | `app/db.py`, `app/models.py` + test | `documents` table (persistent mode) created in Supabase with RLS on; insert/read round-trip | ✅ Add Supabase database layer and documents table |
-| 7 | Streaming upload storage | `app/storage.py` + test | Large file written in chunks; RAM stays flat | ⏳ next |
-| 8 | PDF text extraction | `app/pdf_text.py` + test | Text extracted from a sample PDF | ⬜ |
+| 7 | Streaming upload storage | `app/storage.py` + test | Large file written in chunks; RAM stays flat | ✅ Add streaming PDF upload storage with size and header checks |
+| 8 | PDF text extraction | `app/pdf_text.py` + test | Text extracted from a sample PDF | ⏳ next |
 | 9 | LLM layer | `app/llm/{base,gemini,openai,factory}.py` + tests | Factory picks provider from `.env`; Gemini returns a `DocumentSchema` | ⬜ |
 | 10 | Celery task | `app/tasks.py` + test | `save_to_db` true → row in Supabase; false → no DB call; both return the data (Redis backend, TTL); PDF deleted in every outcome | ⬜ |
 | 11 | CSV export | `app/export.py` + test | Individual (one doc, line items as rows) and unified (one row per doc) CSV; formula injection escaped | ⬜ |
@@ -76,6 +76,11 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
   Supabase (table created, RLS on, insert/read/delete round-trip), 93% total coverage; ruff and
   mypy clean. `python -m app.db` in the runtime image creates the table: 10 columns, 0 rows,
   `relrowsecurity = true`. `config.py` now accepts the `postgresql://` URL as Supabase shows it.
+- Step 7: TDD red → green: 19 storage tests (61 total), `app/storage.py` 100% coverage; ruff
+  and mypy clean. A 50 MB upload is written to disk with a peak of 199 KB of Python memory
+  (64 KB chunks). Rejects non-PDF bytes and oversize files, leaving no partial file; `.part` +
+  rename so the worker never sees half-written files; `delete_file()` refuses paths outside
+  the upload dir.
 
 ## How to run the quality gates
 
@@ -90,5 +95,5 @@ docker run --rm --env-file .env -v "$PWD":/src -w /src pdf-process-pipeline:dev 
 
 ## Next
 
-Step 7 — `app/storage.py`: stream uploaded PDFs to `/tmp_uploads` in chunks, enforce
-`MAX_UPLOAD_MB`, and prove RAM stays flat with a large file.
+Step 8 — `app/pdf_text.py`: extract text with `pdfplumber` page by page, cap the text sent
+to the LLM, and detect scanned PDFs with no text layer.

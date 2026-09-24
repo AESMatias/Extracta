@@ -18,7 +18,7 @@ It is built to run on a **2 GB RAM server**: documents are processed one at a ti
 service has a memory limit and PDFs are deleted as soon as they are processed.
 
 > **Status:** under construction, step by step. Working today: configuration, the minimal web
-> app (`/health`), the extraction schema and the Supabase database. Detailed progress lives in
+> app (`/health`), the extraction schema, the Supabase database and streaming upload storage. Detailed progress lives in
 > the [roadmap](02-DOCS/wiki/ftd/idp-mvp.md).
 
 ---
@@ -322,8 +322,8 @@ pdf_process_pipeline/
 │   ├── config.py            ✅ Settings validated from .env
 │   ├── schemas.py           ✅ DocumentSchema: what the LLM must return
 │   ├── db.py, models.py     ✅ Supabase connection and documents table (RLS on)
-│   ├── storage.py           ⏳ Streaming upload to /tmp_uploads
-│   ├── pdf_text.py          ⬜ Text extraction with pdfplumber
+│   ├── storage.py           ✅ Streaming upload to /tmp_uploads
+│   ├── pdf_text.py          ⏳ Text extraction with pdfplumber
 │   ├── llm/                 ⬜ Common interface + Gemini + OpenAI + selector
 │   ├── tasks.py             ⬜ Celery task (extract → LLM → save → delete PDF)
 │   ├── export.py            ⬜ Individual and unified CSV
