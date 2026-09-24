@@ -1,2 +1,0 @@
-description = "Delegate python review work to the installed python-reviewer agent."
-prompt = "Delegate this request to the python-reviewer agent. Pass the invocation arguments unchanged: {{args}}\nDo not reproduce that agent's method here; load it and follow its own stopping and verification rules."

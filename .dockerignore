@@ -1,0 +1,22 @@
+# Keep secrets, history and local tooling out of the build context.
+.env
+.git
+.venv
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+tmp_uploads/
+
+# Harness and docs are not needed at runtime.
+.rsc/
+.rsc.json
+.claude/
+.gemini/
+01-TOOLS/
+02-DOCS/
+CLAUDE.md
+GEMINI.md
+tests/

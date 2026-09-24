@@ -1,0 +1,82 @@
+# Target: a 2 GB RAM server. Memory limits sum to 1280M (constitution principle 13),
+# leaving headroom for the OS and Docker itself. The database lives in Supabase.
+
+x-app: &app
+  image: pdf-process-pipeline:latest
+  env_file: .env
+  volumes:
+    # Shared by web (writes uploads) and worker (reads, then deletes them).
+    - uploads:/tmp_uploads
+  restart: unless-stopped
+
+services:
+  web:
+    <<: *app
+    # Only web builds the image; worker reuses it. Two builds of one tag at once collide.
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: >
+      gunicorn "app:create_app()"
+      --bind 0.0.0.0:8000
+      --workers 2
+      --timeout 120
+    ports:
+      - "8000:8000"
+    healthcheck:
+      # The slim image has no curl; the Python stdlib is enough.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  worker:
+    <<: *app
+    pull_policy: never  # use the image built for web, never look for it on Docker Hub
+    command: >
+      celery -A app.tasks:celery_app worker
+      --loglevel=info
+      --concurrency=1
+      --prefetch-multiplier=1
+      --max-tasks-per-child=20
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  redis:
+    image: redis:8-alpine
+    # noeviction: a broker must never silently drop queued tasks.
+    # appendonly: queued tasks survive a Redis restart.
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 96mb
+      --maxmemory-policy noeviction
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+volumes:
+  uploads:
+  redis_data:

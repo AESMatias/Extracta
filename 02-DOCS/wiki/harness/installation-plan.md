@@ -1,10 +1,12 @@
 # Accepted harness plan
 
-Plan id: `974489a0c03e3190d496ad1c8236f1a247e1a53929f52a5ca1f9c4a09a2bc57f`
+Plan id: `63371e3d8d31cb805ec4c311a607a611f78488927121d38a5a3250f67ab3f2e6`
 
 | Kind | Component | Decision | Reason | Reevaluate when |
 | --- | --- | --- | --- | --- |
 | agent | developer | selected | The accepted substantial software workflow requires this implementation or review role. | — |
+| agent | postgres-reviewer | selected | The accepted substantial software workflow requires this implementation or review role. | — |
+| agent | python-reviewer | selected | The accepted substantial software workflow requires this implementation or review role. | — |
 | agent | refuter-correctness | selected | The accepted substantial software workflow requires this implementation or review role. | — |
 | agent | refuter-security | selected | The accepted substantial software workflow requires this implementation or review role. | — |
 | agent | refuter-tests | selected | The accepted substantial software workflow requires this implementation or review role. | — |
@@ -21,6 +23,7 @@ Plan id: `974489a0c03e3190d496ad1c8236f1a247e1a53929f52a5ca1f9c4a09a2bc57f`
 | skill | debug | selected | Included in the development workflow for growing software. | — |
 | skill | decision-challenge | selected | Included in the development workflow for growing software. | — |
 | skill | deprecation | selected | Included in the development workflow for growing software. | — |
+| skill | docker | selected | Included in the development workflow for growing software. | — |
 | skill | eli5 | selected | Included in the development workflow for growing software. | — |
 | skill | fable-operator | selected | Included in the development workflow for growing software. | — |
 | skill | ftd | selected | Included in the development workflow for growing software. | — |
@@ -31,6 +34,9 @@ Plan id: `974489a0c03e3190d496ad1c8236f1a247e1a53929f52a5ca1f9c4a09a2bc57f`
 | skill | orient | selected | Included in the development workflow for growing software. | — |
 | skill | parallel | selected | Included in the development workflow for growing software. | — |
 | skill | plan | selected | Included in the development workflow for growing software. | — |
+| skill | postgresdb | selected | Included in the development workflow for growing software. | — |
+| skill | python | selected | Detected python evidence inside the selected project root. | — |
+| skill | redis | selected | Included in the development workflow for growing software. | — |
 | skill | review | selected | Included in the development workflow for growing software. | — |
 | skill | sdd | selected | Included because the accepted work has persistence complexity. | — |
 | skill | sdd-init | selected | Included in the development workflow for growing software. | — |
@@ -40,6 +46,7 @@ Plan id: `974489a0c03e3190d496ad1c8236f1a247e1a53929f52a5ca1f9c4a09a2bc57f`
 | skill | source-grounded-development | selected | Included in the development workflow for growing software. | — |
 | skill | specify | selected | Included in the development workflow for growing software. | — |
 | skill | suggest | selected | Included in the development workflow for growing software. | — |
+| skill | supabase | selected | Included in the development workflow for growing software. | — |
 | skill | tasks | selected | Included in the development workflow for growing software. | — |
 | skill | ui-engineering | selected | Included in the development workflow for growing software. | — |
 | skill | unslop | selected | Included in the development workflow for growing software. | — |

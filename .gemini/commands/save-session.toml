@@ -1,2 +1,0 @@
-description = "Force a local deterministic session checkpoint."
-prompt = "Invoke memory:save with the current local session identifiers: {{args}}\nRun `npx @ericrisco/rsc memory save --session <id>`. Persist only allowed git and SDD ledger metadata; never include conversation or file content."
