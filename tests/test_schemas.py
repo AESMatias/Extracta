@@ -28,9 +28,7 @@ def invoice_payload(**overrides: Any) -> dict[str, Any]:
             "subtotal": 100000,
             "tax_amount": 19000,
             "total_amount": 119000,
-            "line_items": [
-                {"description": "Consulting", "quantity": 10, "unit_price": 10000, "amount": 100000}
-            ],
+            "line_items": [{"description": "Consulting", "quantity": 10, "unit_price": 10000, "amount": 100000}],
         },
     }
     payload.update(overrides)
@@ -79,9 +77,7 @@ def test_matching_section_is_required() -> None:
 
 
 def test_sections_of_other_types_are_discarded() -> None:
-    doc = DocumentSchema.model_validate(
-        invoice_payload(bank_statement={"bank_name": "Banco Estado"})
-    )
+    doc = DocumentSchema.model_validate(invoice_payload(bank_statement={"bank_name": "Banco Estado"}))
 
     assert doc.bank_statement is None
     assert doc.commercial is not None
@@ -144,12 +140,8 @@ def test_account_last4_must_be_exactly_four_digits(value: str) -> None:
         ("report", "report", {"title": "Q3 results", "key_findings": ["Revenue +12%"]}),
     ],
 )
-def test_each_document_type_fills_its_own_section(
-    document_type: str, section: str, data: dict[str, Any]
-) -> None:
-    doc = DocumentSchema.model_validate(
-        {"document_type": document_type, "summary": "Test document.", section: data}
-    )
+def test_each_document_type_fills_its_own_section(document_type: str, section: str, data: dict[str, Any]) -> None:
+    doc = DocumentSchema.model_validate({"document_type": document_type, "summary": "Test document.", section: data})
 
     assert doc.section is getattr(doc, section)
 

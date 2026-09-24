@@ -14,11 +14,10 @@ def create_app(settings: Settings | None = None) -> Flask:
     app = Flask(__name__)
 
     # Keep the validated settings on the app so any part of it can reach them.
-    app.extensions["settings"] = settings or get_settings()
+    app.extensions["settings"] = settings or get_settings()  # get_settings() is cached: .env is read once per process
 
     @app.get("/health")
     def health() -> dict[str, str]:
-        # Liveness probe: answers as long as the web process is up.
         return {"status": "ok"}
 
     return app

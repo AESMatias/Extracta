@@ -41,9 +41,7 @@ def test_each_call_builds_an_independent_app(settings: Settings) -> None:
     assert create_app(settings) is not create_app(settings)
 
 
-def test_without_arguments_uses_environment_settings(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_without_arguments_uses_environment_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     # This is how gunicorn calls it: create_app() with no arguments.
     monkeypatch.chdir(tmp_path)  # no real .env file here
     monkeypatch.setenv("GEMINI_API_KEY", "env-gemini-key")

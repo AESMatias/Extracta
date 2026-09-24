@@ -61,9 +61,7 @@ def test_empty_key_counts_as_missing(valid_env: None, monkeypatch: pytest.Monkey
         load()
 
 
-def test_openai_provider_requires_openai_key(
-    valid_env: None, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_openai_provider_requires_openai_key(valid_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "openai")
 
     with pytest.raises(ValidationError, match="OPENAI_API_KEY"):
@@ -96,9 +94,7 @@ def test_database_url_is_required(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.parametrize("value", ["0", "-5"])
-def test_max_upload_mb_must_be_positive(
-    valid_env: None, monkeypatch: pytest.MonkeyPatch, value: str
-) -> None:
+def test_max_upload_mb_must_be_positive(valid_env: None, monkeypatch: pytest.MonkeyPatch, value: str) -> None:
     monkeypatch.setenv("MAX_UPLOAD_MB", value)
 
     with pytest.raises(ValidationError, match="max_upload_mb"):
@@ -112,9 +108,7 @@ def test_secrets_are_not_exposed_in_repr(valid_env: None) -> None:
     assert "secret" not in text
 
 
-def test_get_settings_builds_once(
-    valid_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_get_settings_builds_once(valid_env: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     # Run from an empty dir so no real .env file is picked up.
     monkeypatch.chdir(tmp_path)
     get_settings.cache_clear()

@@ -35,7 +35,9 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
-line-length = 100
+# 120 leaves room for short comments to the right of a line of code.
+# The formatter counts those comments too, so a lower limit would wrap the code.
+line-length = 120
 target-version = "py312"
 
 [tool.ruff.lint]

@@ -86,25 +86,15 @@ class LineItem(BaseModel):
 class CommercialDocumentData(BaseModel):
     """Invoices, receipts, purchase orders and quotes share this structure."""
 
-    document_number: str | None = Field(
-        default=None, description="Invoice, receipt, order or quote number as printed."
-    )
+    document_number: str | None = Field(default=None, description="Invoice, receipt, order or quote number as printed.")
     issue_date: date | None = Field(default=None, description=f"Issue date. {_ISO_DATE}")
-    due_date: date | None = Field(
-        default=None, description=f"Payment due date or quote expiry date. {_ISO_DATE}"
-    )
+    due_date: date | None = Field(default=None, description=f"Payment due date or quote expiry date. {_ISO_DATE}")
     issuer: Party = Field(description="Who issues the document: vendor, seller or provider.")
-    recipient: Party | None = Field(
-        default=None, description="Who receives it: customer or buyer. Null if absent."
-    )
+    recipient: Party | None = Field(default=None, description="Who receives it: customer or buyer. Null if absent.")
     currency: CurrencyCode | None = None
     subtotal: float | None = Field(default=None, description=f"Total before taxes. {_AMOUNT}")
-    tax_amount: float | None = Field(
-        default=None, description=f"Total taxes (VAT/IVA...). {_AMOUNT}"
-    )
-    total_amount: float | None = Field(
-        default=None, description=f"Final amount to pay, taxes included. {_AMOUNT}"
-    )
+    tax_amount: float | None = Field(default=None, description=f"Total taxes (VAT/IVA...). {_AMOUNT}")
+    total_amount: float | None = Field(default=None, description=f"Final amount to pay, taxes included. {_AMOUNT}")
     line_items: list[LineItem] = Field(
         default_factory=list, description="Each product or service line, in document order."
     )
@@ -129,24 +119,16 @@ class BankStatementData(BaseModel):
 
 class ContractData(BaseModel):
     title: str | None = Field(default=None, description=f"Contract title. {_ANY_LANGUAGE}")
-    parties: list[Party] = Field(
-        default_factory=list, description="Every signing party, with its role."
-    )
+    parties: list[Party] = Field(default_factory=list, description="Every signing party, with its role.")
     effective_date: date | None = Field(default=None, description=f"Start date. {_ISO_DATE}")
     end_date: date | None = Field(default=None, description=f"Expiry date. {_ISO_DATE}")
-    contract_value: float | None = Field(
-        default=None, description=f"Total economic value, if stated. {_AMOUNT}"
-    )
+    contract_value: float | None = Field(default=None, description=f"Total economic value, if stated. {_AMOUNT}")
     currency: CurrencyCode | None = None
-    auto_renewal: bool | None = Field(
-        default=None, description="True if it renews automatically. Null if not stated."
-    )
+    auto_renewal: bool | None = Field(default=None, description="True if it renews automatically. Null if not stated.")
     termination_notice_days: int | None = Field(
         default=None, description="Days of notice required to terminate. Null if not stated."
     )
-    governing_law: str | None = Field(
-        default=None, description="Jurisdiction or governing law, e.g. 'Chile'."
-    )
+    governing_law: str | None = Field(default=None, description="Jurisdiction or governing law, e.g. 'Chile'.")
     key_obligations: list[str] = Field(
         default_factory=list,
         description="Up to 5 main obligations, one short English sentence each.",
@@ -178,18 +160,14 @@ class ResumeData(BaseModel):
     )
     skills: list[str] = Field(default_factory=list, description="Technical and soft skills.")
     languages: list[str] = Field(default_factory=list, description="Spoken languages.")
-    education: list[str] = Field(
-        default_factory=list, description="Degrees, each as 'Degree - Institution - Year'."
-    )
+    education: list[str] = Field(default_factory=list, description="Degrees, each as 'Degree - Institution - Year'.")
 
 
 class ReportData(BaseModel):
     title: str | None = Field(default=None, description=f"Report title. {_ANY_LANGUAGE}")
     author: str | None = Field(default=None, description="Author person or organization.")
     report_date: date | None = Field(default=None, description=f"Publication date. {_ISO_DATE}")
-    period_covered: str | None = Field(
-        default=None, description="Period analyzed, as written, e.g. 'Q3 2026'."
-    )
+    period_covered: str | None = Field(default=None, description="Period analyzed, as written, e.g. 'Q3 2026'.")
     key_findings: list[str] = Field(
         default_factory=list,
         description="Up to 5 main findings or conclusions, one short English sentence each.",
@@ -229,18 +207,12 @@ class DocumentSchema(BaseModel):
     language: str | None = Field(
         default=None, description="Main language of the document, ISO 639-1 code (es, en, pt...)."
     )
-    title: str | None = Field(
-        default=None, description="The document's own title or heading, as written."
-    )
-    summary: str = Field(
-        description="Two or three sentences in English describing what the document is about."
-    )
+    title: str | None = Field(default=None, description="The document's own title or heading, as written.")
+    summary: str = Field(description="Two or three sentences in English describing what the document is about.")
     commercial: CommercialDocumentData | None = Field(
         default=None, description="Fill ONLY for invoice, receipt, purchase_order or quote."
     )
-    bank_statement: BankStatementData | None = Field(
-        default=None, description="Fill ONLY for bank_statement."
-    )
+    bank_statement: BankStatementData | None = Field(default=None, description="Fill ONLY for bank_statement.")
     contract: ContractData | None = Field(default=None, description="Fill ONLY for contract.")
     payslip: PayslipData | None = Field(default=None, description="Fill ONLY for payslip.")
     resume: ResumeData | None = Field(default=None, description="Fill ONLY for resume.")
@@ -250,9 +222,7 @@ class DocumentSchema(BaseModel):
     def keep_only_the_matching_section(self) -> Self:
         expected = SECTION_BY_TYPE.get(self.document_type)
         if expected is not None and getattr(self, expected) is None:
-            raise ValueError(
-                f"document_type={self.document_type} requires the '{expected}' section"
-            )
+            raise ValueError(f"document_type={self.document_type} requires the '{expected}' section")
         # Drop sections the LLM filled for other types, so stored data stays consistent.
         for name in set(SECTION_BY_TYPE.values()) - {expected}:
             setattr(self, name, None)
