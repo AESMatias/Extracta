@@ -1,0 +1,2 @@
+description = "Read the bounded local continuation record for this branch and worktree."
+prompt = "Invoke memory:resume for the current branch and worktree: {{args}}\nRun `npx @ericrisco/rsc memory resume`. Label a nearby branch result as nearby; never merge it silently into the exact continuation."

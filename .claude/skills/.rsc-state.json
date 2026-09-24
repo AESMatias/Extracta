@@ -1,0 +1,260 @@
+{
+  "skills": {
+    "analyze": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/analyze"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/analyze"
+    },
+    "automation-strategy": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/automation-strategy"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/automation-strategy"
+    },
+    "bro": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/bro"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/bro"
+    },
+    "clarify": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/clarify"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/clarify"
+    },
+    "constitution": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/constitution"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/constitution"
+    },
+    "debug": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/debug"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/debug"
+    },
+    "decision-challenge": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/decision-challenge"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/decision-challenge"
+    },
+    "deprecation": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/deprecation"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/deprecation"
+    },
+    "eli5": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/eli5"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/eli5"
+    },
+    "fable-operator": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/fable-operator"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/fable-operator"
+    },
+    "ftd": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/ftd"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/ftd"
+    },
+    "harness": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/harness"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/harness"
+    },
+    "idea-refinement": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/idea-refinement"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/idea-refinement"
+    },
+    "implement": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/implement"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/implement"
+    },
+    "init": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/init"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/init"
+    },
+    "orient": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/orient"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/orient"
+    },
+    "parallel": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/parallel"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/parallel"
+    },
+    "plan": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/plan"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/plan"
+    },
+    "review": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/review"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/review"
+    },
+    "sdd": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/sdd"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/sdd"
+    },
+    "sdd-init": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/sdd-init"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/sdd-init"
+    },
+    "ship": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/ship"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/ship"
+    },
+    "show-me": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/show-me"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/show-me"
+    },
+    "simplify-code": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/simplify-code"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/simplify-code"
+    },
+    "source-grounded-development": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/source-grounded-development"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/source-grounded-development"
+    },
+    "specify": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/specify"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/specify"
+    },
+    "suggest": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/suggest"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/suggest"
+    },
+    "tasks": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/tasks"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/tasks"
+    },
+    "ui-engineering": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/ui-engineering"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/ui-engineering"
+    },
+    "unslop": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/unslop"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/unslop"
+    },
+    "verify": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/verify"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/verify"
+    },
+    "worktrees": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/worktrees"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/worktrees"
+    },
+    "docker": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/docker"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/docker"
+    },
+    "postgresdb": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/postgresdb"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/postgresdb"
+    },
+    "python": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/python"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/python"
+    },
+    "redis": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/redis"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/redis"
+    },
+    "supabase": {
+      "files": [
+        "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/skills/supabase"
+      ],
+      "base": "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/skills/supabase"
+    }
+  },
+  "agents": [
+    "developer",
+    "refuter-correctness",
+    "refuter-security",
+    "refuter-tests"
+  ],
+  "agentCollisions": [],
+  "explicitAgents": [],
+  "memory": {
+    "mode": "full",
+    "reason": "wired",
+    "paths": [
+      "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/session-memory-core.mjs",
+      "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/session-memory-adapter.mjs",
+      "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.rsc/session-memory.mjs",
+      "/Users/matias/Documents/Gemini_Projects/pdf_process_pipeline/.claude/settings.local.json"
+    ]
+  },
+  "policy": {
+    "baseAgents": true,
+    "alwaysOn": true,
+    "codeHooks": true,
+    "gitmojiGuard": true,
+    "memory": true,
+    "context7": false
+  },
+  "commands": [
+    "checkpoint",
+    "learn",
+    "resume-session",
+    "save-session"
+  ],
+  "commandCollisions": [],
+  "version": "2.0.13"
+}

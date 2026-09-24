@@ -1,0 +1,19 @@
+# Secrets
+.env
+01-TOOLS/*/.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+
+# Runtime uploads
+tmp_uploads/
+
+# Local-only harness state
+.rsc/backups/
+.claude/settings.local.json

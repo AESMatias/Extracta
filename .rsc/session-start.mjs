@@ -1,0 +1,331 @@
+#!/usr/bin/env node
+// rsc SessionStart payload (claude). Wired by targets/claude.js as `node ...` so
+// it runs on every platform including Windows (no bash dependency).
+//   argv[2] = absolute path to suggest's SKILL.md   argv[3] = absolute project root
+// Always emits suggest's always-on body; appends an onboarding banner when the
+// workspace has no harness profile yet, and an auto-ingest nudge when there is
+// un-ingested material waiting in the inbox.
+import { readFileSync, existsSync, readdirSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { homedir } from 'node:os';
+import { claimOnce, readHookInput } from './hook-once.mjs';
+
+const STALE_AUDIT_DAYS = 14; // periodic skill-audit cadence (kept in sync with scripts/audit.js)
+
+const suggestMd = process.argv[2];
+const root = process.argv[3] || process.cwd();
+
+// When rsc is wired in more than one scope (user + project), every scope runs this script and the
+// always-on body lands once per scope. Both invocations share Claude Code's session_id, so the
+// first one to claim the event emits and the rest stay silent. `source` is part of the key so a
+// later compaction — which reuses the session_id — still re-injects, as it must.
+// No session id (no stdin / older Claude Code) → claimOnce fails open and we emit as before.
+const hook = readHookInput();
+const emitBody = hook.session_id
+  ? claimOnce(`ss:${hook.session_id}:${hook.source || 'startup'}`)
+  : true;
+
+const has = (...p) => existsSync(join(root, ...p));
+
+// Is a Context7 MCP server configured for this project (.mcp.json → mcpServers.context7)?
+function hasContext7() {
+  try {
+    const mcp = JSON.parse(readFileSync(join(root, '.mcp.json'), 'utf8'));
+    return Boolean(mcp.mcpServers && mcp.mcpServers.context7);
+  } catch { return false; }
+}
+
+// Has a skill audit run within the cadence? Missing stamp → never audited → due.
+function auditDue() {
+  try {
+    const { lastRun } = JSON.parse(readFileSync(join(root, '.rsc', 'audit.json'), 'utf8'));
+    return (Date.now() - new Date(lastRun).getTime()) / 86400000 >= STALE_AUDIT_DAYS;
+  } catch { return true; }
+}
+
+if (emitBody) {
+  try { process.stdout.write(readFileSync(suggestMd, 'utf8')); } catch { /* missing → emit nothing */ }
+}
+
+// De-dup above only works when EVERY wired scope runs an updated hook. A scope left behind keeps
+// emitting its own copy and cannot be silenced from here, so the only honest move is to say which
+// scope is lagging and how to fix it. Cadence-limited (this is advice, not an alarm) and opt-out-able.
+const SCOPE_WARN_DAYS = 7;
+
+function versionAt(scopeRoot) {
+  try { return readFileSync(join(scopeRoot, '.rsc', '.version'), 'utf8').trim() || null; } catch { return null; }
+}
+
+function isWiredScope(scopeRoot) {
+  // settings.json stores the wired command with the separator the installing platform produced, and
+  // JSON escapes a Windows backslash as a pair. Looking only for `.rsc/` therefore answered "not
+  // wired" for every Windows scope — which made THIS detector, the one that warns about a duplicated
+  // always-on body, blind on the exact platform where the body was being injected four times.
+  //
+  // Normalized inline rather than imported: hooks are materialized file by file, so this script can
+  // only import a sibling in `.rsc/`. `targets/claude.js` (hookWiringOf) and `scripts/doctor.js`
+  // carry the same one-liner for the same reason; the duplication is the price of the hook layout.
+  try {
+    const raw = readFileSync(join(scopeRoot, '.claude', 'settings.json'), 'utf8');
+    return raw.replace(/\\\\/g, '/').includes('.rsc/');
+  } catch { return false; }
+}
+
+function olderThan(a, b) {
+  const pa = String(a).split('.').map(Number); const pb = String(b).split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) < (pb[i] || 0)) return true;
+    if ((pa[i] || 0) > (pb[i] || 0)) return false;
+  }
+  return false;
+}
+
+function scopeWarnDue() {
+  try {
+    const { lastRun } = JSON.parse(readFileSync(join(root, '.rsc', 'dup-scope.json'), 'utf8'));
+    return (Date.now() - new Date(lastRun).getTime()) / 86400000 >= SCOPE_WARN_DAYS;
+  } catch { return true; }
+}
+
+if (!has('.rsc', '.no-scope-check') && scopeWarnDue()) {
+  // The complementary scope: from a project root it is the user's home, and vice versa.
+  const home = homedir();
+  const other = resolve(root) === resolve(home) ? (hook.cwd && resolve(hook.cwd) !== resolve(home) ? hook.cwd : null) : home;
+  const mine = versionAt(root);
+  const theirs = other ? versionAt(other) : null;
+  // Both versions must be readable to make a claim; an unreadable scope is not evidence of a problem.
+  if (other && mine && theirs && isWiredScope(other) && olderThan(theirs, mine)) {
+    process.stdout.write(`
+===== rsc duplicate rsc scope =====
+rsc is wired in TWO scopes and one is out of date, so this session receives the always-on
+block and the SDD gate TWICE — once per scope. Only the updated scope can de-duplicate.
+  this scope:    ${root} (${mine})
+  lagging scope: ${other} (${theirs})
+ACTION: update the lagging scope, then it will stay silent on its own:
+  cd "${other}" && npx @ericrisco/rsc@latest
+Opt out with .rsc/.no-scope-check · this notice repeats at most every ${SCOPE_WARN_DAYS} days.
+===================================
+`);
+    try {
+      mkdirSync(join(root, '.rsc'), { recursive: true });
+      writeFileSync(join(root, '.rsc', 'dup-scope.json'), JSON.stringify({ lastRun: new Date().toISOString() }) + '\n');
+    } catch { /* unwritable → the notice simply repeats next session */ }
+  }
+}
+
+const profile = join(root, '02-DOCS', 'wiki', 'harness', 'user-profile.md');
+const optout = join(root, '.rsc', '.no-harness');
+const profileExists = existsSync(profile);
+if (!existsSync(profile) && !existsSync(optout)) {
+  process.stdout.write(`
+===== rsc onboarding =====
+Fresh setup: 02-DOCS/wiki/harness/user-profile.md is missing.
+ACTION: invoke \`init\` now (first contact: technical level + accompaniment dial) before the task.
+If the user does not want a harness here: create .rsc/.no-harness
+==========================
+`);
+}
+
+// Auto-Ingest nudge: when a harness wiki exists and the inbox holds a real file
+// (anything other than README.md / dotfiles / the _processed archive), tell the
+// agent to run the Auto-Ingest Sweep. The hook only reminds; the agent does the
+// scan + ingest. Cheap signal here; the thorough workspace scan lives in the sweep.
+const inbox = join(root, '02-DOCS', 'inbox');
+if (existsSync(join(root, '02-DOCS', 'wiki')) && existsSync(inbox)) {
+  let pending = false;
+  try {
+    pending = readdirSync(inbox, { withFileTypes: true })
+      .some((e) => e.isFile() && e.name !== 'README.md' && !e.name.startsWith('.'));
+  } catch { /* unreadable → no nudge */ }
+  if (pending) {
+    process.stdout.write(`
+===== rsc auto-ingest =====
+Un-ingested material is waiting in 02-DOCS/inbox/.
+ACTION: run the Auto-Ingest Sweep now — ingest inbox/, then scan the workspace
+(minus .rscignore) for un-ingested documents, recording them in wiki/.ingested.json.
+Originals are copied, never moved; deleting an emptied folder needs explicit consent.
+===========================
+`);
+  }
+}
+
+// Git required: version control is the substrate the SDD chain + ship guard assume.
+// If the project is not under git, push for it once per session. Persist the user's
+// "no" as .rsc/.no-git so the decision lives in a file and we stop re-asking.
+if (!has('.git') && !has('.rsc', '.no-git')) {
+  process.stdout.write(`
+===== rsc git required =====
+This project is NOT under version control (no .git/).
+The SDD flow and the ship guard assume git. ACTION: offer to run \`git init\` now
+(recommended). If the user declines, create .rsc/.no-git so I stop asking.
+============================
+`);
+}
+
+// Context7 MCP: only for active rsc projects (a profile exists). If the live-docs MCP
+// isn't wired, nudge to add it once. Opt out per project with .rsc/.no-context7.
+if (profileExists && !hasContext7() && !has('.rsc', '.no-context7')) {
+  process.stdout.write(`
+===== rsc context7 MCP =====
+Context7 (live, version-correct library docs) is not configured for this project.
+ACTION: install it once — \`claude mcp add --transport http context7 https://mcp.context7.com/mcp\`
+then reload the session. If you don't want it here: create .rsc/.no-context7.
+============================
+`);
+}
+
+// Periodic skill audit: for active rsc projects, nudge to re-audit when the last run
+// is stale (or never ran). Running \`rsc audit\` stamps .rsc/audit.json and silences
+// this for the cadence. Opt out with .rsc/.no-audit.
+if (profileExists && auditDue() && !has('.rsc', '.no-audit')) {
+  process.stdout.write(`
+===== rsc skill audit =====
+A skill audit is due (runs at most every ${STALE_AUDIT_DAYS} days). It flags overlapping
+skills and skills with no footprint in this project.
+ACTION: run \`npx @ericrisco/rsc audit\`. Opt out with .rsc/.no-audit.
+===========================
+`);
+}
+
+// CLAUDE.md hygiene: the root CLAUDE.md is read on EVERY turn, so an overgrown one (usually
+// the Knowledge map accreting a row per wiki article) is a permanent context tax that rots
+// adherence. When it passes the ~200-line 2026 budget, nudge to offload the index into
+// 02-DOCS/wiki/index.md and keep CLAUDE.md a short pointer (the `harness` skill owns the move;
+// it's a relocation, not a delete). Opt out with .rsc/.no-claudemd-check.
+const CLAUDEMD_MAX_LINES = 200;
+if (!has('.rsc', '.no-claudemd-check')) {
+  // WHICH file is the project's instructions is no longer a constant. From Claude Code 2.1.277, a
+  // project with no CLAUDE.md is read through its root AGENTS.md instead — same per-turn cost, same
+  // adherence rot when it grows, and until now nothing measured it. Measure the file that is
+  // actually being loaded: CLAUDE.md when there is one, otherwise AGENTS.md.
+  const name = has('CLAUDE.md') ? 'CLAUDE.md' : (has('AGENTS.md') ? 'AGENTS.md' : null);
+  try {
+    const lines = readFileSync(join(root, name), 'utf8').split('\n').length;
+    if (lines > CLAUDEMD_MAX_LINES) {
+      // Only the CLAUDE.md claim is unconditional. A client older than 2.1.277 does not read
+      // AGENTS.md at all, and this hook cannot tell which it is talking to (the SessionStart
+      // payload carries no version), so the AGENTS.md line says when the cost applies instead of
+      // asserting it — a notice that overstates its case is the kind that gets opted out of.
+      const why = name === 'CLAUDE.md'
+        ? "it's read every turn, so each line costs context"
+        : "Claude Code 2.1.277+ loads it every turn when there is no CLAUDE.md, so each line costs context";
+      process.stdout.write(`
+===== rsc ${name} hygiene =====
+${name} is ${lines} lines — over the ~${CLAUDEMD_MAX_LINES}-line budget (${why}).
+ACTION: offload the Knowledge map / overgrown sections into 02-DOCS/wiki/index.md and leave a short
+pointer in ${name} (no info lost — it's a move). The \`harness\` skill owns the procedure.
+Opt out with .rsc/.no-claudemd-check.
+=================================
+`);
+    }
+  } catch { /* no instructions file (name === null) → nothing to check */ }
+}
+
+// Worktree sweep: a worktree whose work already reached the trunk is landed work wearing the same
+// clothes as live work, and the list stops being readable once a couple of them pile up. `ship`
+// retires the one it just landed; this is for the merge that happened somewhere else — a pull request
+// accepted in the forge, a merge by hand, a session that ended before ship. It only ever NAMES them:
+// at session start the user has asked for nothing, and acting on disk before they say a word is how a
+// safeguard earns itself an opt-out. Silent when there is nothing to say. Off with .rsc/.no-worktree-cleanup.
+if (has('.git')) {
+  try {
+    // No opt-out check here: `classifyWorktrees` returns nothing when the project turned the cleanup
+    // off, so a second check could never fail and would only look like protection (P2). Test 36 holds
+    // the behaviour end to end, through this hook.
+    const W = await import('./worktree-reaper.mjs');
+    {
+      const candidates = W.classifyWorktrees(root).filter((c) => c.verdict !== 'skip');
+      if (candidates.length) {
+        process.stdout.write(`
+===== rsc worktree cleanup =====
+${candidates.length} worktree(s) hold work that is already in the trunk:
+${candidates.map((c) => W.summarize(c, root)).join('\n')}
+ACTION: offer to retire them in ONE line and wait for a yes. On a yes run:
+  npx @ericrisco/rsc worktrees reap          (the ones marked safe)
+  npx @ericrisco/rsc worktrees reap <path>   (one the user confirmed by name)
+A yes in bulk covers only the safe ones; anything marked \`ask\` is confirmed on its own.
+A no holds for this session. Permanent off: .rsc/.no-worktree-cleanup
+================================
+`);
+      }
+    }
+  } catch { /* reaper missing or git unhappy → say nothing; this is never worth breaking startup for */ }
+}
+
+// Update check: compare the installed version (.rsc/.version, written at install)
+// against the latest published on npm, and nudge the agent to offer an update.
+// Fail-silent (offline / missing baseline / parse error → nothing). Disable with
+// RSC_NO_UPDATE_CHECK=1. RSC_LATEST overrides the npm lookup (tests / mirrors).
+function isNewer(a, b) {
+  const pa = String(a).split('.').map(Number);
+  const pb = String(b).split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) > (pb[i] || 0)) return true;
+    if ((pa[i] || 0) < (pb[i] || 0)) return false;
+  }
+  return false;
+}
+
+// "rsc X is out" was being ignored — the maintainer's own workspace sat on 2.0.4 for days with this
+// notice on every session, and two people in two days reported bugs that were already fixed. A
+// version number names nothing anyone recognises. A symptom does: someone who sees a red error after
+// every turn updates the moment they are told that is what the update fixes (`suggest` §3: say what
+// is wrong as a symptom, not as a cause).
+//
+// The symptoms travel for free: the registry's `/latest` document is the published package.json, so
+// its `rscFixes` field — `{ fixedIn, symptom }` — arrives in the response this check already makes.
+// It is text a model will read, so every entry is reduced to one short plain line or dropped.
+const SEMVER_ONLY = /^\d+\.\d+\.\d+$/;
+function fixesSince(list, installed, latest) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const item of list) {
+    if (!item || typeof item !== 'object' || typeof item.symptom !== 'string') continue;
+    if (!SEMVER_ONLY.test(String(item.fixedIn))) continue;
+    if (!isNewer(item.fixedIn, installed) || isNewer(item.fixedIn, latest)) continue;
+    const symptom = item.symptom.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (symptom) out.push({ fixedIn: item.fixedIn, symptom });
+  }
+  return out.slice(0, 8);
+}
+
+if (!process.env.RSC_NO_UPDATE_CHECK) {
+  try {
+    const installed = readFileSync(join(root, '.rsc', '.version'), 'utf8').trim();
+    let doc = null;
+    if (process.env.RSC_LATEST_JSON) doc = JSON.parse(process.env.RSC_LATEST_JSON);
+    else if (process.env.RSC_LATEST) doc = { version: process.env.RSC_LATEST };
+    else {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 1500);
+      const res = await fetch('https://registry.npmjs.org/@ericrisco%2frsc/latest', { signal: ctrl.signal });
+      clearTimeout(timer);
+      doc = await res.json();
+    }
+    const latest = doc?.version;
+    if (installed && latest && isNewer(latest, installed)) {
+      let fixes = [];
+      try { fixes = fixesSince(doc.rscFixes, installed, latest); } catch { fixes = []; }
+      if (fixes.length) {
+        process.stdout.write(`
+===== rsc update available =====
+rsc ${latest} is out — you have ${installed}. It fixes problems this install still has:
+${fixes.map((f) => `  - ${f.symptom} (fixed in ${f.fixedIn})`).join('\n')}
+ACTION: before starting the task, tell the user in one line that the update fixes what they
+may be seeing, and if they say yes, run it in this project:
+  npx @ericrisco/rsc@latest
+================================
+`);
+      } else {
+        process.stdout.write(`
+===== rsc update available =====
+rsc ${latest} is out — you have ${installed}.
+ACTION: tell the user a new version is available and, if they say yes, run:
+  npx @ericrisco/rsc@latest
+(That reinstalls and refreshes the skill content to the latest.)
+================================
+`);
+      }
+    }
+  } catch { /* offline / no baseline / parse error → stay silent */ }
+}
