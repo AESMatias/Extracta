@@ -1,0 +1,73 @@
+# Target: a 2 GB RAM server. Memory limits sum to 1280M (constitution principle 13),
+# leaving headroom for the OS and Docker itself. The database lives in Supabase.
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+  image: pdf-process-pipeline:latest
+  env_file: .env
+  volumes:
+    # Shared by web (writes uploads) and worker (reads, then deletes them).
+    - uploads:/tmp_uploads
+  restart: unless-stopped
+
+services:
+  web:
+    <<: *app
+    command: >
+      gunicorn "app:create_app()"
+      --bind 0.0.0.0:8000
+      --workers 2
+      --timeout 120
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+  worker:
+    <<: *app
+    command: >
+      celery -A app.tasks worker
+      --loglevel=info
+      --concurrency=1
+      --prefetch-multiplier=1
+      --max-tasks-per-child=20
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  redis:
+    image: redis:8-alpine
+    # noeviction: a broker must never silently drop queued tasks.
+    # appendonly: queued tasks survive a Redis restart.
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 96mb
+      --maxmemory-policy noeviction
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+volumes:
+  uploads:
+  redis_data:

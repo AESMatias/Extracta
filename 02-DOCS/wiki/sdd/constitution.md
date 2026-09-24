@@ -5,12 +5,12 @@ description: The non-negotiable principles every rsc-sdd phase obeys.
 tags: [sdd, constitution]
 timestamp: 2026-09-24T00:00:00Z
 topic: sdd
-version: v1.0.0
+version: v2.0.0
 ---
 
 # pdf_process_pipeline (IDP) — Constitution
 
-> Version: v1.0.0 · Ratified: 2026-09-24 · Last amended: 2026-09-24
+> Version: v2.0.0 · Ratified: 2026-09-24 · Last amended: 2026-09-24
 > The non-negotiable principles every rsc-sdd phase obeys. Stack mechanics live in the
 > installed stack skills (`python`, `docker`, `redis`, `supabase`, `postgresdb`); this file
 > ratifies the principle and points at the detail.
@@ -19,9 +19,10 @@ version: v1.0.0
 
 1. Python 3.12. Dependencies are managed with **Poetry**: declared in `pyproject.toml`,
    pinned in `poetry.lock`, both committed. No hand-edited `requirements.txt`.
-2. Frameworks fixed: Flask + Jinja2 (web/UI), Celery (workers), Redis (broker), PostgreSQL on
+~~2. Frameworks fixed: Flask + Jinja2 (web/UI), Celery (workers), Redis (broker), PostgreSQL on
    **Supabase** (storage), Pydantic v2 (schemas), `pdfplumber` (text extraction), `openai` SDK
-   with structured outputs bound to a Pydantic schema. Changing one is a MAJOR amendment.
+   with structured outputs bound to a Pydantic schema. Changing one is a MAJOR amendment.~~
+   (superseded by 18)
 3. Every service runs through Docker Compose. The database is Supabase (managed), so Compose
    has no local Postgres container.
 
@@ -46,8 +47,8 @@ version: v1.0.0
 
 ## 5. Security & privacy floor
 
-11. No secret is ever committed. `OPENAI_API_KEY` and Supabase credentials load from
-    `01-TOOLS/<provider>/.env` (gitignored).
+~~11. No secret is ever committed. `OPENAI_API_KEY` and Supabase credentials load from
+    `01-TOOLS/<provider>/.env` (gitignored).~~ (superseded by 19)
 
 ## 6. Resource floor (2 GB RAM production server)
 
@@ -68,6 +69,18 @@ version: v1.0.0
 17. Every significant decision is appended to `02-DOCS/wiki/sdd/decisions.md` (date, options,
     why). The constitution is the highest-order decision record.
 
+## 9. Amendments v2.0.0
+
+18. Frameworks fixed: Flask + Jinja2 (web/UI), Celery (workers), Redis (broker), PostgreSQL on
+    **Supabase** (storage), Pydantic v2 (schemas), `pdfplumber` (text extraction). LLM
+    extraction goes through one provider-agnostic interface with structured output bound to
+    the Pydantic schema; the provider and model are chosen only by `LLM_PROVIDER` and
+    `LLM_MODEL` in `.env`. Default: Gemini (`google-genai` SDK) on the cheapest Flash model.
+    Other providers (e.g. OpenAI) are optional Poetry extras, never required dependencies.
+    Changing a fixed framework is a MAJOR amendment.
+19. No secret is ever committed. Secrets load from the root `.env` (gitignored), which Docker
+    Compose reads; `.env.sample` documents every variable with empty or placeholder values.
+
 ## Definition of Done (the merge bar `verify` runs against)
 
 A change ships only when ALL hold:
@@ -78,7 +91,7 @@ A change ships only when ALL hold:
 - [ ] Tests pass; coverage ≥ 70% on changed code (principle 6).
 - [ ] English code, gitmoji commit (principles 7-8).
 - [ ] On a branch, authored by the human (principles 9-10).
-- [ ] No secret committed (principle 11).
+- [ ] No secret committed; `.env.sample` updated for new variables (principle 19).
 - [ ] RAM/disk rules intact: concurrency 1, memory limits, streaming, cleanup (principles 12-15).
 - [ ] UI floor met where UI changed (principle 16).
 - [ ] Significant decisions logged (principle 17).
@@ -88,3 +101,4 @@ A change ships only when ALL hold:
 | Date | Version | Change | Why |
 |------|---------|--------|-----|
 | 2026-09-24 | v1.0.0 | Ratified initial constitution. | Project kickoff. |
+| 2026-09-24 | v2.0.0 | Struck 2 → 18: OpenAI SDK replaced by a provider-agnostic LLM layer, Gemini Flash by default. Struck 11 → 19: secrets in root `.env`. | Owner prefers Gemini credits and a model switchable from `.env`; Compose reads root `.env`. |
