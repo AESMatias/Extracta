@@ -13,7 +13,7 @@ from pydantic import SecretStr
 from app import create_app
 from app.config import Settings
 from app.web.queue import TaskStatus
-from app.web.routes import MAX_FILES_PER_UPLOAD
+from app.web.routes import MAX_EXPORT_BODY_BYTES, MAX_FILES_PER_UPLOAD
 
 MakePdf = Callable[[list[str]], Path]
 INVOICE_DOC = {
@@ -268,3 +268,16 @@ def test_unknown_export_format_is_404(client: FlaskClient) -> None:
     response = client.post("/export/pdf/individual", json={"filename": "a.pdf", "document": INVOICE_DOC})
 
     assert response.status_code == 404
+
+
+# --------------------------------------------------------------------------- review fixes
+
+
+def test_export_bodies_are_capped_well_below_the_upload_limit(client: FlaskClient) -> None:
+    # The upload limit allows ~2.5 GB for 50 PDFs; a JSON body that large would be parsed into the
+    # web process memory (384 MB). Export requests get their own, much smaller cap.
+    huge = b'{"items": [' + b" " * (MAX_EXPORT_BODY_BYTES + 1) + b"]}"
+
+    response = client.post("/export/csv/unified", data=huge, content_type="application/json")
+
+    assert response.status_code == 413

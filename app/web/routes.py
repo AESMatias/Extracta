@@ -30,6 +30,8 @@ from app.web.queue import TaskQueue
 api = Blueprint("api", __name__)
 
 MAX_FILES_PER_UPLOAD = 50
+# JSON export bodies are parsed in memory: cap them far below the multi-file upload limit.
+MAX_EXPORT_BODY_BYTES = 10 * 1024 * 1024
 _OWNER_KEY = "owner"
 _TRUE_VALUES = {"1", "true", "on", "yes"}
 Body = tuple[dict[str, Any], int]
@@ -147,11 +149,16 @@ def _not_found() -> Body:
     return {"error": "Unknown export format. Use csv, xlsx or json."}, 404
 
 
+def _json_body() -> Any:
+    request.max_content_length = MAX_EXPORT_BODY_BYTES  # checked before the body is read: larger -> 413
+    return request.get_json(silent=True)
+
+
 @api.post("/export/<fmt>/individual")
 def export_individual(fmt: str) -> Response | Body:
     if fmt not in _MIMETYPES:
         return _not_found()
-    payload = request.get_json(silent=True)
+    payload = _json_body()
     if payload is None:
         return {"error": "Send the document as a JSON body."}, 400
     try:
@@ -174,7 +181,7 @@ def export_individual(fmt: str) -> Response | Body:
 def export_unified(fmt: str) -> Response | Body:
     if fmt not in _MIMETYPES:
         return _not_found()
-    payload = request.get_json(silent=True)
+    payload = _json_body()
     if payload is None:
         return {"error": "Send the documents as a JSON body."}, 400
     try:
