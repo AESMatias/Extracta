@@ -1,2 +1,0 @@
-description = "Run the plan skill through a short, non-duplicating entry point."
-prompt = "Delegate this request to the plan skill. Pass the invocation arguments unchanged: {{args}}\nDo not reproduce that skill's method here; load it and follow its own stopping and verification rules."
