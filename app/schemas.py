@@ -53,9 +53,7 @@ class DocumentType(StrEnum):
     OTHER = "other"
 
 
-# --------------------------------------------------------------------------
 # Shared building blocks
-# --------------------------------------------------------------------------
 
 
 class Party(BaseModel):
@@ -78,9 +76,7 @@ class LineItem(BaseModel):
     amount: float | None = Field(default=None, description=f"Line total. {_AMOUNT}")
 
 
-# --------------------------------------------------------------------------
 # Type-specific sections
-# --------------------------------------------------------------------------
 
 
 class CommercialDocumentData(BaseModel):
@@ -188,9 +184,7 @@ SECTION_BY_TYPE: dict[DocumentType, str] = {
 }
 
 
-# --------------------------------------------------------------------------
 # Root model
-# --------------------------------------------------------------------------
 
 
 class DocumentSchema(BaseModel):
