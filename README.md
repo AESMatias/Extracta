@@ -9,385 +9,385 @@
 ![Docker](https://img.shields.io/badge/docker-compose-2496ED?logo=docker&logoColor=white)
 ![Ruff](https://img.shields.io/badge/code%20style-ruff-D7FF64?logo=ruff&logoColor=black)
 
-Sube muchos PDF a la vez y obtén sus datos estructurados. Cada documento se **clasifica**
-(factura, boleta, contrato, cartola, liquidación, CV, informe…), se extrae su texto y un LLM
-(Gemini por defecto) lo convierte en JSON validado. El resultado se ve en tablas y gráficos, se
-exporta a CSV y, si quieres, se guarda en Supabase.
+Upload many PDFs at once and get their data back as structured JSON. Each document is
+**classified** (invoice, receipt, contract, bank statement, payslip, resume, report…), its text
+is extracted and an LLM (Gemini by default) turns it into validated JSON. Results show up as
+tables and charts, can be exported to CSV and, if you choose, are saved to Supabase.
 
-Está diseñado para correr en un **servidor de 2 GB de RAM**: los documentos se procesan de uno
-en uno, cada servicio tiene un límite de memoria y los PDF se borran apenas se procesan.
+It is built to run on a **2 GB RAM server**: documents are processed one at a time, every
+service has a memory limit and PDFs are deleted as soon as they are processed.
 
-> **Estado:** en construcción, paso a paso. Hoy funcionan la configuración, la app web mínima
-> (`/health`), el esquema de extracción y la base de datos en Supabase. El avance detallado está en la
-> [hoja de ruta](02-DOCS/wiki/ftd/idp-mvp.md).
-
----
-
-## Índice
-
-- [Qué hace](#qué-hace)
-- [Arquitectura](#arquitectura)
-- [Diseñado para 2 GB de RAM](#diseñado-para-2-gb-de-ram)
-- [Puesta en marcha](#puesta-en-marcha)
-- [Configuración (`.env`)](#configuración-env)
-- [Desarrollo: tests y calidad](#desarrollo-tests-y-calidad)
-- [Ruff: qué es y cómo se usa](#ruff-qué-es-y-cómo-se-usa)
-- [Estructura del proyecto](#estructura-del-proyecto)
-- [Convenciones](#convenciones)
-- [Seguridad](#seguridad)
-- [Documentación interna y harness](#documentación-interna-y-harness)
+> **Status:** under construction, step by step. Working today: configuration, the minimal web
+> app (`/health`), the extraction schema and the Supabase database. Detailed progress lives in
+> the [roadmap](02-DOCS/wiki/ftd/idp-mvp.md).
 
 ---
 
-## Qué hace
+## Contents
 
-### Tipos de documento
+- [What it does](#what-it-does)
+- [Architecture](#architecture)
+- [Built for 2 GB of RAM](#built-for-2-gb-of-ram)
+- [Getting started](#getting-started)
+- [Configuration (`.env`)](#configuration-env)
+- [Development: tests and quality](#development-tests-and-quality)
+- [Ruff: what it is and how to use it](#ruff-what-it-is-and-how-to-use-it)
+- [Project structure](#project-structure)
+- [Conventions](#conventions)
+- [Security](#security)
+- [Internal docs and AI harness](#internal-docs-and-ai-harness)
 
-El LLM primero clasifica el PDF y luego rellena **solo** la sección de ese tipo
+---
+
+## What it does
+
+### Document types
+
+The LLM first classifies the PDF and then fills **only** the section for that type
 ([`app/schemas.py`](app/schemas.py)):
 
-| Tipo | Ejemplos | Datos que extrae |
+| Type | Examples | Extracted data |
 |---|---|---|
-| `invoice` | Facturas, cuentas de servicios | Emisor, cliente, RUT/tax ID, fechas, subtotal, impuestos, total, moneda, líneas de detalle |
-| `receipt` | Boletas, tickets | Igual que factura |
-| `purchase_order` | Órdenes de compra | Igual que factura |
-| `quote` | Cotizaciones, presupuestos | Igual que factura (vencimiento de la oferta) |
-| `bank_statement` | Cartolas bancarias | Banco, titular, **solo últimos 4 dígitos** de la cuenta, período, saldos, abonos y cargos |
-| `contract` | Contratos | Partes y roles, vigencia, valor, renovación automática, aviso de término, ley aplicable, obligaciones |
-| `payslip` | Liquidaciones de sueldo | Empleador, empleado, período, bruto, descuentos, líquido |
-| `resume` | CVs | Nombre, contacto, cargo, experiencia, habilidades, idiomas, estudios |
-| `report` | Informes | Título, autor, fecha, período, hallazgos clave |
-| `other` | Cualquier otro | Título y resumen |
+| `invoice` | Invoices, utility bills | Issuer, customer, tax ID (RUT, VAT…), dates, subtotal, taxes, total, currency, line items |
+| `receipt` | Receipts, sales tickets | Same as invoice |
+| `purchase_order` | Purchase orders | Same as invoice |
+| `quote` | Quotes, estimates | Same as invoice (offer expiry date) |
+| `bank_statement` | Bank statements | Bank, holder, **last 4 account digits only**, period, balances, credits and debits |
+| `contract` | Contracts | Parties and roles, term, value, auto-renewal, termination notice, governing law, key obligations |
+| `payslip` | Payslips | Employer, employee, period, gross pay, deductions, net pay |
+| `resume` | Resumes / CVs | Name, contact, title, experience, skills, languages, education |
+| `report` | Reports | Title, author, date, period, key findings |
+| `other` | Anything else | Title and summary |
 
-Todos incluyen `document_type`, `language`, `title` y un `summary` breve. Funciona con
-documentos en cualquier idioma: montos como números, fechas en `YYYY-MM-DD` y monedas en ISO 4217.
+Every result also has `document_type`, `language`, `title` and a short `summary`. Documents can
+be in any language: amounts come back as numbers, dates as `YYYY-MM-DD` and currencies as ISO
+4217 codes.
 
-### Dos modos de procesamiento
+### Two processing modes
 
-Al subir los archivos eliges:
+The user picks one when uploading:
 
-| Modo | Qué pasa con los datos |
+| Mode | What happens to the data |
 |---|---|
-| **Persistente** | Se guardan en PostgreSQL (Supabase) y además se muestran en pantalla. |
-| **Efímero** | **Nunca tocan la base de datos.** Viven temporalmente en Redis (expiran) y en el navegador. |
+| **Persistent** | Saved to PostgreSQL (Supabase) and shown on screen. |
+| **Ephemeral** | **Never touches the database.** Lives temporarily in Redis (it expires) and in the browser. |
 
-En ambos modos el PDF se borra del disco al terminar su tarea.
+In both modes the PDF is deleted from disk when its task finishes.
 
-### Exportar y visualizar
+### Export and visualize
 
-- **Tabla y gráficos en vivo** (Chart.js) a medida que cada documento termina.
-- **CSV individual**: un documento (sus líneas de detalle como filas).
-- **CSV unificado**: todo el lote, una fila por documento.
+- **Live table and charts** (Chart.js) as each document finishes.
+- **Individual CSV**: one document (its line items as rows).
+- **Unified CSV**: the whole batch, one row per document.
 
 ---
 
-## Arquitectura
+## Architecture
 
 ```mermaid
 flowchart LR
-    B[Navegador<br/>dropzone + tabla + gráficos] -- "POST /upload<br/>(PDFs + save_to_db)" --> W[web<br/>Flask + gunicorn]
-    W -- "escribe en streaming" --> V[(volumen<br/>/tmp_uploads)]
-    W -- "encola tarea" --> R[(Redis<br/>cola + resultados con TTL)]
+    B[Browser<br/>dropzone + table + charts] -- "POST /upload<br/>(PDFs + save_to_db)" --> W[web<br/>Flask + gunicorn]
+    W -- "streams to disk" --> V[(volume<br/>/tmp_uploads)]
+    W -- "enqueues task" --> R[(Redis<br/>queue + results with TTL)]
     R --> K[worker<br/>Celery, concurrency=1]
-    V -- "lee PDF" --> K
-    K -- "texto" --> P[pdfplumber]
-    K -- "texto + esquema" --> L[LLM<br/>Gemini / OpenAI]
-    K -- "solo si save_to_db" --> S[(Supabase<br/>PostgreSQL)]
-    K -- "devuelve JSON" --> R
-    K -. "borra el PDF" .-> V
+    V -- "reads PDF" --> K
+    K -- "text" --> P[pdfplumber]
+    K -- "text + schema" --> L[LLM<br/>Gemini / OpenAI]
+    K -- "only if save_to_db" --> S[(Supabase<br/>PostgreSQL)]
+    K -- "returns JSON" --> R
+    K -. "deletes PDF" .-> V
     B -- "GET /tasks/{id} (polling)" --> W
-    W -- "estado + resultado" --> R
+    W -- "status + result" --> R
     B -- "POST /export/csv/*" --> W
 ```
 
-**Flujo de un documento:**
+**Life of a document:**
 
-1. El navegador sube los PDF. `web` los escribe **en trozos** al volumen compartido `/tmp_uploads`
-   (nunca el archivo entero en RAM) y encola una tarea de Celery por archivo.
-2. El `worker` toma **una tarea a la vez**: extrae el texto con `pdfplumber`, lo envía al LLM
-   junto con el esquema (`DocumentSchema`) y recibe JSON validado por Pydantic.
-3. Si el modo es persistente, guarda el resultado en Supabase.
-4. Devuelve el JSON: Celery lo guarda en Redis por un tiempo limitado.
-5. Borra el PDF del disco, pase lo que pase.
-6. El navegador consulta el estado de cada tarea (Pending → Processing → Completed/Failed) y,
-   al completarse, muestra los datos y habilita los CSV.
+1. The browser uploads the PDFs. `web` writes them **in chunks** to the shared `/tmp_uploads`
+   volume (never the whole file in RAM) and enqueues one Celery task per file.
+2. The `worker` takes **one task at a time**: it extracts the text with `pdfplumber`, sends it to
+   the LLM together with the schema (`DocumentSchema`) and gets back JSON validated by Pydantic.
+3. In persistent mode it saves the result to Supabase.
+4. It returns the JSON: Celery keeps it in Redis for a limited time.
+5. It deletes the PDF from disk, whatever the outcome.
+6. The browser polls each task's status (Pending → Processing → Completed/Failed) and, once
+   completed, shows the data and enables the CSV buttons.
 
-| Pieza | Tecnología | Rol |
+| Piece | Technology | Role |
 |---|---|---|
-| Web / UI | Flask 3.1 + Jinja2, gunicorn | Subida, estado, exportación CSV |
-| Cola | Celery 5.6 + Redis 8 | Procesamiento en segundo plano, resultados temporales |
-| Extracción de texto | pdfplumber | Texto de PDF digitales |
-| LLM | Gemini (`google-genai`), OpenAI opcional | Clasificar y extraer datos estructurados |
-| Validación | Pydantic v2, pydantic-settings | Esquema de salida y configuración |
-| Base de datos | Supabase (PostgreSQL 17) + SQLAlchemy 2 + psycopg 3 | Persistencia (modo persistente) |
-| Contenedores | Docker Compose | Todo el sistema con límites de memoria |
-| Dependencias | Poetry | `pyproject.toml` + `poetry.lock` reproducibles |
+| Web / UI | Flask 3.1 + Jinja2, gunicorn | Upload, status, CSV export |
+| Queue | Celery 5.6 + Redis 8 | Background processing, temporary results |
+| Text extraction | pdfplumber | Text from digital PDFs |
+| LLM | Gemini (`google-genai`), optional OpenAI | Classify and extract structured data |
+| Validation | Pydantic v2, pydantic-settings | Output schema and configuration |
+| Database | Supabase (PostgreSQL 17) + SQLAlchemy 2 + psycopg 3 | Storage (persistent mode) |
+| Containers | Docker Compose | The whole system, with memory limits |
+| Dependencies | Poetry | Reproducible `pyproject.toml` + `poetry.lock` |
 
 ---
 
-## Diseñado para 2 GB de RAM
+## Built for 2 GB of RAM
 
-| Medida | Dónde | Por qué |
+| Measure | Where | Why |
 |---|---|---|
-| Límite de memoria por servicio: web 384M, worker 768M, redis 128M (**total 1280M**) | `docker-compose.yml` | Deja ~700 MB para el sistema y Docker |
-| `--concurrency=1` y `--prefetch-multiplier=1` | worker | Un PDF a la vez, sin reservar tareas de más |
-| `--max-tasks-per-child=20` | worker | Reinicia el proceso cada 20 tareas y libera memoria acumulada |
-| Subida en streaming a disco | web | Lotes grandes sin cargar archivos en RAM |
-| Borrado del PDF al terminar cada tarea | worker | El disco no se llena |
-| Redis `noeviction` + `appendonly` | redis | Nunca descarta tareas encoladas; sobreviven a un reinicio |
-| Sin contenedor de PostgreSQL | — | La base vive en Supabase |
+| Per-service memory limits: web 384M, worker 768M, redis 128M (**1280M total**) | `docker-compose.yml` | Leaves ~700 MB for the OS and Docker |
+| `--concurrency=1` and `--prefetch-multiplier=1` | worker | One PDF at a time, no extra tasks reserved |
+| `--max-tasks-per-child=20` | worker | Restarts the process every 20 tasks to release accumulated memory |
+| Streaming uploads to disk | web | Large batches without loading files into RAM |
+| PDF deleted when each task finishes | worker | The disk never fills up |
+| Redis `noeviction` + `appendonly` | redis | Queued tasks are never dropped and survive a restart |
+| No PostgreSQL container | — | The database lives in Supabase |
 
 ---
 
-## Puesta en marcha
+## Getting started
 
-### Requisitos
+### Requirements
 
-- **Docker** con Compose. En macOS sin Docker Desktop:
+- **Docker** with Compose. On macOS without Docker Desktop:
   ```bash
   brew install colima docker docker-compose
   colima start --cpu 2 --memory 2 --disk 30
   ```
-  (`--memory 2` imita el servidor de producción.)
-- Un proyecto en **Supabase** y una API key de **Gemini** ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)).
+  (`--memory 2` mimics the production server.)
+- A **Supabase** project and a **Gemini** API key ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)).
 
-No necesitas Python ni Poetry en tu máquina: todo corre en contenedores.
+You do not need Python or Poetry on your machine: everything runs in containers.
 
-### Pasos
+### Steps
 
 ```bash
-git clone <url-del-repo>
+git clone <repo-url>
 cd pdf_process_pipeline
-cp .env.sample .env        # luego rellena GEMINI_API_KEY y DATABASE_URL
+cp .env.sample .env        # then fill in GEMINI_API_KEY and DATABASE_URL
 docker compose up --build web redis
 ```
 
-Abre <http://localhost:8000/health> → `{"status": "ok"}`.
+Open <http://localhost:8000/health> → `{"status": "ok"}`.
 
-Crea la tabla en Supabase (una sola vez; se puede repetir sin riesgo):
+Create the table in Supabase (once; running it again is safe):
 
 ```bash
 docker compose run --rm --no-deps web python -m app.db
 ```
 
-> El servicio `worker` se levantará con `docker compose up --build` cuando exista
-> `app/tasks.py` (paso 10 de la hoja de ruta).
+> The `worker` service will start with `docker compose up --build` once `app/tasks.py`
+> exists (step 10 of the roadmap).
 
-Comandos útiles:
+Useful commands:
 
 ```bash
-docker compose logs -f web      # ver logs
-docker compose ps               # estado y salud de cada servicio
-docker stats --no-stream        # consumo de memoria real
-docker compose down             # apagar
+docker compose logs -f web      # follow logs
+docker compose ps               # status and health of each service
+docker stats --no-stream        # real memory usage
+docker compose down             # stop everything
 ```
 
 ---
 
-## Configuración (`.env`)
+## Configuration (`.env`)
 
-Todas las variables están documentadas en [`.env.sample`](.env.sample). `.env` está en
-`.gitignore`: **nunca se sube al repo**. La configuración se valida al arrancar
-([`app/config.py`](app/config.py)); si falta algo, la app no arranca y dice qué falta.
+Every variable is documented in [`.env.sample`](.env.sample). `.env` is in `.gitignore`:
+**it is never committed**. Configuration is validated at startup ([`app/config.py`](app/config.py));
+if something is missing, the app refuses to start and says what is missing.
 
-| Variable | Ejemplo | Descripción |
+| Variable | Example | Description |
 |---|---|---|
-| `LLM_PROVIDER` | `gemini` | `gemini` u `openai` |
-| `LLM_MODEL` | `gemini-3.1-flash-lite` | Modelo del proveedor elegido |
-| `GEMINI_API_KEY` | — | Obligatoria si `LLM_PROVIDER=gemini` |
-| `OPENAI_API_KEY` | — | Obligatoria si `LLM_PROVIDER=openai` |
-| `DATABASE_URL` | `postgresql+psycopg://postgres.<ref>:<pass>@aws-0-<region>.pooler.supabase.com:5432/postgres` | Conexión a Supabase |
-| `CELERY_BROKER_URL` | `redis://redis:6379/0` | Redis dentro de Compose |
-| `UPLOAD_DIR` | `/tmp_uploads` | Volumen compartido web ↔ worker |
-| `MAX_UPLOAD_MB` | `50` | Tamaño máximo por PDF |
+| `LLM_PROVIDER` | `gemini` | `gemini` or `openai` |
+| `LLM_MODEL` | `gemini-3.1-flash-lite` | Model of the selected provider |
+| `GEMINI_API_KEY` | — | Required when `LLM_PROVIDER=gemini` |
+| `OPENAI_API_KEY` | — | Required when `LLM_PROVIDER=openai` |
+| `DATABASE_URL` | `postgresql://postgres.<ref>:<pass>@aws-0-<region>.pooler.supabase.com:5432/postgres` | Supabase connection (paste it as shown; the app switches it to the psycopg 3 driver) |
+| `CELERY_BROKER_URL` | `redis://redis:6379/0` | Redis inside Compose |
+| `UPLOAD_DIR` | `/tmp_uploads` | Volume shared by web and worker |
+| `MAX_UPLOAD_MB` | `50` | Maximum size per PDF |
 
-### ¿Qué cadena de conexión de Supabase usar?
+### Which Supabase connection string?
 
-En el dashboard: **Connect → Connection String**. Hay tres; usa el **Session pooler**:
+In the dashboard: **Connect → Connection String**. There are three; use the **Session pooler**:
 
-| Opción | Puerto | Uso |
+| Option | Port | Use |
 |---|---|---|
-| Direct connection | 5432 | ❌ Solo IPv6: muchos VPS y redes Docker no llegan |
-| **Session pooler** | **5432** | ✅ IPv4, conexiones largas (web + worker) |
-| Transaction pooler | 6543 | ❌ Para serverless; rompe los *prepared statements* de psycopg 3 |
+| Direct connection | 5432 | ❌ IPv6 only: many VPS and Docker networks cannot reach it |
+| **Session pooler** | **5432** | ✅ IPv4, long-lived connections (web + worker) |
+| Transaction pooler | 6543 | ❌ Meant for serverless; breaks psycopg 3 prepared statements |
 
-### Cambiar de proveedor de LLM
+### Switching LLM provider
 
-1. En `.env`: `LLM_PROVIDER=openai`, `LLM_MODEL=<modelo>` y `OPENAI_API_KEY=...`
-2. Reconstruye la imagen incluyendo el SDK opcional:
+1. In `.env`: `LLM_PROVIDER=openai`, `LLM_MODEL=<model>` and `OPENAI_API_KEY=...`
+2. Rebuild the image with the optional SDK:
    ```bash
    docker compose build --build-arg POETRY_EXTRAS=openai
    ```
 
-No hay que tocar código: todos los proveedores usan la misma interfaz y el mismo esquema.
+No code changes: every provider uses the same interface and the same schema.
 
 ---
 
-## Desarrollo: tests y calidad
+## Development: tests and quality
 
-El proyecto se desarrolla con **TDD**: primero un test que falla (🔴), luego el código mínimo
-que lo hace pasar (🟢). Las herramientas corren dentro de una imagen `dev`:
+The project is built with **TDD**: first a failing test (🔴), then the minimum code that makes
+it pass (🟢). The tools run inside a `dev` image:
 
 ```bash
-# Una vez (o cuando cambien las dependencias)
+# Once (or whenever dependencies change)
 docker build -f docker/Dockerfile --target dev -t pdf-process-pipeline:dev .
 
-# Tests + cobertura
+# Tests + coverage
 docker run --rm -v "$PWD":/src -w /src pdf-process-pipeline:dev pytest
 
-# Formatear y revisar estilo
+# Format and lint
 docker run --rm -v "$PWD":/src -w /src pdf-process-pipeline:dev ruff format app tests
 docker run --rm -v "$PWD":/src -w /src pdf-process-pipeline:dev ruff check app tests
 
-# Tipos
+# Types
 docker run --rm -v "$PWD":/src -w /src pdf-process-pipeline:dev mypy app tests
 
-# Tests de integración contra tu Supabase real (lee .env)
+# Integration tests against your real Supabase (reads .env)
 docker run --rm --env-file .env -v "$PWD":/src -w /src pdf-process-pipeline:dev pytest -m integration
 ```
 
-| Herramienta | Qué verifica | Exigencia |
+| Tool | What it checks | Bar |
 |---|---|---|
-| **pytest** + pytest-cov | Que el código hace lo que debe | Todo pasa; cobertura ≥ 70 % en código cambiado |
-| **ruff** | Estilo y errores comunes | Cero avisos |
-| **mypy** | Que los tipos (`str`, `int`, `Settings`…) cuadran | Cero errores |
+| **pytest** + pytest-cov | The code does what it should | All green; ≥ 70% coverage on changed code |
+| **ruff** | Style and common mistakes | Zero findings |
+| **mypy** | Types (`str`, `int`, `Settings`…) line up | Zero errors |
 
-El código se monta en `/src` para que no tape el entorno virtual de la imagen (`/app/.venv`).
+The code is mounted at `/src` so it does not hide the image's virtualenv (`/app/.venv`).
 
-### Dependencias con Poetry
+### Dependencies with Poetry
 
-- Se declaran en [`pyproject.toml`](pyproject.toml) y se fijan en `poetry.lock` (versiones exactas).
-- Grupos: dependencias de producción, grupo `dev` (pytest, ruff, mypy) y el extra opcional `openai`.
-- Sin Poetry local, se usa desde un contenedor, por ejemplo para añadir un paquete:
+- Declared in [`pyproject.toml`](pyproject.toml) and pinned in `poetry.lock` (exact versions).
+- Groups: production dependencies, a `dev` group (pytest, ruff, mypy) and the optional `openai` extra.
+- Without a local Poetry, run it from a container, e.g. to add a package:
   ```bash
   docker run --rm -v "$PWD":/work -w /work python:3.12-slim \
-    sh -c 'pip install -q poetry==2.5.1 && poetry add <paquete>'
+    sh -c 'pip install -q poetry==2.5.1 && poetry add <package>'
   ```
 
 ---
 
-## Ruff: qué es y cómo se usa
+## Ruff: what it is and how to use it
 
-[**Ruff**](https://docs.astral.sh/ruff/) es un analizador y formateador de código Python
-escrito en Rust (muy rápido). Tiene **dos trabajos distintos**:
+[**Ruff**](https://docs.astral.sh/ruff/) is a Python linter and formatter written in Rust (very
+fast). It does **two different jobs**:
 
-| Comando | Qué hace | Analogía |
+| Command | What it does | Analogy |
 |---|---|---|
-| `ruff check` | **Linter**: detecta errores y malas prácticas (imports sin usar, variables no definidas, imports desordenados, sintaxis antigua, líneas demasiado largas…) y los **reporta** | Corrector ortográfico |
-| `ruff format` | **Formateador**: **reescribe** el código con un estilo uniforme (espacios, comillas, saltos de línea) | "Autoformato" de un editor |
+| `ruff check` | **Linter**: finds bugs and bad practices (unused imports, undefined names, unsorted imports, outdated syntax, overlong lines…) and **reports** them | Spell checker |
+| `ruff format` | **Formatter**: **rewrites** the code in one consistent style (spacing, quotes, line breaks) | An editor's auto-format |
 
-**Por qué se usa:** todo el código se ve igual lo escriba quien lo escriba, y las revisiones se
-centran en la lógica, no en espacios.
+**Why use it:** all code looks the same no matter who wrote it, so reviews focus on logic, not
+whitespace.
 
-**Configuración** (en `pyproject.toml`):
+**Configuration** (in `pyproject.toml`):
 
 ```toml
 [tool.ruff]
-line-length = 120          # ancho máximo de línea, contando comentarios
+line-length = 120          # maximum line width, comments included
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM"]
 ```
 
-| Regla | Qué revisa |
+| Rule set | What it checks |
 |---|---|
-| `E` | Estilo PEP 8 (p. ej. `E501`: línea demasiado larga) |
-| `F` | Errores reales: nombres no definidos, imports sin usar |
-| `I` | Orden de los imports |
-| `B` | Bugs frecuentes (bugbear), p. ej. argumentos mutables por defecto |
-| `UP` | Sintaxis moderna de Python (`str \| None` en vez de `Optional[str]`) |
-| `SIM` | Simplificaciones de código |
+| `E` | PEP 8 style (e.g. `E501`: line too long) |
+| `F` | Real errors: undefined names, unused imports |
+| `I` | Import order |
+| `B` | Common bugs (bugbear), e.g. mutable default arguments |
+| `UP` | Modern Python syntax (`str \| None` instead of `Optional[str]`) |
+| `SIM` | Code simplifications |
 
-**Comentarios a la derecha del código:** están permitidos. El límite de 120 caracteres deja
-espacio para ellos; el formateador cuenta el comentario dentro del ancho, así que si una línea
-con comentario pasa de 120, `ruff format` partiría el código para hacerle sitio. `ruff format`
-también pone automáticamente los **dos espacios antes del `#`** que pide PEP 8:
+**Comments to the right of code** are allowed. The 120-character limit leaves room for them;
+the formatter counts the comment in the line width, so if a commented line goes past 120,
+`ruff format` would split the code to make room. `ruff format` also adds the **two spaces before
+`#`** that PEP 8 asks for:
 
 ```python
 app.extensions["settings"] = settings or get_settings()  # get_settings() is cached: .env is read once per process
 ```
 
-**Flujo recomendado:** después de editar, `ruff format` (arregla solo) y luego `ruff check`
-(lo que quede, lo corriges tú o con `ruff check --fix`).
+**Recommended flow:** after editing, run `ruff format` (fixes things itself), then `ruff check`
+(fix what is left by hand or with `ruff check --fix`).
 
 ---
 
-## Estructura del proyecto
+## Project structure
 
 ```
 pdf_process_pipeline/
 ├── app/
-│   ├── __init__.py          ✅ create_app(): app factory de Flask + /health
-│   ├── config.py            ✅ Configuración validada desde .env
-│   ├── schemas.py           ✅ DocumentSchema: lo que el LLM debe devolver
-│   ├── db.py, models.py     ✅ Conexión a Supabase y tabla documents (RLS activado)
-│   ├── storage.py           ⏳ Subida en streaming a /tmp_uploads
-│   ├── pdf_text.py          ⬜ Texto con pdfplumber
-│   ├── llm/                 ⬜ Interfaz común + Gemini + OpenAI + selector
-│   ├── tasks.py             ⬜ Tarea Celery (extraer → LLM → guardar → borrar PDF)
-│   ├── export.py            ⬜ CSV individual y unificado
-│   └── web/                 ⬜ Rutas, plantillas Jinja2, JS y gráficos
+│   ├── __init__.py          ✅ create_app(): Flask app factory + /health
+│   ├── config.py            ✅ Settings validated from .env
+│   ├── schemas.py           ✅ DocumentSchema: what the LLM must return
+│   ├── db.py, models.py     ✅ Supabase connection and documents table (RLS on)
+│   ├── storage.py           ⏳ Streaming upload to /tmp_uploads
+│   ├── pdf_text.py          ⬜ Text extraction with pdfplumber
+│   ├── llm/                 ⬜ Common interface + Gemini + OpenAI + selector
+│   ├── tasks.py             ⬜ Celery task (extract → LLM → save → delete PDF)
+│   ├── export.py            ⬜ Individual and unified CSV
+│   └── web/                 ⬜ Routes, Jinja2 templates, JS and charts
 ├── tests/                   Tests (pytest)
-├── docker/Dockerfile        Imagen multi-etapa: builder → dev → runtime
-├── docker-compose.yml       web + worker + redis con límites de memoria
-├── pyproject.toml           Dependencias (Poetry) y configuración de ruff/mypy/pytest
-├── poetry.lock              Versiones exactas
-├── .env.sample              Plantilla de configuración documentada
-├── 02-DOCS/wiki/            Constitución, decisiones y hoja de ruta
-└── CLAUDE.md / GEMINI.md    Índice para asistentes de IA
+├── docker/Dockerfile        Multi-stage image: builder → dev → runtime
+├── docker-compose.yml       web + worker + redis with memory limits
+├── pyproject.toml           Dependencies (Poetry) and ruff/mypy/pytest config
+├── poetry.lock              Exact versions
+├── .env.sample              Documented configuration template
+├── 02-DOCS/wiki/            Constitution, decisions and roadmap
+└── CLAUDE.md / GEMINI.md    Index for AI assistants
 ```
 
-✅ hecho · ⏳ en curso · ⬜ pendiente
+✅ done · ⏳ in progress · ⬜ pending
 
 ---
 
-## Convenciones
+## Conventions
 
-- **Idioma:** código, variables, funciones y comentarios **en inglés**; documentación para el
-  equipo en español.
-- **Ramas:** el trabajo se hace en ramas (`feat/...`) y se integra a `main` solo tras pasar
-  tests, ruff y mypy.
-- **Commits:** [gitmoji](https://gitmoji.dev) + Conventional Commits, con un asunto descriptivo
-  que empieza con un verbo en imperativo:
+- **Language:** everything in the repository is in **English** — code, identifiers, comments,
+  docs and commit messages.
+- **Branches:** work happens on branches (`feat/...`) and reaches `main` only after tests, ruff
+  and mypy pass.
+- **Commits:** [gitmoji](https://gitmoji.dev) + Conventional Commits, with a descriptive subject
+  that starts with an imperative verb:
   ```
   ✨ feat(config): add validated settings loaded from .env
   🐳 build(docker): add multi-stage Dockerfile, .dockerignore and poetry.lock
   🎨 style(ruff): raise line length to 120 to allow comments to the right of code
   ```
-- **Decisiones importantes** se registran en [`02-DOCS/wiki/sdd/decisions.md`](02-DOCS/wiki/sdd/decisions.md).
+- **Significant decisions** are logged in [`02-DOCS/wiki/sdd/decisions.md`](02-DOCS/wiki/sdd/decisions.md).
 
 ---
 
-## Seguridad
+## Security
 
-- **Secretos** solo en `.env` (ignorado por git y por `.dockerignore`, nunca entra a la imagen);
-  la configuración usa `SecretStr` para no mostrarlos en logs.
-- **Contenedor sin root**: la app corre como `appuser`.
-- **Supabase**: la tabla `documents` tiene Row Level Security activado (sin políticas), así la
-  API pública de Supabase no la expone; la app se conecta como dueña de la tabla.
-- **Privacidad**: de las cuentas bancarias solo se guardan los últimos 4 dígitos; el modo
-  efímero nunca escribe en la base de datos.
-- **CSV**: las celdas que empiezan con `=`, `+`, `-` o `@` se escapan (inyección de fórmulas
-  en Excel).
-- **Vulnerabilidades**: dependencias escaneadas con [Trivy](https://trivy.dev) (0 CVE en
-  `poetry.lock`); la imagen base se revisa en cada versión
-  ([decisión registrada](02-DOCS/wiki/sdd/decisions.md)).
+- **Secrets** only in `.env` (ignored by git and by `.dockerignore`, so it never enters the
+  image); settings use `SecretStr` so secrets never show up in logs.
+- **Non-root container**: the app runs as `appuser`.
+- **Supabase**: the `documents` table has Row Level Security enabled (no policies), so
+  Supabase's public REST API cannot read it; the app connects as the table owner.
+- **Privacy**: only the last 4 digits of bank accounts are stored; ephemeral mode never writes
+  to the database.
+- **CSV**: cells starting with `=`, `+`, `-` or `@` are escaped (spreadsheet formula injection).
+- **Vulnerabilities**: dependencies scanned with [Trivy](https://trivy.dev) (0 CVEs in
+  `poetry.lock`); the base image is reviewed on every release
+  ([logged decision](02-DOCS/wiki/sdd/decisions.md)).
 
 ---
 
-## Documentación interna y harness
+## Internal docs and AI harness
 
-- [`02-DOCS/wiki/sdd/constitution.md`](02-DOCS/wiki/sdd/constitution.md): reglas no negociables
-  del proyecto (stack, calidad, límites de RAM, seguridad).
-- [`02-DOCS/wiki/sdd/decisions.md`](02-DOCS/wiki/sdd/decisions.md): registro de decisiones con
-  alternativas y motivos.
-- [`02-DOCS/wiki/ftd/idp-mvp.md`](02-DOCS/wiki/ftd/idp-mvp.md): hoja de ruta paso a paso con
-  evidencia de cada paso.
+- [`02-DOCS/wiki/sdd/constitution.md`](02-DOCS/wiki/sdd/constitution.md): the project's
+  non-negotiable rules (stack, quality, RAM limits, security).
+- [`02-DOCS/wiki/sdd/decisions.md`](02-DOCS/wiki/sdd/decisions.md): decision log with
+  alternatives and reasons.
+- [`02-DOCS/wiki/ftd/idp-mvp.md`](02-DOCS/wiki/ftd/idp-mvp.md): step-by-step roadmap with the
+  evidence for each step.
 
-El proyecto usa [rsc-harness](https://ericrisco.github.io/rsc-harness/) para configurar
-asistentes de IA (Claude Code y Gemini CLI): skills, agentes revisores y hooks. En git solo va
-la declaración (`.rsc.json`); los archivos generados (`.rsc/`, enlaces en `.claude/` y
-`.gemini/`) son locales. Tras clonar, se regeneran con:
+The project uses [rsc-harness](https://ericrisco.github.io/rsc-harness/) to configure AI
+assistants (Claude Code and Gemini CLI): skills, reviewer agents and hooks. Only the declaration
+(`.rsc.json`) is committed; generated files (`.rsc/`, links in `.claude/` and `.gemini/`) are
+machine-local. After cloning, regenerate them with:
 
 ```bash
 npx @ericrisco/rsc@latest sync
