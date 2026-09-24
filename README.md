@@ -349,12 +349,12 @@ pdf_process_pipeline/
   docs and commit messages.
 - **Branches:** work happens on branches (`feat/...`) and reaches `main` only after tests, ruff
   and mypy pass.
-- **Commits:** [gitmoji](https://gitmoji.dev) + Conventional Commits, with a descriptive subject
-  that starts with an imperative verb:
+- **Commits:** [Conventional Commits](https://www.conventionalcommits.org), no emoji, with a
+  descriptive subject that starts with an imperative verb:
   ```
-  ✨ feat(config): add validated settings loaded from .env
-  🐳 build(docker): add multi-stage Dockerfile, .dockerignore and poetry.lock
-  🎨 style(ruff): raise line length to 120 to allow comments to the right of code
+  feat(config): add validated settings loaded from .env
+  feat(llm): add provider-agnostic LLM extraction with Gemini and optional OpenAI
+  docs(readme): translate README to English
   ```
 - **Significant decisions** are logged in [`02-DOCS/wiki/sdd/decisions.md`](02-DOCS/wiki/sdd/decisions.md).
 
