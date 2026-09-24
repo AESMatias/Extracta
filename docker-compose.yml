@@ -12,6 +12,8 @@ x-app: &app
 services:
   web:
     <<: *app
+    # 2 processes x 4 threads: a slow or large upload occupies one thread, not a whole process,
+    # so status polling keeps answering. Threads share memory, so RAM stays within the limit.
     # Only web builds the image; worker reuses it. Two builds of one tag at once collide.
     build:
       context: .
@@ -20,6 +22,8 @@ services:
       gunicorn "app:create_app()"
       --bind 0.0.0.0:8000
       --workers 2
+      --worker-class gthread
+      --threads 4
       --timeout 120
     ports:
       - "8000:8000"
