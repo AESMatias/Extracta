@@ -48,8 +48,8 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
 | 11 | Export (CSV, XLSX, JSON) | `app/export.py` + test | Individual (one doc, line items as rows) and unified (one row per doc) in CSV, XLSX and JSON; formula injection blocked | ✅ Add individual and unified CSV export with formula injection protection |
 | 12 | Web routes | `app/web/routes.py` + tests | `POST /upload` (+ `save_to_db`) → task ids; `GET /tasks/<id>` → status + result; `POST /export/csv/individual` and `/unified` stream CSV | ✅ Add the HTTP API with per-browser task ownership |
 | 13 | UI | `app/web/templates/`, `app/web/static/` | Dropzone + mode toggle + polling + results table + Chart.js charts + CSV/XLSX/JSON buttons | ✅ Add the browser UI with live status, charts and exports |
-| 14 | Verify | — | ruff, mypy, pytest ≥ 70% coverage all green; Trivy re-scan | ⏳ next |
-| 15 | End-to-end + merge | — | Batch of real PDFs in both modes under the 2 GB limits; merged to `main` | ⬜ |
+| 14 | Verify | — | ruff, mypy, pytest ≥ 70% coverage all green; Trivy re-scan | ✅ Verified: 182 tests, 98% coverage, 0 Python CVEs, 5 review fixes |
+| 15 | End-to-end + merge | — | Batch of real PDFs in both modes under the 2 GB limits; merged to `main` | ⏳ next |
 
 ## Evidence
 
@@ -136,6 +136,24 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
   SpA — No. 004512 — CLP 119,000"), live Pending → Processing → Completed, both charts drawn,
   XLSX batch download 200, persistent mode shows "Saved to the database", no console errors
   (CSP blocks nothing legitimate). Test rows deleted from Supabase afterwards.
+- Step 14 (verify): ruff, mypy clean; 177 unit + 5 integration tests (real Gemini and Supabase)
+  pass, 98% coverage. Trivy: `poetry.lock` 0 CVEs; runtime image had 2 fixable HIGH findings
+  (msgpack, setuptools) vendored inside the base image's pip, fixed by removing pip from the
+  runtime image → 0 Python CVEs; 44 Debian OS findings with no fix released (logged decision).
+  Review fixes: export JSON bodies capped at 10 MB (were bounded only by the 2.5 GB upload
+  limit), sliding ownership TTL while the owner polls, no HTTPS-only browser API in the UI,
+  threaded gunicorn (2 × 4) so uploads do not block polling. HTTP end-to-end re-run green; web
+  121 MiB / 384, worker 146 MiB / 768.
+
+## Follow-ups before a public deployment
+
+- **Abuse and cost control (high):** there are no accounts and no rate limit, so anyone who can
+  reach the server can upload PDFs and spend Gemini credits. Add authentication, or at least a
+  per-IP/per-session rate limit and a daily document cap, before exposing it to the internet.
+- **Orphan PDFs (medium):** if the worker is killed mid-task (e.g. out of memory) its `finally`
+  never runs; add a periodic sweep that deletes files older than the result TTL.
+- **Base image OS CVEs (low):** re-scan with Trivy and rebuild with `--pull` regularly.
+- **Migrations (low):** adopt Alembic before the first schema change once real data exists.
 
 ## How to run the quality gates
 
@@ -150,5 +168,5 @@ docker run --rm --env-file .env -v "$PWD":/src -w /src pdf-process-pipeline:dev 
 
 ## Next
 
-Step 14 — Verify: full quality gates, integration tests, Trivy re-scan of image and lock file,
-and a review pass (security, correctness, tests) before the end-to-end run and merge.
+Step 15 — End to end: a batch of real PDFs (not generated ones) in both modes under the 2 GB
+memory limits, then merge `feat/project-skeleton` into `main` through a pull request.
