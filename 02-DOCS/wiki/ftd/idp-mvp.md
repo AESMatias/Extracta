@@ -28,10 +28,10 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
 | # | Step | Files | Proof it is done | Status |
 |---|------|-------|------------------|--------|
 | 0 | Harness + local tooling | `.rsc.json`, Colima/Docker | `RSC_ONBOARDING_READY`; `docker compose version` | ✅ |
-| 1 | Base configuration | `pyproject.toml`, `docker-compose.yml`, `.env.sample` | `docker compose config` OK | ✅ `3713af3` |
-| 2 | Docker image | `docker/Dockerfile`, `.dockerignore`, `poetry.lock` | Dependency stage builds and imports; Trivy scan reviewed | ✅ `eae6313` |
-| 3 | Settings | `app/config.py` + test | Missing/invalid `.env` values fail at startup with a clear error | ⏳ next |
-| 4 | Flask app factory + health check | `app/__init__.py` + test | Full image builds; `docker compose up web redis` → `GET /health` 200 | ⬜ |
+| 1 | Base configuration | `pyproject.toml`, `docker-compose.yml`, `.env.sample` | `docker compose config` OK | ✅ Add Poetry config, Docker Compose stack and env sample |
+| 2 | Docker image | `docker/Dockerfile`, `.dockerignore`, `poetry.lock` | Dependency stage builds and imports; Trivy scan reviewed | ✅ Add multi-stage Dockerfile, .dockerignore and poetry.lock |
+| 3 | Settings | `app/config.py` + test | Missing/invalid `.env` values fail at startup with a clear error | ✅ Add validated settings loaded from .env |
+| 4 | Flask app factory + health check | `app/__init__.py` + test | Full image builds; `docker compose up web redis` → `GET /health` 200 | ⏳ next |
 | 5 | Extraction schema | `app/schemas.py` + test | `DocumentSchema` validates/rejects sample payloads | ⬜ |
 | 6 | Database | `app/db.py`, `app/models.py` + test | `documents` table created in Supabase; insert/read round-trip | ⬜ |
 | 7 | Streaming upload storage | `app/storage.py` + test | Large file written in chunks; RAM stays flat | ⬜ |
@@ -52,6 +52,20 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
   Trivy on `python:3.12-slim` (Debian 13.7): HIGH findings only in OS packages with no fix
   released upstream — see decision 2026-09-24 in `02-DOCS/wiki/sdd/decisions.md`.
 
+- Step 3: TDD red (`ModuleNotFoundError: app`) → green: 11 tests pass, `app/config.py` 100%
+  coverage; ruff format/check clean; mypy clean. Added a `dev` Docker stage (pytest, ruff,
+  mypy) so gates run without local Python.
+
+## How to run the quality gates
+
+```bash
+docker build -f docker/Dockerfile --target dev -t pdf-process-pipeline:dev .
+docker run --rm -v "$PWD":/src -w /src pdf-process-pipeline:dev pytest
+docker run --rm -v "$PWD":/src -w /src pdf-process-pipeline:dev ruff check app tests
+docker run --rm -v "$PWD":/src -w /src pdf-process-pipeline:dev mypy app tests
+```
+
 ## Next
 
-Step 3 — `app/config.py`: load and validate `.env` with `pydantic-settings`.
+Step 4 — `app/__init__.py`: Flask app factory with `GET /health`; first full image build and
+`docker compose up web redis`.

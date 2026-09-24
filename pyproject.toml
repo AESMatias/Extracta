@@ -45,7 +45,9 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 python_version = "3.12"
 plugins = ["pydantic.mypy"]
 ignore_missing_imports = true
+explicit_package_bases = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "--cov=app --cov-report=term-missing"
