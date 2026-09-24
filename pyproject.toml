@@ -52,4 +52,5 @@ explicit_package_bases = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = ["integration: talks to the real Supabase database (needs DATABASE_URL)"]
 addopts = "--cov=app --cov-report=term-missing"

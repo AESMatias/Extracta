@@ -117,3 +117,19 @@ def test_get_settings_builds_once(valid_env: None, monkeypatch: pytest.MonkeyPat
         assert get_settings() is get_settings()
     finally:
         get_settings.cache_clear()
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "postgresql://user:secret@host:5432/db",  # as copied from the Supabase dashboard
+        "postgres://user:secret@host:5432/db",
+        "postgresql+psycopg://user:secret@host:5432/db",  # already explicit: unchanged
+    ],
+)
+def test_database_url_uses_the_psycopg3_driver(valid_env: None, monkeypatch: pytest.MonkeyPatch, raw: str) -> None:
+    monkeypatch.setenv("DATABASE_URL", raw)
+
+    url = load().database_url.get_secret_value()
+
+    assert url == "postgresql+psycopg://user:secret@host:5432/db"

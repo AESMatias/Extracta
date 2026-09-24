@@ -9,7 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal, Self
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 LLMProvider = Literal["gemini", "openai"]
@@ -36,6 +36,16 @@ class Settings(BaseSettings):
 
     upload_dir: Path = Path("/tmp_uploads")
     max_upload_mb: int = Field(default=50, gt=0)
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def use_psycopg3_driver(cls, value: object) -> object:
+        # Supabase shows "postgresql://..."; SQLAlchemy needs "postgresql+psycopg://..." for psycopg 3.
+        if isinstance(value, str):
+            for prefix in ("postgresql://", "postgres://"):
+                if value.startswith(prefix):
+                    return "postgresql+psycopg://" + value.removeprefix(prefix)
+        return value
 
     @model_validator(mode="after")
     def require_key_for_selected_provider(self) -> Self:

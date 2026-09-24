@@ -40,8 +40,8 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
 | 3 | Settings | `app/config.py` + test | Missing/invalid `.env` values fail at startup with a clear error | ✅ Add validated settings loaded from .env |
 | 4 | Flask app factory + health check | `app/__init__.py` + test | Full image builds; `docker compose up web redis` → `GET /health` 200 | ✅ Add Flask app factory with a health check endpoint |
 | 5 | Extraction schema | `app/schemas.py` + test | `DocumentSchema` validates/rejects sample payloads | ✅ Add multi-type extraction schema for the LLM |
-| 6 | Database | `app/db.py`, `app/models.py` + test | `documents` table (persistent mode) created in Supabase with RLS on; insert/read round-trip | ⏳ next |
-| 7 | Streaming upload storage | `app/storage.py` + test | Large file written in chunks; RAM stays flat | ⬜ |
+| 6 | Database | `app/db.py`, `app/models.py` + test | `documents` table (persistent mode) created in Supabase with RLS on; insert/read round-trip | ✅ Add Supabase database layer and documents table |
+| 7 | Streaming upload storage | `app/storage.py` + test | Large file written in chunks; RAM stays flat | ⏳ next |
 | 8 | PDF text extraction | `app/pdf_text.py` + test | Text extracted from a sample PDF | ⬜ |
 | 9 | LLM layer | `app/llm/{base,gemini,openai,factory}.py` + tests | Factory picks provider from `.env`; Gemini returns a `DocumentSchema` | ⬜ |
 | 10 | Celery task | `app/tasks.py` + test | `save_to_db` true → row in Supabase; false → no DB call; both return the data (Redis backend, TTL); PDF deleted in every outcome | ⬜ |
@@ -71,6 +71,11 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
   coverage; ruff and mypy clean. 10 document types (invoice, receipt, purchase_order, quote,
   bank_statement, contract, payslip, resume, report, other) mapped to 6 sections; the Gemini
   SDK accepts `DocumentSchema` as `response_schema` (real API call comes in step 9).
+- Step 6: `DATABASE_URL` moved to the session pooler (5432); connection verified with SSL to
+  PostgreSQL 17.6. TDD red → green: 42 unit tests + 2 integration tests against the real
+  Supabase (table created, RLS on, insert/read/delete round-trip), 93% total coverage; ruff and
+  mypy clean. `python -m app.db` in the runtime image creates the table: 10 columns, 0 rows,
+  `relrowsecurity = true`. `config.py` now accepts the `postgresql://` URL as Supabase shows it.
 
 ## How to run the quality gates
 
@@ -79,9 +84,11 @@ docker build -f docker/Dockerfile --target dev -t pdf-process-pipeline:dev .
 docker run --rm -v "$PWD":/src -w /src pdf-process-pipeline:dev pytest
 docker run --rm -v "$PWD":/src -w /src pdf-process-pipeline:dev ruff check app tests
 docker run --rm -v "$PWD":/src -w /src pdf-process-pipeline:dev mypy app tests
+# Integration tests against the real Supabase (reads .env):
+docker run --rm --env-file .env -v "$PWD":/src -w /src pdf-process-pipeline:dev pytest -m integration
 ```
 
 ## Next
 
-Step 6 — `app/db.py` + `app/models.py`: SQLAlchemy connection to Supabase and the
-`documents` table (status + extracted JSON).
+Step 7 — `app/storage.py`: stream uploaded PDFs to `/tmp_uploads` in chunks, enforce
+`MAX_UPLOAD_MB`, and prove RAM stays flat with a large file.

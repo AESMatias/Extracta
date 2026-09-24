@@ -18,7 +18,7 @@ Está diseñado para correr en un **servidor de 2 GB de RAM**: los documentos se
 en uno, cada servicio tiene un límite de memoria y los PDF se borran apenas se procesan.
 
 > **Estado:** en construcción, paso a paso. Hoy funcionan la configuración, la app web mínima
-> (`/health`) y el esquema de extracción. El avance detallado está en la
+> (`/health`), el esquema de extracción y la base de datos en Supabase. El avance detallado está en la
 > [hoja de ruta](02-DOCS/wiki/ftd/idp-mvp.md).
 
 ---
@@ -164,6 +164,12 @@ docker compose up --build web redis
 
 Abre <http://localhost:8000/health> → `{"status": "ok"}`.
 
+Crea la tabla en Supabase (una sola vez; se puede repetir sin riesgo):
+
+```bash
+docker compose run --rm --no-deps web python -m app.db
+```
+
 > El servicio `worker` se levantará con `docker compose up --build` cuando exista
 > `app/tasks.py` (paso 10 de la hoja de ruta).
 
@@ -235,6 +241,9 @@ docker run --rm -v "$PWD":/src -w /src pdf-process-pipeline:dev ruff check app t
 
 # Tipos
 docker run --rm -v "$PWD":/src -w /src pdf-process-pipeline:dev mypy app tests
+
+# Tests de integración contra tu Supabase real (lee .env)
+docker run --rm --env-file .env -v "$PWD":/src -w /src pdf-process-pipeline:dev pytest -m integration
 ```
 
 | Herramienta | Qué verifica | Exigencia |
@@ -311,8 +320,8 @@ pdf_process_pipeline/
 │   ├── __init__.py          ✅ create_app(): app factory de Flask + /health
 │   ├── config.py            ✅ Configuración validada desde .env
 │   ├── schemas.py           ✅ DocumentSchema: lo que el LLM debe devolver
-│   ├── db.py, models.py     ⏳ Conexión a Supabase y tabla documents
-│   ├── storage.py           ⬜ Subida en streaming a /tmp_uploads
+│   ├── db.py, models.py     ✅ Conexión a Supabase y tabla documents (RLS activado)
+│   ├── storage.py           ⏳ Subida en streaming a /tmp_uploads
 │   ├── pdf_text.py          ⬜ Texto con pdfplumber
 │   ├── llm/                 ⬜ Interfaz común + Gemini + OpenAI + selector
 │   ├── tasks.py             ⬜ Tarea Celery (extraer → LLM → guardar → borrar PDF)
@@ -354,8 +363,8 @@ pdf_process_pipeline/
 - **Secretos** solo en `.env` (ignorado por git y por `.dockerignore`, nunca entra a la imagen);
   la configuración usa `SecretStr` para no mostrarlos en logs.
 - **Contenedor sin root**: la app corre como `appuser`.
-- **Supabase**: la tabla `documents` tendrá Row Level Security activado, para que la API pública
-  de Supabase no la exponga.
+- **Supabase**: la tabla `documents` tiene Row Level Security activado (sin políticas), así la
+  API pública de Supabase no la expone; la app se conecta como dueña de la tabla.
 - **Privacidad**: de las cuentas bancarias solo se guardan los últimos 4 dígitos; el modo
   efímero nunca escribe en la base de datos.
 - **CSV**: las celdas que empiezan con `=`, `+`, `-` o `@` se escapan (inyección de fórmulas
