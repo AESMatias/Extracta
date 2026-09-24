@@ -20,7 +20,7 @@ service has a memory limit and PDFs are deleted as soon as they are processed.
 > **Status:** under construction, step by step. Working today: configuration, the minimal web
 > app (`/health`), the extraction schema, the Supabase database, streaming upload storage, PDF text extraction, LLM
 > extraction with Gemini (≈ USD 0.0006 per invoice) and the Celery worker that processes each PDF
-> in persistent or ephemeral mode, CSV export and the HTTP API. The browser UI is next. Detailed progress lives in
+> in persistent or ephemeral mode, CSV/XLSX/JSON export, the HTTP API and the browser UI. Detailed progress lives in
 > the [roadmap](02-DOCS/wiki/ftd/idp-mvp.md).
 
 ---
@@ -192,7 +192,8 @@ cp .env.sample .env        # then fill in GEMINI_API_KEY and DATABASE_URL
 docker compose up --build
 ```
 
-Open <http://localhost:8000/health> → `{"status": "ok"}`.
+Open <http://localhost:8000> and drop some PDFs. Health check: <http://localhost:8000/health> →
+`{"status": "ok"}`.
 
 Create the table in Supabase (once; running it again is safe):
 
@@ -359,7 +360,7 @@ pdf_process_pipeline/
 │   ├── tasks.py             ✅ Celery task (extract → LLM → save → delete PDF)
 │   ├── export.py            ✅ Individual and unified export: CSV, XLSX, JSON
 │   ├── celery_app.py        ✅ Celery app shared by web (enqueue) and worker (run)
-│   └── web/                 ✅ HTTP API + task ownership · ⏳ Jinja2 page, JS and charts
+│   └── web/                 ✅ HTTP API, task ownership, Jinja2 page, JS and charts
 ├── tests/                   Tests (pytest)
 ├── docker/Dockerfile        Multi-stage image: builder → dev → runtime
 ├── docker-compose.yml       web + worker + redis with memory limits
@@ -396,6 +397,10 @@ pdf_process_pipeline/
 - **Secrets** only in `.env` (ignored by git and by `.dockerignore`, so it never enters the
   image); settings use `SecretStr` so secrets never show up in logs.
 - **Non-root container**: the app runs as `appuser`.
+- **Browser hardening**: a Content-Security-Policy with no inline scripts (only our files and the
+  pinned Chart.js from jsDelivr, verified with Subresource Integrity), `X-Content-Type-Options:
+  nosniff`, `Referrer-Policy: no-referrer` and no framing. Document data is always inserted as
+  text, never as HTML, so a malicious PDF cannot inject scripts into the page.
 - **Task ownership** (no user accounts yet): each browser gets a random owner token in a signed
   session cookie (`HttpOnly`, `SameSite=Lax`, `Secure` in production) and only that browser can
   read its tasks; any other request for a task id gets `404`. Ownership expires with the results.

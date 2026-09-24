@@ -47,8 +47,8 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
 | 10 | Celery task | `app/tasks.py` + test | `save_to_db` true → row in Supabase; false → no DB call; both return the data (Redis backend, TTL); PDF deleted in every outcome | ✅ Add Celery document processing task with persistent and ephemeral modes |
 | 11 | Export (CSV, XLSX, JSON) | `app/export.py` + test | Individual (one doc, line items as rows) and unified (one row per doc) in CSV, XLSX and JSON; formula injection blocked | ✅ Add individual and unified CSV export with formula injection protection |
 | 12 | Web routes | `app/web/routes.py` + tests | `POST /upload` (+ `save_to_db`) → task ids; `GET /tasks/<id>` → status + result; `POST /export/csv/individual` and `/unified` stream CSV | ✅ Add the HTTP API with per-browser task ownership |
-| 13 | UI | `app/web/templates/`, `app/web/static/` | Dropzone + mode toggle + polling + results table + Chart.js charts + both CSV buttons | ⏳ next |
-| 14 | Verify | — | ruff, mypy, pytest ≥ 70% coverage all green; Trivy re-scan | ⬜ |
+| 13 | UI | `app/web/templates/`, `app/web/static/` | Dropzone + mode toggle + polling + results table + Chart.js charts + CSV/XLSX/JSON buttons | ✅ Add the browser UI with live status, charts and exports |
+| 14 | Verify | — | ruff, mypy, pytest ≥ 70% coverage all green; Trivy re-scan | ⏳ next |
 | 15 | End-to-end + merge | — | Batch of real PDFs in both modes under the 2 GB limits; merged to `main` | ⬜ |
 
 ## Evidence
@@ -127,6 +127,15 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
   164 unit tests, 96% coverage. Real downloads from the stack: XLSX detected as "Microsoft Excel
   2007+", `004512` kept as text, totals numeric, dates typed. `openpyxl` added to the dev group
   only, to read the files back in tests.
+- Step 13: `GET /` page (Jinja2) with `app.js` and `app.css`, no framework; Chart.js 4.5.1 from
+  jsDelivr pinned with SRI. Security headers on every response (CSP without inline scripts,
+  nosniff, `Referrer-Policy: no-referrer`, frame denial); document data is inserted with
+  `textContent` only (a test forbids `innerHTML`). 9 page tests (173 unit tests total, 96%
+  coverage). Real run in a browser against the stack: 2 PDFs + 1 fake dropped on the dropzone →
+  fake rejected with its reason, invoice and contract completed with details ("Acme Servicios
+  SpA — No. 004512 — CLP 119,000"), live Pending → Processing → Completed, both charts drawn,
+  XLSX batch download 200, persistent mode shows "Saved to the database", no console errors
+  (CSP blocks nothing legitimate). Test rows deleted from Supabase afterwards.
 
 ## How to run the quality gates
 
@@ -141,5 +150,5 @@ docker run --rm --env-file .env -v "$PWD":/src -w /src pdf-process-pipeline:dev 
 
 ## Next
 
-Step 13 — UI: Jinja2 page with a dropzone, the persistent/ephemeral toggle, live status polling,
-a results table, Chart.js charts and both CSV buttons.
+Step 14 — Verify: full quality gates, integration tests, Trivy re-scan of image and lock file,
+and a review pass (security, correctness, tests) before the end-to-end run and merge.

@@ -9,6 +9,7 @@ from flask import Flask
 
 from app.config import Settings, get_settings
 from app.web.ownership import RedisTaskOwnership, TaskOwnership
+from app.web.pages import add_security_headers, ui
 from app.web.queue import CeleryTaskQueue, TaskQueue
 from app.web.routes import MAX_FILES_PER_UPLOAD, api
 
@@ -38,6 +39,8 @@ def create_app(
         settings.celery_result_backend, ttl_seconds=settings.result_ttl_seconds
     )
     app.register_blueprint(api)
+    app.register_blueprint(ui)
+    app.after_request(add_security_headers)
 
     @app.get("/health")
     def health() -> dict[str, str]:
