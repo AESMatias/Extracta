@@ -56,6 +56,7 @@ const state = {
   selected: [], // { file, error }
   batch: [], // { key, taskId, filename, status, result, error, saveToDb }
   polling: false,
+  nextKey: 0, // local row ids (the browser UUID API needs HTTPS, so a plain counter is used)
 };
 let charts = null;
 
@@ -195,7 +196,7 @@ el.form.addEventListener("submit", async (event) => {
       state.batch.push({ key: task.task_id, taskId: task.task_id, filename: task.filename, status: "pending", saveToDb });
     }
     for (const rejected of data.rejected) {
-      state.batch.push({ key: crypto.randomUUID(), filename: rejected.filename, status: "rejected", error: rejected.error });
+      state.batch.push({ key: `rejected-${state.nextKey++}`, filename: rejected.filename, status: "rejected", error: rejected.error });
     }
     const note = data.rejected.length ? ` ${data.rejected.length} rejected.` : "";
     showMessage(`${data.tasks.length} file(s) queued for processing.${note}`, data.tasks.length ? "ok" : "error");

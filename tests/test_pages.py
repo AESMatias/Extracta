@@ -99,3 +99,11 @@ def test_frontend_never_injects_html_from_documents() -> None:
     assert "innerHTML" not in script
     assert "insertAdjacentHTML" not in script
     assert "eval(" not in script
+
+
+def test_frontend_works_without_https() -> None:
+    # crypto.randomUUID() exists only in secure contexts (HTTPS or localhost): a server reached
+    # over plain http://<ip> would break. The UI must not depend on it.
+    script = (Path(__file__).parents[1] / "app/web/static/app.js").read_text()
+
+    assert "randomUUID" not in script
