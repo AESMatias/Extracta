@@ -32,8 +32,8 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
 | 2 | Docker image | `docker/Dockerfile`, `.dockerignore`, `poetry.lock` | Dependency stage builds and imports; Trivy scan reviewed | ✅ Add multi-stage Dockerfile, .dockerignore and poetry.lock |
 | 3 | Settings | `app/config.py` + test | Missing/invalid `.env` values fail at startup with a clear error | ✅ Add validated settings loaded from .env |
 | 4 | Flask app factory + health check | `app/__init__.py` + test | Full image builds; `docker compose up web redis` → `GET /health` 200 | ✅ Add Flask app factory with a health check endpoint |
-| 5 | Extraction schema | `app/schemas.py` + test | `DocumentSchema` validates/rejects sample payloads | ⏳ next |
-| 6 | Database | `app/db.py`, `app/models.py` + test | `documents` table created in Supabase; insert/read round-trip | ⬜ |
+| 5 | Extraction schema | `app/schemas.py` + test | `DocumentSchema` validates/rejects sample payloads | ✅ Add multi-type extraction schema for the LLM |
+| 6 | Database | `app/db.py`, `app/models.py` + test | `documents` table created in Supabase; insert/read round-trip | ⏳ next |
 | 7 | Streaming upload storage | `app/storage.py` + test | Large file written in chunks; RAM stays flat | ⬜ |
 | 8 | PDF text extraction | `app/pdf_text.py` + test | Text extracted from a sample PDF | ⬜ |
 | 9 | LLM layer | `app/llm/{base,gemini,openai,factory}.py` + tests | Factory picks provider from `.env`; Gemini returns a `DocumentSchema` | ⬜ |
@@ -59,6 +59,10 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
   and mypy clean. Runtime image 396 MB builds; `docker compose up -d web redis` with the real
   `.env` → both `healthy`, `GET /health` → `200 {"status":"ok"}`, web runs as `appuser`,
   memory web 82 MiB / 384 MiB, redis 6 MiB / 128 MiB.
+- Step 5: TDD red → green: 20 schema tests (31 total with config), `app/schemas.py` 100%
+  coverage; ruff and mypy clean. 10 document types (invoice, receipt, purchase_order, quote,
+  bank_statement, contract, payslip, resume, report, other) mapped to 6 sections; the Gemini
+  SDK accepts `DocumentSchema` as `response_schema` (real API call comes in step 9).
 
 ## How to run the quality gates
 
@@ -71,4 +75,5 @@ docker run --rm -v "$PWD":/src -w /src pdf-process-pipeline:dev mypy app tests
 
 ## Next
 
-Step 5 — `app/schemas.py`: `DocumentSchema` (Pydantic) the LLM must fill.
+Step 6 — `app/db.py` + `app/models.py`: SQLAlchemy connection to Supabase and the
+`documents` table (status + extracted JSON).
