@@ -24,14 +24,15 @@ COPY pyproject.toml poetry.lock ./
 RUN poetry install --only main --no-root ${POETRY_EXTRAS:+--extras "$POETRY_EXTRAS"}
 
 # ---------------------------------------------------------------------------
-# Stage "dev": builder + dev tools (pytest, ruff, mypy). Local use only:
+# Stage "dev": builder + dev tools (pytest, ruff, mypy) + all extras. Local use only:
 #   docker build -f docker/Dockerfile --target dev -t pdf-process-pipeline:dev .
 #   docker run --rm -v "$PWD":/src -w /src pdf-process-pipeline:dev pytest
 # The code is mounted at /src so it never hides the venv in /app/.venv.
 # ---------------------------------------------------------------------------
 FROM builder AS dev
 
-RUN poetry install --no-root --with dev ${POETRY_EXTRAS:+--extras "$POETRY_EXTRAS"}
+# All extras (e.g. openai) so every provider is tested; the runtime image stays lean.
+RUN poetry install --no-root --with dev --all-extras
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONDONTWRITEBYTECODE=1

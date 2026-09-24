@@ -43,8 +43,8 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
 | 6 | Database | `app/db.py`, `app/models.py` + test | `documents` table (persistent mode) created in Supabase with RLS on; insert/read round-trip | ✅ Add Supabase database layer and documents table |
 | 7 | Streaming upload storage | `app/storage.py` + test | Large file written in chunks; RAM stays flat | ✅ Add streaming PDF upload storage with size and header checks |
 | 8 | PDF text extraction | `app/pdf_text.py` + test | Text extracted from a sample PDF | ✅ Add page-by-page PDF text extraction with an LLM character cap |
-| 9 | LLM layer | `app/llm/{base,gemini,openai,factory}.py` + tests | Factory picks provider from `.env`; Gemini returns a `DocumentSchema` | ⏳ next |
-| 10 | Celery task | `app/tasks.py` + test | `save_to_db` true → row in Supabase; false → no DB call; both return the data (Redis backend, TTL); PDF deleted in every outcome | ⬜ |
+| 9 | LLM layer | `app/llm/{base,gemini,openai,factory}.py` + tests | Factory picks provider from `.env`; Gemini returns a `DocumentSchema` | ✅ Add provider-agnostic LLM extraction with Gemini and optional OpenAI |
+| 10 | Celery task | `app/tasks.py` + test | `save_to_db` true → row in Supabase; false → no DB call; both return the data (Redis backend, TTL); PDF deleted in every outcome | ⏳ next |
 | 11 | CSV export | `app/export.py` + test | Individual (one doc, line items as rows) and unified (one row per doc) CSV; formula injection escaped | ⬜ |
 | 12 | Web routes | `app/web/routes.py` + tests | `POST /upload` (+ `save_to_db`) → task ids; `GET /tasks/<id>` → status + result; `POST /export/csv/individual` and `/unified` stream CSV | ⬜ |
 | 13 | UI | `app/web/templates/`, `app/web/static/` | Dropzone + mode toggle + polling + results table + Chart.js charts + both CSV buttons | ⬜ |
@@ -86,6 +86,14 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
   accents round-trip). 300-page PDF: full read peaks at 81 MB RSS; with the default 60,000-char
   cap only 9 pages are parsed (1.1 s). Scanned PDFs (< 20 visible chars) raise
   `NoTextLayerError`; corrupted files raise `UnreadablePdfError`.
+- Step 9: TDD red → green: 25 LLM unit tests with fake clients (no cost, no network), 93 unit
+  tests total, 96% coverage; ruff and mypy clean. 3 integration tests against the real Gemini
+  API (`gemini-3.1-flash-lite`) pass: Spanish invoice (total 119000 CLP, dates, RUTs, line
+  items), English contract (2 parties, auto-renewal, 60-day notice, USD) and bank statement
+  (only the last 4 digits kept). Real cost: 302 input + 371 output tokens ≈ USD 0.0006 per
+  invoice. Every provider output goes through `parse_response()` (Pydantic); rate limits,
+  5xx and network errors raise `LLMTransientError` (retry), everything else
+  `LLMExtractionError` (fail). The dev image now installs all extras so OpenAI is tested.
 
 ## How to run the quality gates
 
@@ -100,6 +108,6 @@ docker run --rm --env-file .env -v "$PWD":/src -w /src pdf-process-pipeline:dev 
 
 ## Next
 
-Step 9 — `app/llm/`: provider-agnostic extractor interface, Gemini implementation with
-`DocumentSchema` as structured output, optional OpenAI implementation, and a factory driven by
-`LLM_PROVIDER`/`LLM_MODEL`.
+Step 10 — `app/tasks.py`: Celery app with the Redis result backend (TTL) and the
+`process_document` task: extract text → LLM → save only if `save_to_db` → return the data →
+delete the PDF in `finally`; retry only `LLMTransientError`.
