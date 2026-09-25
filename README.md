@@ -205,6 +205,10 @@ Values that matter in this setup (every variable is explained inside `.env`):
 | `PAYPAL_*` | see [Payments](docs/DEPLOY.md#9-optional-payments-with-paypal) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | optional: Sign in with Google |
 
+Containers read `.env` only when they are created. **After any later change to `.env`** (SMTP,
+PayPal or Google keys...), apply it with `docker compose up -d --force-recreate web worker` and
+check with `docker compose exec web printenv | grep SMTP_HOST`; no rebuild is needed.
+
 ### 4. Start it
 
 ```bash
@@ -285,6 +289,7 @@ tests and **Deploy to production**; **Deployments → production** keeps the his
 | Every visitor has a `172.x` address in `docker compose logs frontend` | `REAL_IP_FROM` is missing from `.env`. |
 | Pay button: "PayPal is not available right now" | Run the check in [docs/DEPLOY.md](docs/DEPLOY.md#9-optional-payments-with-paypal); `PAYEE_ACCOUNT_RESTRICTED` means PayPal has not finished verifying your business account. |
 | The build stops with `Killed` | Not enough memory: turn on swap (step 1). |
+| A change to `.env` has no effect (e.g. Resend shows no logs at all) | The containers still use the old values: `docker compose up -d --force-recreate web worker`. |
 | Confirmation or password emails never arrive | Run the email check in [docs/DEPLOY.md](docs/DEPLOY.md#7-email-required-in-production): it sends one message and prints the provider's answer. |
 
 ---
