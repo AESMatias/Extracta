@@ -137,6 +137,25 @@
   background-size: 32px 32px;
 }
 
+/* The logo's name: fills with gold from left to right when its link is hovered. */
+.logo-text {
+  --logo-ink: #0f172a;
+  background-image: linear-gradient(90deg, #d97706 0%, #facc15 46%, var(--logo-ink) 54%, var(--logo-ink) 100%);
+  background-size: 220% 100%;
+  background-position: 100% 0;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  transition: background-position 0.7s var(--ease-out);
+}
+.dark .logo-text {
+  --logo-ink: #fff;
+}
+.group\/logo:hover .logo-text,
+.group\/logo:focus-visible .logo-text {
+  background-position: 0 0;
+}
+
 /* Gradient text for headlines: green -> teal -> blue, slowly moving. */
 @utility text-gradient {
   background-image: linear-gradient(100deg, #10b981 0%, #06b6d4 40%, #2f6fed 70%, #10b981 100%);

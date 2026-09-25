@@ -77,7 +77,7 @@ export function SiteHeader() {
     >
       <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6" aria-label="Main">
         <div className="flex items-center gap-4">
-          <Logo />
+          <Logo travel />
           <span className="hidden h-7 w-px bg-slate-200 lg:block dark:bg-slate-800" aria-hidden />
           <Byline className="hidden lg:inline-flex" />
         </div>
