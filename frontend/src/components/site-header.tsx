@@ -35,7 +35,6 @@ export function SiteHeader() {
   const { m } = useI18n();
   const links = [
     { href: "/#features", label: m.nav.features },
-    { href: "/#how-it-works", label: m.nav.steps },
     { href: "/#security", label: m.nav.security },
     { href: "/pricing", label: m.nav.pricing },
     { href: "/#faq", label: m.nav.faq },

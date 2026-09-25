@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 
 import { AuthShell, Divider, GoogleButton } from "@/components/auth-shell";
+import { PasswordStrength } from "@/components/password-strength";
 import { Alert, Button, Field } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -24,6 +25,7 @@ function RegisterForm() {
   const [google, setGoogle] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fields, setFields] = useState({ name: "", email: "", password: "" });
   const next = safeNext(params.get("next"));
 
   useEffect(() => {
@@ -70,19 +72,37 @@ function RegisterForm() {
         </>
       )}
       <form onSubmit={onSubmit} className="space-y-4">
-        <Field label={a.name} name="name" autoComplete="name" placeholder="Ana Pérez" maxLength={120} />
-        <Field label={a.email} name="email" type="email" autoComplete="email" required placeholder={a.emailPlaceholder} />
         <Field
-          label={a.password}
-          name="password"
-          type="password"
-          autoComplete="new-password"
-          required
-          minLength={10}
-          maxLength={128}
-          placeholder={a.passwordPlaceholder}
-          hint={a.passwordHint}
+          label={a.name}
+          name="name"
+          autoComplete="name"
+          placeholder="Ana Pérez"
+          maxLength={120}
+          onChange={(e) => setFields((f) => ({ ...f, name: e.target.value }))}
         />
+        <Field
+          label={a.email}
+          name="email"
+          type="email"
+          autoComplete="email"
+          required
+          placeholder={a.emailPlaceholder}
+          onChange={(e) => setFields((f) => ({ ...f, email: e.target.value }))}
+        />
+        <div>
+          <Field
+            label={a.password}
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={10}
+            maxLength={128}
+            placeholder={a.passwordPlaceholder}
+            onChange={(e) => setFields((f) => ({ ...f, password: e.target.value }))}
+          />
+          <PasswordStrength password={fields.password} email={fields.email} name={fields.name} />
+        </div>
         <Button type="submit" size="lg" className="w-full" loading={loading} icon={<UserPlus className="size-5" />}>
           {a.register.submit}
         </Button>

@@ -26,7 +26,7 @@ import { api, ApiError, type AdminPayment, type AdminStats, type AdminUser, type
 import { formatDate } from "@/lib/documents";
 
 const STATUSES: UserStatus[] = ["pending", "active", "rejected", "suspended"];
-const STATUS_TONE = { active: "green", pending: "amber", rejected: "red", suspended: "red" } as const;
+const STATUS_TONE = { active: "green", pending: "amber", rejected: "red", suspended: "red", deleted: "slate" } as const;
 const SUBSCRIPTION_TONE = { ACTIVE: "green", APPROVED: "amber", SUSPENDED: "red" } as const;
 const PAYMENT_TONE: Record<string, "green" | "red" | "amber"> = { COMPLETED: "green", REFUNDED: "red", REVERSED: "red" };
 const selectClass =

@@ -36,7 +36,7 @@ from app.db import Base, UTCDateTime, utcnow
 from app.schemas import DocumentSchema
 
 UserStatus = Literal["pending", "active", "rejected", "suspended"]
-USER_STATUSES = ("pending", "active", "rejected", "suspended")
+USER_STATUSES = ("pending", "active", "rejected", "suspended", "deleted")  # deleted: anonymized
 PLAN_IDS = ("free", "starter", "pro", "business", "ultra")
 PAYMENT_KINDS = ("pass", "subscription", "pages")  # "pass": legacy one-time 30-day plan
 

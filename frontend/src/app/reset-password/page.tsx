@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { AuthShell } from "@/components/auth-shell";
+import { PasswordStrength } from "@/components/password-strength";
 import { useToast } from "@/components/toast";
 import { Alert, Button, ButtonLink, Field, Spinner } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -24,6 +25,7 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [mismatch, setMismatch] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [password, setPassword] = useState("");
 
   useEffect(() => {
     token.current ??= takeTokenFromHash(); // read once: the link is removed from the address bar
@@ -83,17 +85,20 @@ export default function ResetPasswordPage() {
         </div>
       )}
       <form onSubmit={onSubmit} className="space-y-4">
-        <Field
-          label={r.newPassword}
-          name="password"
-          type="password"
-          autoComplete="new-password"
-          required
-          minLength={10}
-          maxLength={128}
-          placeholder={m.auth.passwordPlaceholder}
-          hint={m.auth.passwordHint}
-        />
+        <div>
+          <Field
+            label={r.newPassword}
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={10}
+            maxLength={128}
+            placeholder={m.auth.passwordPlaceholder}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <PasswordStrength password={password} />
+        </div>
         <Field
           label={r.repeat}
           name="confirm"

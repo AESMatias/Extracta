@@ -50,17 +50,17 @@ export function DocumentDialog({ filename, document, onClose }: { filename: stri
       className="m-auto max-h-[90dvh] w-[min(42rem,calc(100vw-1.5rem))] overflow-hidden border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-950/60 backdrop:backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
     >
       <div className="flex max-h-[90dvh] flex-col">
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5 dark:border-slate-800">
+        <div className="relative border-b border-slate-200 px-12 py-5 text-center dark:border-slate-800">
           <div className="min-w-0">
             <p className="truncate text-lg font-semibold">{filename}</p>
-            <div className="mt-1 flex items-center gap-2">
+            <div className="mt-1 flex items-center justify-center gap-2">
               <Badge tone="brand">{m.documentTypes.types[document.document_type]?.label ?? type.label}</Badge>
               {document.language && <Badge tone="slate">{document.language.toUpperCase()}</Badge>}
             </div>
           </div>
           <button
             onClick={() => dialog.current?.close()}
-            className="p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
+            className="absolute top-4 right-3 p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
             aria-label={m.common.close}
           >
             <X className="size-5" />

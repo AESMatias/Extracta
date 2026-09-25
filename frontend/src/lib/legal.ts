@@ -95,7 +95,9 @@ const terms: Record<Locale, LegalDocument> = {
       },
       {
         title: "10. Suspension and closure",
-        paragraphs: [`We may suspend or close accounts that break these terms. You can ask us to close your account at any time by writing to ${E}.`],
+        paragraphs: [
+          `We may suspend or close accounts that break these terms. You can delete your account at any time: from your account page, with the form at /delete-account (we email your account a confirmation link), or by writing to ${E} from the email of your account, in which case we delete it within 48 hours and confirm by email.`,
+        ],
       },
       {
         title: "11. Changes to these terms",
@@ -198,7 +200,9 @@ const terms: Record<Locale, LegalDocument> = {
       },
       {
         title: "10. Suspensión y cierre",
-        paragraphs: [`Podemos suspender o cerrar cuentas que incumplan estos términos. Puedes pedirnos cerrar tu cuenta en cualquier momento escribiendo a ${E}.`],
+        paragraphs: [
+          `Podemos suspender o cerrar cuentas que incumplan estos términos. Puedes eliminar tu cuenta cuando quieras: desde la página de tu cuenta, con el formulario de /delete-account (enviamos a tu cuenta un link de confirmación), o escribiendo a ${E} desde el email de tu cuenta, en cuyo caso la eliminamos dentro de 48 horas y te confirmamos por email.`,
+        ],
       },
       {
         title: "11. Cambios a estos términos",
@@ -323,6 +327,7 @@ const privacy: Record<Locale, LegalDocument> = {
         ],
         after: [
           `Write to ${E} from the email of your account. We reply within 30 days. You can also complain to the data protection or consumer authority of your country.`,
+          "To delete your account and its data yourself, use the button on your account page or the form at /delete-account; requests sent by email are completed within 48 hours.",
         ],
       },
       {
@@ -433,6 +438,7 @@ const privacy: Record<Locale, LegalDocument> = {
         ],
         after: [
           `Escribe a ${E} desde el email de tu cuenta. Respondemos dentro de 30 días. También puedes reclamar ante la autoridad de protección de datos o del consumidor de tu país.`,
+          "Para eliminar tu cuenta y sus datos tú mismo, usa el botón de la página de tu cuenta o el formulario de /delete-account; las solicitudes enviadas por email se completan dentro de 48 horas.",
         ],
       },
       {

@@ -2,7 +2,7 @@
 // HttpOnly session cookie travels automatically and no token is ever stored in JavaScript.
 
 export type PlanId = "free" | "starter" | "pro" | "business" | "ultra";
-export type UserStatus = "pending" | "active" | "rejected" | "suspended";
+export type UserStatus = "pending" | "active" | "rejected" | "suspended" | "deleted";
 export type ExportFormat = "csv" | "xlsx" | "json";
 export type DocumentType =
   | "invoice"
@@ -300,6 +300,11 @@ export const api = {
   forgotPassword: (email: string) => request<{ ok: boolean }>("/api/auth/password/forgot", { method: "POST", json: { email } }),
   resetPassword: (token: string, password: string) =>
     request<{ user: User }>("/api/auth/password/reset", { method: "POST", json: { token, password } }),
+  deleteAccount: (body: { password?: string; email?: string }) =>
+    request<{ deleted: boolean }>("/api/auth/account/delete", { method: "POST", json: body }),
+  requestAccountDeletion: (email: string) => request<{ ok: boolean }>("/api/auth/account/delete-request", { method: "POST", json: { email } }),
+  confirmAccountDeletion: (token: string) =>
+    request<{ deleted: boolean }>("/api/auth/account/delete-confirm", { method: "POST", json: { token } }),
   changePassword: (body: { current_password?: string; new_password: string }) =>
     request<{ user: User }>("/api/auth/password/change", { method: "POST", json: body }),
 

@@ -14,16 +14,17 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from app import passwords
 from app.db import utcnow
-from app.models import Subscription, UsageEvent, User
+from app.models import Document, Subscription, UsageEvent, User
 from app.plans import PREPAID_PRIVILEGES, Plan, effective_plan
 
-PASSWORD_MIN_LENGTH = 10
-PASSWORD_MAX_LENGTH = 128
+PASSWORD_MIN_LENGTH = passwords.MIN_LENGTH
+PASSWORD_MAX_LENGTH = passwords.MAX_LENGTH
 QUOTA_WINDOW = timedelta(hours=24)  # the admin's "last 24 hours" figures
 # PBKDF2-SHA256 with 600k iterations (OWASP 2023). scrypt would need ~32 MB of RAM per login.
 HASH_METHOD = "pbkdf2:sha256:600000"
@@ -80,11 +81,12 @@ def _clean_name(name: str | None) -> str | None:
     return name or None
 
 
-def validate_password(password: str, email: str) -> None:
-    if not PASSWORD_MIN_LENGTH <= len(password or "") <= PASSWORD_MAX_LENGTH:
-        raise AccountError(f"Use a password between {PASSWORD_MIN_LENGTH} and {PASSWORD_MAX_LENGTH} characters.")
-    if password.strip().lower() == email:
-        raise AccountError("The password cannot be your email address.")
+def validate_password(password: str, email: str, name: str | None = None) -> None:
+    """NIST SP 800-63B policy: see app/passwords.py."""
+    try:
+        passwords.check(password, email=email, name=name)
+    except passwords.WeakPasswordError as exc:
+        raise AccountError(str(exc)) from None
 
 
 def ensure_can_sign_in(user: User) -> None:
@@ -92,11 +94,13 @@ def ensure_can_sign_in(user: User) -> None:
         raise AccountBlockedError("This account request was rejected.")
     if user.status == "suspended":
         raise AccountBlockedError("This account is suspended. Contact the administrator.")
+    if user.status == "deleted":
+        raise AccountBlockedError("This account was deleted.")
 
 
 def register(db: Session, *, email: str, password: str, name: str | None, require_approval: bool) -> User:
     email = normalize_email(email)
-    validate_password(password, email)
+    validate_password(password, email, _clean_name(name))
     if db.scalar(select(User.id).where(User.email == email)) is not None:
         raise EmailTakenError("An account with this email already exists. Sign in instead.")
     user = User(
@@ -127,7 +131,7 @@ def authenticate(db: Session, *, email: str, password: str) -> User:
 
 
 def set_password(user: User, password: str) -> None:
-    validate_password(password, user.email)
+    validate_password(password, user.email, user.name)
     user.password_hash = generate_password_hash(password, method=HASH_METHOD)
 
 
@@ -268,6 +272,28 @@ def pages_in_window(db: Session, user_ids: list[uuid.UUID], since: datetime) -> 
         .group_by(UsageEvent.user_id)
     ).tuples()
     return {user_id: int(total or 0) for user_id, total in rows}
+
+
+def delete_account(db: Session, user: User, now: datetime) -> None:
+    """Erase the account's personal data and documents.
+
+    Payments stay (tax law requires keeping them), linked to a row with no personal data left:
+    no email, name, password or Google link. The caller cancels any live subscription first.
+    """
+    db.execute(delete(Document).where(Document.user_id == user.id))
+    db.execute(delete(UsageEvent).where(UsageEvent.user_id == user.id))
+    user.email = f"deleted-{user.id}@deleted.invalid"
+    user.name = None
+    user.password_hash = None
+    user.google_sub = None
+    user.email_verified_at = None
+    user.page_credits = 0
+    user.plan = "free"
+    user.plan_expires_at = None
+    user.daily_limit_override = None
+    user.status = "deleted"
+    user.last_login_at = now
+    db.flush()
 
 
 def current_subscription(db: Session, user: User) -> Subscription | None:

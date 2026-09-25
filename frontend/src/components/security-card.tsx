@@ -8,6 +8,8 @@ import { useAuth } from "@/lib/auth";
 import { errorText } from "@/lib/errors";
 import { useI18n } from "@/lib/i18n";
 
+import { PasswordStrength } from "./password-strength";
+
 import { useToast } from "./toast";
 import { Alert, Button, Card, Field } from "./ui";
 
@@ -21,6 +23,7 @@ export function SecurityCard({ user }: { user: User }) {
   const [error, setError] = useState<string | null>(null);
   const [mismatch, setMismatch] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [password, setPassword] = useState("");
   const adding = !user.has_password;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -71,16 +74,19 @@ export function SecurityCard({ user }: { user: User }) {
           {!adding && (
             <Field label={s.current} name="current_password" type="password" autoComplete="current-password" required />
           )}
-          <Field
-            label={s.newPassword}
-            name="new_password"
-            type="password"
-            autoComplete="new-password"
-            required
-            minLength={10}
-            maxLength={128}
-            hint={s.hint}
-          />
+          <div>
+            <Field
+              label={s.newPassword}
+              name="new_password"
+              type="password"
+              autoComplete="new-password"
+              required
+              minLength={10}
+              maxLength={128}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <PasswordStrength password={password} email={user.email} name={user.name ?? ""} />
+          </div>
           <Field
             label={s.repeat}
             name="confirm"

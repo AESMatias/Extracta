@@ -3,6 +3,8 @@
 - Email verification: names the account and the address; valid for 3 days.
 - Password reset: names the account and a fingerprint of its current password hash; valid for
   1 hour. Once the password changes the fingerprint no longer matches, so each link works once.
+- Account deletion: names the account and the address; valid for 48 hours. Once the account is
+  deleted its email changes, so the link cannot be used again.
 
 itsdangerous ships with Flask (it also signs Flask's session cookie).
 """
@@ -18,8 +20,10 @@ from app.models import User
 
 VERIFY_EMAIL_MAX_AGE = timedelta(days=3)
 RESET_PASSWORD_MAX_AGE = timedelta(hours=1)
+DELETE_ACCOUNT_MAX_AGE = timedelta(hours=48)
 _VERIFY_SALT = "extracta.verify-email"
 _RESET_SALT = "extracta.reset-password"
+_DELETE_SALT = "extracta.delete-account"
 
 
 class InvalidTokenError(ValueError):
@@ -68,3 +72,12 @@ def password_reset_token(secret: str, user: User) -> str:
 def read_password_reset_token(secret: str, token: str) -> tuple[uuid.UUID, str]:
     data = _load(secret, _RESET_SALT, token, RESET_PASSWORD_MAX_AGE)
     return _user_id(data), str(data.get("p", ""))
+
+
+def account_deletion_token(secret: str, user: User) -> str:
+    return _serializer(secret, _DELETE_SALT).dumps({"u": str(user.id), "e": user.email})
+
+
+def read_account_deletion_token(secret: str, token: str) -> tuple[uuid.UUID, str]:
+    data = _load(secret, _DELETE_SALT, token, DELETE_ACCOUNT_MAX_AGE)
+    return _user_id(data), str(data.get("e", ""))
