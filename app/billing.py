@@ -1,15 +1,16 @@
-"""Billing rules: one-time 30-day passes, monthly subscriptions, refunds and PayPal webhooks.
+"""Billing rules: page packs (pay as you go), monthly subscriptions, refunds and PayPal webhooks.
 
 Framework-free: the HTTP routes, the webhook endpoint and the periodic reconciliation task all
 call these functions with an open SQLAlchemy session and a PayPal client. Nothing here trusts
 the browser: owner, plan, amount and currency always come from PayPal and are checked here.
 
-Plan time:
-- One-time pass: 30 days, added after the current pass when it is the same plan.
+What each payment gives:
+- Page pack: prepaid pages added to the balance; they never expire.
 - Subscription: until the next billing date plus GRACE, so a renewal that PayPal charges a bit
   late never interrupts the service. Each renewal moves it one month further. Cancelling keeps
   the plan until the paid period ends (the grace is dropped).
-- Refund or reversal: the payment is marked and the plan it paid for ends now.
+- Refund or reversal: the payment is marked and what it bought is taken back (the plan ends
+  now, or the pack's pages leave the balance).
 """
 
 import logging
@@ -24,7 +25,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Payment, PayPalPlan, Subscription, User, WebhookEvent
-from app.plans import PAID_PLAN_IDS, PLAN_DURATION_DAYS, Plan, get_plan
+from app.plans import PAGE_PACKS, PLAN_DURATION_DAYS, Plan
 
 log = logging.getLogger(__name__)
 
@@ -81,7 +82,7 @@ def _owner_and_plan(custom_id: object) -> tuple[uuid.UUID, str] | None:
         return None
 
 
-# --------------------------------------------------------------------------- one-time passes
+# --------------------------------------------------------------------------- page packs
 
 
 def _unit(order: dict[str, Any]) -> dict[str, Any]:
@@ -97,7 +98,7 @@ def _first_capture(order: dict[str, Any]) -> dict[str, Any]:
 
 
 def fulfil_order(db: Session, client: PayPalApi, order_id: str, *, user: User | None, now: datetime) -> User:
-    """Capture an approved order (or record one already captured) and extend the buyer's plan.
+    """Capture an approved page-pack order (or record one already captured) and add its pages.
 
     Called by the browser after approval (`user` = the signed-in account) and by the webhook when
     the browser never came back (`user` = None). Safe to call twice for the same order.
@@ -113,19 +114,20 @@ def fulfil_order(db: Session, client: PayPalApi, order_id: str, *, user: User | 
 
     order = client.get_order(order_id)
     unit = _unit(order)
-    parsed = _owner_and_plan(unit.get("custom_id"))
-    if parsed is None or parsed[1] not in PAID_PLAN_IDS:
+    parsed = _owner_and_plan(unit.get("custom_id"))  # "<user id>:pack:<pack id>"
+    kind, _, pack_id = parsed[1].partition(":") if parsed else ("", "", "")
+    if parsed is None or kind != "pack" or pack_id not in PAGE_PACKS:
         raise _not_found("Order")
-    owner_id, plan_id = parsed
+    owner_id = parsed[0]
     if user is not None and owner_id != user.id:
         raise _not_found("Order")
     owner = user or db.get(User, owner_id)
     if owner is None:
         raise _not_found("Order")
-    plan = get_plan(plan_id)
+    pack = PAGE_PACKS[pack_id]
     amount = unit.get("amount") or {}
-    if amount.get("currency_code") != client.currency or Decimal(str(amount.get("value", "0"))) != plan.price_usd:
-        raise BillingError(400, "The order amount does not match the plan price.")
+    if amount.get("currency_code") != client.currency or Decimal(str(amount.get("value", "0"))) != pack.price_usd:
+        raise BillingError(400, "The order amount does not match the pack price.")
 
     if order.get("status") == "APPROVED":
         order = client.capture_order(order_id)  # idempotent at PayPal: same request ID per order
@@ -136,11 +138,12 @@ def fulfil_order(db: Session, client: PayPalApi, order_id: str, *, user: User | 
     payment = Payment(
         user_id=owner.id,
         provider="paypal",
-        kind="pass",
+        kind="pages",
         provider_order_id=order_id,
         provider_capture_id=capture.get("id") or None,
-        plan=plan.id,
-        amount=plan.price_usd,
+        plan=pack.id,
+        pages=pack.pages,
+        amount=pack.price_usd,
         currency=client.currency,
         status="COMPLETED",
     )
@@ -149,13 +152,9 @@ def fulfil_order(db: Session, client: PayPalApi, order_id: str, *, user: User | 
             db.add(payment)
             db.flush()
     except IntegrityError:
-        return owner  # the other one recorded it and extended the plan
+        return owner  # the other one recorded it and added the pages
 
-    # Extend an active pass of the same plan; otherwise the new plan starts now.
-    active_same_plan = owner.plan == plan.id and owner.plan_expires_at is not None and owner.plan_expires_at > now
-    start = owner.plan_expires_at if active_same_plan and owner.plan_expires_at else now
-    owner.plan = plan.id
-    owner.plan_expires_at = start + timedelta(days=PLAN_DURATION_DAYS)
+    owner.page_credits += pack.pages
     return owner
 
 
@@ -200,7 +199,7 @@ def _plan_of_paypal_plan(db: Session, env: str, paypal_plan: object) -> str | No
 
 
 def ensure_no_live_subscription(db: Session, user: User) -> None:
-    """One subscription at a time, and no one-time pass on top of one (its renewal would win)."""
+    """One subscription at a time: changing plans means cancelling the current one first."""
     blocking = db.scalar(
         select(Subscription.id).where(Subscription.user_id == user.id, Subscription.status.in_(BLOCKING_STATUSES))
     )
@@ -329,13 +328,17 @@ def record_sale(db: Session, client: PayPalApi, sale: dict[str, Any], now: datet
 
 
 def revoke_payment(db: Session, capture_id: str, status: str, now: datetime) -> None:
-    """A refund or reversal: mark the payment and end the plan time it bought."""
+    """A refund or reversal: mark the payment and take back what it bought."""
     payment = db.scalar(select(Payment).where(Payment.provider_capture_id == capture_id))
     if payment is None or payment.status == status:
         return
     payment.status = status
     owner = db.get(User, payment.user_id)
-    if owner is not None and owner.plan == payment.plan and owner.plan_expires_at and owner.plan_expires_at > now:
+    if owner is None:
+        return
+    if payment.kind == "pages":
+        owner.page_credits = max(owner.page_credits - (payment.pages or 0), 0)
+    elif owner.plan == payment.plan and owner.plan_expires_at and owner.plan_expires_at > now:
         owner.plan_expires_at = now
     log.warning("Payment %s was %s: the plan it paid for ended.", payment.provider_order_id, status.lower())
 

@@ -19,7 +19,15 @@ def test_register_signs_the_browser_in(harness: Harness) -> None:
     assert user["email"] == "ana@example.com"
     assert user["status"] == "active"
     assert user["plan"]["id"] == "free"
-    assert user["usage"] == {"used": 0, "limit": 2, "remaining": 2, "next_slot_at": None}
+    assert user["usage"] == {
+        "used": 0,
+        "limit": 10,
+        "remaining": 10,
+        "credits": 0,
+        "available": 10,
+        "window_hours": 24,
+        "next_slot_at": None,
+    }
     cookie = response.headers["Set-Cookie"]
     assert "HttpOnly" in cookie and "SameSite=Lax" in cookie
     assert client.get("/api/auth/me").get_json()["user"]["email"] == "ana@example.com"

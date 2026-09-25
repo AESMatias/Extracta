@@ -57,7 +57,7 @@ def test_unverified_accounts_cannot_upload_or_pay(harness: Harness) -> None:
 
     refused = upload_one(client)
     assert refused.status_code == 403 and refused.get_json()["verify_email"] is True
-    assert client.post("/api/billing/orders", json={"plan": "pro"}).status_code == 403
+    assert client.post("/api/billing/orders", json={"pack": "p100"}).status_code == 403
     assert client.post("/api/billing/subscriptions", json={"plan": "pro"}).status_code == 403
 
     client.post("/api/auth/email/verify", json={"token": harness.mailer.link_token("ana@example.com")})

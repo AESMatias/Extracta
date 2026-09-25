@@ -57,7 +57,9 @@ def test_admin_sees_every_account_with_explicit_privileges(harness: Harness) -> 
     assert ana["status"] == "active"
     assert ana["plan"]["id"] == "free"
     assert ana["privileges"] == {
-        "docs_per_24h": 2,
+        "pages": 10,
+        "window_hours": 24,
+        "max_pages_per_pdf": 10,
         "max_file_mb": 10,
         "max_files_per_upload": 2,
         "can_save_to_db": False,
@@ -77,16 +79,16 @@ def test_admin_approves_rejects_and_upgrades_accounts(harness: Harness) -> None:
     approved = admin.patch(f"/api/admin/users/{user_id}", json={"status": "active"})
     upgraded = admin.patch(
         f"/api/admin/users/{user_id}",
-        json={"plan": "business", "plan_expires_at": "2099-01-01T00:00:00Z", "daily_limit_override": 500},
+        json={"plan": "business", "plan_expires_at": "2099-01-01T00:00:00Z", "daily_limit_override": 5000},
     )
 
     assert approved.status_code == 200
     user = upgraded.get_json()["user"]
     assert user["plan"]["id"] == "business"
-    assert user["privileges"]["docs_per_24h"] == 500  # the override beats the plan's 250
+    assert user["privileges"]["pages"] == 5000  # the override beats the plan's 2,500
     assert user["privileges"]["can_save_to_db"] is True
     me = user_client.get("/api/auth/me").get_json()["user"]
-    assert me["plan"]["id"] == "business" and me["daily_limit"] == 500
+    assert me["plan"]["id"] == "business" and me["page_limit"] == 5000
 
     admin.patch(f"/api/admin/users/{user_id}", json={"status": "rejected"})
     assert user_client.get("/api/auth/me").get_json()["user"] is None  # rejected accounts are signed out
@@ -102,7 +104,7 @@ def test_premium_without_expiry_and_back_to_free(harness: Harness) -> None:
 
     assert forever.get_json()["user"]["plan"]["id"] == "ultra"
     assert forever.get_json()["user"]["raw_plan_expires_at"] is None
-    assert free.get_json()["user"]["privileges"]["docs_per_24h"] == 2
+    assert free.get_json()["user"]["privileges"]["pages"] == 10
 
 
 @pytest.mark.parametrize(
@@ -135,7 +137,7 @@ def test_unknown_users_are_404(harness: Harness) -> None:
 
 def test_admin_stats_and_payments(harness: Harness) -> None:
     client = harness.signed_up()
-    order_id = client.post("/api/billing/orders", json={"plan": "pro"}).get_json()["order_id"]
+    order_id = client.post("/api/billing/orders", json={"pack": "p1000"}).get_json()["order_id"]
     client.post(f"/api/billing/orders/{order_id}/capture")
     admin = harness.admin()
 
@@ -143,10 +145,24 @@ def test_admin_stats_and_payments(harness: Harness) -> None:
     [payment] = admin.get("/api/admin/payments").get_json()["payments"]
 
     assert stats["users_by_status"] == {"active": 1}
-    assert stats["users_by_plan"] == {"pro": 1}
-    assert stats["revenue_usd"] == "4.99"
-    assert payment["email"] == "ana@example.com" and payment["amount"] == "4.99"
-    assert users_of(admin)[0]["paid_total_usd"] == "4.99"
+    assert stats["revenue_usd"] == "5.99"
+    assert stats["pages_24h"] == 0
+    assert payment["email"] == "ana@example.com" and payment["amount"] == "5.99"
+    assert (payment["kind"], payment["plan"]) == ("pages", "p1000")
+    assert users_of(admin)[0]["paid_total_usd"] == "5.99"
+    assert users_of(admin)[0]["page_credits"] == 1000
+
+
+def test_admin_sets_the_prepaid_page_balance(harness: Harness) -> None:
+    client = harness.signed_up()
+    admin = harness.admin()
+    user_id = users_of(admin)[0]["id"]
+
+    response = admin.patch(f"/api/admin/users/{user_id}", json={"page_credits": 250})
+
+    assert response.status_code == 200 and response.get_json()["user"]["page_credits"] == 250
+    assert client.get("/api/auth/me").get_json()["user"]["usage"]["available"] == 260
+    assert admin.patch(f"/api/admin/users/{user_id}", json={"page_credits": -5}).status_code == 400
 
 
 def test_short_admin_password_setting_is_refused() -> None:

@@ -27,9 +27,9 @@ from app.export import (
     unified_json,
     unified_xlsx,
 )
-from app.models import Document
+from app.models import Document, User
 from app.schemas import summarize_validation_error
-from app.storage import UploadError, delete_file, display_name, save_stream
+from app.storage import UploadError, count_pages, delete_file, display_name, save_stream
 from app.web.ownership import TaskOwnership
 from app.web.queue import TaskQueue
 from app.web.security import ApiError, UploadLock, require_active, require_user, require_verified, settings
@@ -80,12 +80,14 @@ def upload() -> Body:
         require_active(user)
         require_verified(user)
         plan = accounts.current_plan(user, now)
+        privileges = accounts.privileges(user, now)
         quota = accounts.usage(db, user, now)
         user_id = user.id
-    if quota.remaining == 0:
+    if quota.available == 0:
+        window = "24 hours" if quota.window_hours <= 24 else "30 days"
         raise ApiError(
             429,
-            f"You reached your limit of {quota.limit} PDFs in 24 hours.",
+            f"You used your {quota.limit} pages for these {window}. Buy a page pack or upgrade to keep going.",
             next_slot_at=quota.next_slot_at.isoformat() if quota.next_slot_at else None,
             upgrade=True,
         )
@@ -93,50 +95,76 @@ def upload() -> Body:
     files = [file for file in request.files.getlist("files") if file.filename]
     if not files:
         raise ApiError(400, "Send at least one PDF in the 'files' field.")
-    if len(files) > min(plan.max_files_per_upload, MAX_FILES_PER_UPLOAD):
-        raise ApiError(400, f"Your {plan.name} plan allows {plan.max_files_per_upload} files per upload.", upgrade=True)
+    max_files = int(privileges["max_files_per_upload"])
+    if len(files) > min(max_files, MAX_FILES_PER_UPLOAD):
+        raise ApiError(400, f"Your {plan.name} plan allows {max_files} files per upload.", upgrade=True)
     raw_mode = request.args.get("save_to_db") or request.form.get("save_to_db") or ""
     save_to_db = raw_mode.strip().lower() in _TRUE_VALUES  # default: process only
-    if save_to_db and not plan.can_save_to_db:
-        raise ApiError(403, "Saving documents to the database is available on paid plans.", upgrade=True)
+    if save_to_db and not privileges["can_save_to_db"]:
+        raise ApiError(403, "Saving documents to the database is available on paid plans and page packs.", upgrade=True)
 
     lock: UploadLock = current_app.extensions["upload_lock"]
     if not lock.acquire(user_id):
         raise ApiError(409, "Another upload from your account is still in progress. Wait for it to finish.")
     config = settings()
-    max_bytes = min(plan.max_file_mb, config.max_upload_mb) * 1024 * 1024
-    accepted: list[dict[str, str]] = []
+    max_bytes = min(int(privileges["max_file_mb"]), config.max_upload_mb) * 1024 * 1024
+    max_pages = int(privileges["max_pages_per_pdf"])
+    plan_left, credits_left = quota.remaining, quota.credits
+    accepted: list[dict[str, str | int]] = []
+    charges: list[accounts.Charge] = []
     rejected: list[dict[str, str]] = []
     try:
         for file in files:
-            if len(accepted) >= quota.remaining:
-                rejected.append({"filename": display_name(file.filename), "error": "Daily limit reached"})
+            name = display_name(file.filename)
+            if plan_left + credits_left == 0:
+                rejected.append({"filename": name, "error": "No pages left"})
                 continue
             try:
                 stored = save_stream(file.stream, file.filename, upload_dir=config.upload_dir, max_bytes=max_bytes)
             except UploadError as exc:  # not a PDF, too large: report it and keep going with the rest
-                rejected.append({"filename": display_name(file.filename), "error": str(exc)})
+                rejected.append({"filename": name, "error": str(exc)})
+                continue
+            try:
+                pages = count_pages(stored.path)
+                if pages > max_pages:
+                    raise UploadError(f"{pages} pages: your plan reads up to {max_pages} pages per PDF.")
+                split = accounts.split_charge(pages, plan_left=plan_left, credits_left=credits_left)
+                if split is None:
+                    raise UploadError(f"{pages} pages: only {plan_left + credits_left} pages left.")
+            except UploadError as exc:
+                delete_file(stored.path, upload_dir=config.upload_dir)
+                rejected.append({"filename": name, "error": str(exc)})
                 continue
             try:
                 task_id = _queue().enqueue(stored.path, stored.original_name, save_to_db, str(user_id))
             except Exception:
                 delete_file(stored.path, upload_dir=config.upload_dir)  # nobody will process it: free the disk
                 raise
-            accepted.append({"task_id": task_id, "filename": stored.original_name})
+            plan_left -= split[0]
+            credits_left -= split[1]
+            charges.append(accounts.Charge(task_id=task_id, pages=pages, credits_used=split[1]))
+            accepted.append({"task_id": task_id, "filename": stored.original_name, "pages": pages})
 
-        if accepted:
-            task_ids = [task["task_id"] for task in accepted]
+        if charges:
             with session_scope() as db:
-                accounts.record_usage(db, user_id, task_ids, now)
-            _ownership().add(str(user_id), task_ids)
+                owner = db.get(User, user_id)
+                if owner is not None:
+                    accounts.record_usage(db, owner, charges, now)
+            _ownership().add(str(user_id), [c.task_id for c in charges])
     finally:
         lock.release(user_id)
 
+    used_pages = sum(c.pages for c in charges)
     body = {
         "save_to_db": save_to_db,
         "tasks": accepted,
         "rejected": rejected,
-        "usage": {"used": quota.used + len(accepted), "limit": quota.limit},
+        "usage": {
+            "pages": used_pages,
+            "used": quota.used + (quota.remaining - plan_left),
+            "limit": quota.limit,
+            "credits": credits_left,
+        },
     }
     return body, 202 if accepted else 400
 

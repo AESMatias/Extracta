@@ -281,3 +281,31 @@ def test_reconcile_task_uses_the_paypal_settings(env: Any, settings: Settings, m
 
     assert tasks.reconcile_subscriptions.apply().get() == 3
     assert seen == {"env": "sandbox", "currency": "USD"}
+
+
+def test_failed_documents_give_their_pages_back(
+    env: Any, settings: Settings, make_pdf: MakePdf, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    refunded: list[str] = []
+    monkeypatch.setattr(tasks.accounts, "refund_usage", lambda db, task_id: refunded.append(task_id) or 1)
+    env(FakeExtractor(VALID_DOC))
+
+    scanned = run(upload(settings, make_pdf, pages=[""]), save_to_db=False)
+    ok = run(upload(settings, make_pdf), save_to_db=False)
+
+    assert scanned.failed() and ok.successful()
+    assert refunded == [scanned.id]  # only the failed one
+
+
+def test_a_refund_problem_never_hides_the_processing_error(
+    env: Any, settings: Settings, make_pdf: MakePdf, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(db: object, task_id: str) -> int:
+        raise RuntimeError("database down")
+
+    monkeypatch.setattr(tasks.accounts, "refund_usage", broken)
+    env(FakeExtractor(VALID_DOC))
+
+    result = run(upload(settings, make_pdf, pages=[""]), save_to_db=False)
+
+    assert result.failed() and "scanned" in str(result.result)

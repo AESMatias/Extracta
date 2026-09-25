@@ -3,6 +3,7 @@
 `save_stream()` copies an upload to disk in fixed-size chunks, so a 50 MB PDF
 never sits in RAM (2 GB server). Files get server-generated names; the user's
 filename is kept only for display, never used to build a path.
+`count_pages()` reads only the page tree, so the quota is known before any processing.
 `delete_file()` is what the worker calls when a task finishes.
 """
 
@@ -25,6 +26,10 @@ class UploadError(ValueError):
 
 
 class NotAPdfError(UploadError):
+    pass
+
+
+class UnreadablePdfError(UploadError):
     pass
 
 
@@ -122,3 +127,19 @@ def sweep_orphans(upload_dir: Path, *, max_age_seconds: float, now: float | None
         except (ValueError, FileNotFoundError):  # not ours, or deleted meanwhile by its task
             continue
     return removed
+
+
+def count_pages(path: Path) -> int:
+    """Number of pages, read from the PDF's page tree without parsing any page content."""
+    from pdfminer.pdfdocument import PDFDocument  # pdfplumber's parser; imported here to keep startup light
+    from pdfminer.pdfpage import PDFPage
+    from pdfminer.pdfparser import PDFParser
+
+    try:
+        with path.open("rb") as handle:
+            pages = sum(1 for _ in PDFPage.create_pages(PDFDocument(PDFParser(handle))))
+    except Exception:  # damaged, encrypted with a password, or not really a PDF inside
+        raise UnreadablePdfError("This PDF could not be opened (damaged or password-protected).") from None
+    if pages == 0:
+        raise UnreadablePdfError("This PDF has no pages.")
+    return pages

@@ -8,6 +8,7 @@ whatever the outcome; only a pending retry keeps it.
 Worker (see docker-compose.yml):  celery -A app.tasks:celery_app worker --beat --concurrency=1
 """
 
+import logging
 import uuid
 from functools import lru_cache
 from pathlib import Path
@@ -16,7 +17,7 @@ from typing import Any
 from celery import Task
 from sqlalchemy.exc import OperationalError
 
-from app import billing
+from app import accounts, billing
 from app.celery_app import PROCESS_DOCUMENT_TASK, RECONCILE_SUBSCRIPTIONS_TASK, SWEEP_ORPHANS_TASK, celery_app
 from app.config import get_settings
 from app.db import session_scope, utcnow
@@ -24,6 +25,8 @@ from app.llm import DocumentExtractor, LLMTransientError, build_extractor
 from app.models import Document
 from app.pdf_text import extract_text
 from app.storage import delete_file, sweep_orphans
+
+log = logging.getLogger(__name__)
 
 
 class UploadExpiredError(RuntimeError):
@@ -74,6 +77,15 @@ def run_pipeline(
     }
 
 
+def give_pages_back(task_id: str) -> None:
+    """Return the pages of a PDF that could not be processed to its owner's quota."""
+    try:
+        with session_scope() as session:
+            accounts.refund_usage(session, task_id)
+    except Exception:  # never hide the processing error behind a refund problem
+        log.exception("Could not give back the pages of task %s", task_id)
+
+
 class ProcessDocumentTask(Task):  # type: ignore[misc]
     max_retries = 3
     acks_late = True
@@ -107,6 +119,10 @@ def process_document(
         if self.request.retries < self.max_retries:
             will_retry = True
             raise self.retry(exc=exc, countdown=self.retry_backoff_seconds(self.request.retries)) from None
+        give_pages_back(self.request.id)
+        raise
+    except Exception:
+        give_pages_back(self.request.id)  # scanned, damaged, invalid AI answer: the user does not pay
         raise
     finally:
         if not will_retry:
