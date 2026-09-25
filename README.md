@@ -1,95 +1,85 @@
-# PDF Process Pipeline — Intelligent Document Processing (IDP)
+# Extracta — Intelligent Document Processing
 
 ![Python](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)
 ![Flask](https://img.shields.io/badge/flask-3.1-000000?logo=flask&logoColor=white)
+![Next.js](https://img.shields.io/badge/next.js-16-000000?logo=nextdotjs&logoColor=white)
 ![Celery](https://img.shields.io/badge/celery-5.6-37814A?logo=celery&logoColor=white)
-![Redis](https://img.shields.io/badge/redis-8-DC382D?logo=redis&logoColor=white)
 ![Supabase](https://img.shields.io/badge/supabase-postgres%2017-3FCF8E?logo=supabase&logoColor=white)
 ![Gemini](https://img.shields.io/badge/LLM-Gemini%20Flash--Lite-4285F4?logo=googlegemini&logoColor=white)
-![Docker](https://img.shields.io/badge/docker-compose-2496ED?logo=docker&logoColor=white)
+![Caddy](https://img.shields.io/badge/caddy-2.11-1F88C0?logo=caddy&logoColor=white)
 ![Ruff](https://img.shields.io/badge/code%20style-ruff-D7FF64?logo=ruff&logoColor=black)
 
-Upload many PDFs at once and get their data back as structured JSON. Each document is
-**classified** (invoice, receipt, contract, bank statement, payslip, resume, report…), its text
-is extracted and an LLM (Gemini by default) turns it into validated JSON. Results show up as
-tables and charts, can be exported to CSV and, if you choose, are saved to Supabase.
+Upload PDFs and get their data back as structured JSON, tables, charts and Excel/CSV/JSON files.
+Each document is **classified** (invoice, receipt, contract, bank statement, payslip, resume,
+report…), its text is extracted and an LLM (Gemini by default) turns it into validated data.
 
-It is built to run on a **2 GB RAM server**: documents are processed one at a time, every
-service has a memory limit and PDFs are deleted as soon as they are processed.
+Extracta is a complete SaaS: accounts (email + password or Google), a free plan and four cheap
+paid plans with daily quotas, PayPal checkout, and an admin panel to approve accounts and assign
+privileges. It is built to run on a **2 GB RAM server** behind automatic HTTPS.
 
-> **Status:** under construction, step by step. Working today: configuration, the minimal web
-> app (`/health`), the extraction schema, the Supabase database, streaming upload storage, PDF text extraction, LLM
-> extraction with Gemini (≈ USD 0.0006 per invoice) and the Celery worker that processes each PDF
-> in persistent or ephemeral mode, CSV/XLSX/JSON export, the HTTP API and the browser UI. Detailed progress lives in
-> the [roadmap](02-DOCS/wiki/ftd/idp-mvp.md).
+- **Deploy it**: [docs/DEPLOY.md](docs/DEPLOY.md) — from an empty VPS to HTTPS, step by step.
+- **Progress and decisions**: [roadmap](02-DOCS/wiki/ftd/idp-mvp.md),
+  [accounts and billing](02-DOCS/wiki/ftd/accounts-billing-nextjs.md),
+  [decision log](02-DOCS/wiki/sdd/decisions.md).
 
 ---
 
 ## Contents
 
-- [What it does](#what-it-does)
+- [Features](#features)
+- [Plans](#plans)
 - [Architecture](#architecture)
-- [Built for 2 GB of RAM](#built-for-2-gb-of-ram)
-- [Getting started](#getting-started)
+- [Run it locally](#run-it-locally)
 - [Configuration (`.env`)](#configuration-env)
+- [Administration](#administration)
+- [HTTP API](#http-api)
 - [Development: tests and quality](#development-tests-and-quality)
 - [Ruff: what it is and how to use it](#ruff-what-it-is-and-how-to-use-it)
 - [Project structure](#project-structure)
-- [Conventions](#conventions)
 - [Security](#security)
-- [Internal docs and AI harness](#internal-docs-and-ai-harness)
+- [Conventions](#conventions)
 
 ---
 
-## What it does
+## Features
 
-### Document types
-
-The LLM first classifies the PDF and then fills **only** the section for that type
-([`app/schemas.py`](app/schemas.py)):
-
-| Type | Examples | Extracted data |
-|---|---|---|
-| `invoice` | Invoices, utility bills | Issuer, customer, tax ID (RUT, VAT…), dates, subtotal, taxes, total, currency, line items |
-| `receipt` | Receipts, sales tickets | Same as invoice |
-| `purchase_order` | Purchase orders | Same as invoice |
-| `quote` | Quotes, estimates | Same as invoice (offer expiry date) |
-| `bank_statement` | Bank statements | Bank, holder, **last 4 account digits only**, period, balances, credits and debits |
-| `contract` | Contracts | Parties and roles, term, value, auto-renewal, termination notice, governing law, key obligations |
-| `payslip` | Payslips | Employer, employee, period, gross pay, deductions, net pay |
-| `resume` | Resumes / CVs | Name, contact, title, experience, skills, languages, education |
-| `report` | Reports | Title, author, date, period, key findings |
-| `other` | Anything else | Title and summary |
-
-Every result also has `document_type`, `language`, `title` and a short `summary`. Documents can
-be in any language: amounts come back as numbers, dates as `YYYY-MM-DD` and currencies as ISO
-4217 codes.
-
-### Two processing modes
-
-The user picks one when uploading:
-
-| Mode | What happens to the data |
+| Area | What you get |
 |---|---|
-| **Persistent** | Saved to PostgreSQL (Supabase) and shown on screen. |
-| **Ephemeral** | **Never touches the database.** Lives temporarily in Redis (it expires) and in the browser. |
+| **Extraction** | 10 document types in any language: invoices, receipts, purchase orders, quotes, bank statements, contracts, payslips, resumes, reports and "other". Amounts as numbers, dates as `YYYY-MM-DD`, currencies as ISO 4217. |
+| **Processing modes** | *Process only*: nothing is stored, results expire after 1 hour. *Save to history* (paid plans): results are kept in the account. The PDF file is deleted right after processing in both modes. |
+| **Exports** | Excel (XLSX with typed numbers and dates), CSV (UTF-8 with BOM) and JSON, per document or for the whole batch. |
+| **Dashboard** | Drag and drop, upload progress, live status per document, detail view, charts by type and by currency, saved history. |
+| **Accounts** | Email + password or Google sign-in. Optional manual approval of new accounts. |
+| **Plans** | Free (2 PDFs every 24 hours) and four 30-day passes paid with PayPal. |
+| **Admin** | `/admin` with `ADMIN_PASSWORD`: approve/reject/suspend accounts, assign plans with or without expiry, custom daily limits, payments and stats. |
 
-In both modes the PDF is deleted from disk when its task finishes.
+Document types and extracted fields:
 
-### Export and visualize
+| Type | Extracted data |
+|---|---|
+| `invoice`, `receipt`, `purchase_order`, `quote` | Issuer, customer, tax IDs, dates, subtotal, taxes, total, currency, line items |
+| `bank_statement` | Bank, holder, **last 4 account digits only**, period, balances, credits and debits |
+| `contract` | Parties and roles, term, value, auto-renewal, termination notice, governing law, key obligations |
+| `payslip` | Employer, employee, period, gross pay, deductions, net pay |
+| `resume` | Name, contact, title, experience, skills, languages, education |
+| `report` | Title, author, date, period, key findings |
+| `other` | Title and summary |
 
-- **Live table and charts** (Chart.js) as each document finishes.
-- **Three export formats**, each for one document or for the whole batch:
+## Plans
 
-| Format | Best for | Details |
-|---|---|---|
-| **CSV** | Any tool, databases, scripts | UTF-8 with BOM (accents display in Excel), streamed row by row |
-| **XLSX** | Excel, Google Sheets, LibreOffice | Numbers and dates keep their type (sum, filter, sort), leading zeros such as `004512` survive, bold frozen header with filters |
-| **JSON** | Other systems and APIs | The original nested structure, one object per document |
+Defined in [`app/plans.py`](app/plans.py) (the frontend catalog is generated from it and a test
+fails if they drift). Paid plans are 30-day passes, with no automatic renewal.
 
-- **Individual** export: one document; invoices, receipts, orders and quotes get one row per line item.
-- **Unified** export: the whole batch, one row per document, always with the same 64 columns (derived
-  from the schema), so exports from different batches can be stacked in a spreadsheet.
+| Plan | Price | PDFs / 24 h | MB per file | Files per upload | Save to history |
+|---|---|---|---|---|---|
+| Free | $0 | 2 | 10 | 2 | — |
+| Starter | $1.99 | 25 | 20 | 10 | ✓ |
+| Pro | $4.99 | 100 | 50 | 25 | ✓ |
+| Business | $9.99 | 250 | 50 | 50 | ✓ |
+| Ultra | $19.99 | 600 | 50 | 50 | ✓ |
+
+Every paid plan covers its worst-case LLM cost (≈ USD 0.0006 per document with Gemini
+Flash-Lite), which is checked by a test.
 
 ---
 
@@ -97,341 +87,245 @@ In both modes the PDF is deleted from disk when its task finishes.
 
 ```mermaid
 flowchart LR
-    B[Browser<br/>dropzone + table + charts] -- "POST /upload<br/>(PDFs + save_to_db)" --> W[web<br/>Flask + gunicorn]
-    W -- "streams to disk" --> V[(volume<br/>/tmp_uploads)]
-    W -- "enqueues task" --> R[(Redis<br/>queue + results with TTL)]
-    R --> K[worker<br/>Celery, concurrency=1]
-    V -- "reads PDF" --> K
-    K -- "text" --> P[pdfplumber]
-    K -- "text + schema" --> L[LLM<br/>Gemini / OpenAI]
-    K -- "only if save_to_db" --> S[(Supabase<br/>PostgreSQL)]
-    K -- "returns JSON" --> R
-    K -. "deletes PDF" .-> V
-    B -- "GET /tasks/{id} (polling)" --> W
-    W -- "status + result" --> R
-    B -- "POST /export/{csv,xlsx,json}/*" --> W
+    B[Browser] -- "HTTPS" --> C[frontend<br/>Caddy: static Next.js site<br/>+ automatic HTTPS]
+    C -- "/api/*" --> W[web<br/>Flask API + gunicorn]
+    W -- "streams PDFs" --> V[(volume<br/>/tmp_uploads)]
+    W -- "enqueue" --> R[(Redis<br/>queue, results, sessions data)]
+    R --> K[worker<br/>Celery, concurrency 1<br/>+ orphan sweep]
+    V --> K
+    K -- "text + schema" --> L[Gemini / OpenAI]
+    K -- "save (paid plans)" --> S[(Supabase<br/>PostgreSQL)]
+    W -- "accounts, quotas, payments" --> S
+    W -- "orders" --> P[PayPal]
+    W -- "sign-in" --> G[Google OAuth]
 ```
-
-**Life of a document:**
-
-1. The browser uploads the PDFs. `web` writes them **in chunks** to the shared `/tmp_uploads`
-   volume (never the whole file in RAM) and enqueues one Celery task per file.
-2. The `worker` takes **one task at a time**: it extracts the text with `pdfplumber`, sends it to
-   the LLM together with the schema (`DocumentSchema`) and gets back JSON validated by Pydantic.
-3. In persistent mode it saves the result to Supabase.
-4. It returns the JSON: Celery keeps it in Redis for a limited time.
-5. It deletes the PDF from disk, whatever the outcome.
-6. The browser polls each task's status (Pending → Processing → Completed/Failed) and, once
-   completed, shows the data and enables the CSV buttons.
 
 | Piece | Technology | Role |
 |---|---|---|
-| Web / UI | Flask 3.1 + Jinja2, gunicorn | Upload, status, export |
-| Export | csv (stdlib), XlsxWriter, json | CSV, XLSX and JSON downloads |
-| Queue | Celery 5.6 + Redis 8 | Background processing, temporary results |
-| Text extraction | pdfplumber | Text from digital PDFs (scanned PDFs need OCR, not in the MVP) |
-| LLM | Gemini (`google-genai`), optional OpenAI | Classify and extract structured data |
-| Validation | Pydantic v2, pydantic-settings | Output schema and configuration |
-| Database | Supabase (PostgreSQL 17) + SQLAlchemy 2 + psycopg 3 | Storage (persistent mode) |
-| Containers | Docker Compose | The whole system, with memory limits |
-| Dependencies | Poetry | Reproducible `pyproject.toml` + `poetry.lock` |
+| Frontend | Next.js 16 (static export), React 19, Tailwind CSS 4, Recharts | The website and dashboard; no Node.js at runtime |
+| Edge | Caddy 2.11 (compiled with patched Go) | Serves the site, proxies `/api`, obtains and renews HTTPS certificates |
+| API | Flask 3.1, gunicorn (2 × 4 threads) | Accounts, quotas, uploads, task status, exports, admin, billing |
+| Queue | Celery 5.6 + Redis 8 | One document at a time, results with a TTL, periodic cleanup |
+| Extraction | pdfplumber + Gemini (`google-genai`), optional OpenAI | Text, then structured data validated by Pydantic |
+| Database | Supabase PostgreSQL + SQLAlchemy 2 + Alembic | Accounts, usage, payments, saved documents (Row Level Security on) |
+| Payments / sign-in | PayPal Orders v2, Google OAuth 2.0 (PKCE) | Optional; enabled by `.env` |
 
-### HTTP API
-
-| Method | Path | Body | Response |
-|---|---|---|---|
-| `POST` | `/upload` | multipart: `files` (1–50 PDFs), `save_to_db` (`true`/`false`, default `false`) | `202` `{"save_to_db", "tasks": [{"task_id", "filename"}], "rejected": [{"filename", "error"}]}` |
-| `GET` | `/tasks/<task_id>` | — | `{"task_id", "status": "pending"\|"processing"\|"completed"\|"failed", "result"?, "error"?}`; `404` if the task is not yours |
-| `POST` | `/export/{csv\|xlsx\|json}/individual` | JSON `{"filename", "document"}` | File download in that format |
-| `POST` | `/export/{csv\|xlsx\|json}/unified` | JSON `{"items": [{"filename", "document"}, …]}` (1–500) | File download in that format |
-| `GET` | `/health` | — | `{"status": "ok"}` |
-
-```bash
-curl -c cookies.txt -F "files=@invoice.pdf" -F "save_to_db=false" http://localhost:8000/upload
-curl -b cookies.txt http://localhost:8000/tasks/<task_id>
-```
-
-The session cookie matters: `/tasks/<id>` only answers the browser (cookie) that uploaded the file.
+**Memory on a 2 GB server** (limits in `docker-compose.yml`, total 1344 MB): frontend 64 MB,
+web 384 MB, worker 768 MB, redis 128 MB. Measured under load: ~12 / 210 / 240 / 14 MB.
 
 ---
 
-## Built for 2 GB of RAM
+## Run it locally
 
-| Measure | Where | Why |
-|---|---|---|
-| Per-service memory limits: web 384M, worker 768M, redis 128M (**1280M total**) | `docker-compose.yml` | Leaves ~700 MB for the OS and Docker |
-| `--concurrency=1` and `--prefetch-multiplier=1` | worker | One PDF at a time, no extra tasks reserved |
-| `--max-tasks-per-child=20` | worker | Restarts the process every 20 tasks to release accumulated memory |
-| Streaming uploads to disk | web | Large batches without loading files into RAM |
-| PDF deleted when each task finishes | worker | The disk never fills up |
-| Redis `noeviction` + `appendonly` | redis | Queued tasks are never dropped and survive a restart |
-| No PostgreSQL container | — | The database lives in Supabase |
-
----
-
-## Getting started
-
-### Requirements
-
-- **Docker** with Compose. On macOS without Docker Desktop:
-  ```bash
-  brew install colima docker docker-compose
-  colima start --cpu 2 --memory 2 --disk 30
-  ```
-  (`--memory 2` mimics the production server.)
-- A **Supabase** project and a **Gemini** API key ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)).
-
-You do not need Python or Poetry on your machine: everything runs in containers.
-
-### Steps
+Requirements: Docker with Compose (macOS without Docker Desktop:
+`brew install colima docker docker-compose && colima start --cpu 2 --memory 2 --disk 30`),
+a Supabase project and a Gemini API key. No Python or Node.js needed on your machine.
 
 ```bash
-git clone <repo-url>
-cd pdf_process_pipeline
-cp .env.sample .env        # then fill in GEMINI_API_KEY and DATABASE_URL
-docker compose up --build
+git clone https://github.com/AESMatias/Extracta.git
+cd Extracta
+cp .env.sample .env          # fill GEMINI_API_KEY, DATABASE_URL, SECRET_KEY, ADMIN_PASSWORD
+docker compose up -d --build
+./scripts/docker-cleanup.sh  # optional: free the disk space used by the build
 ```
 
-Open <http://localhost:8000> and drop some PDFs. Health check: <http://localhost:8000/health> →
-`{"status": "ok"}`.
-
-Create the table in Supabase (once; running it again is safe):
-
-```bash
-docker compose run --rm --no-deps web python -m app.db
-```
+Open <http://localhost:8080>. The API migrates the database on start. `/admin` uses
+`ADMIN_PASSWORD`.
 
 Useful commands:
 
 ```bash
-docker compose logs -f web      # follow web logs
-docker compose logs -f worker   # follow the worker processing documents
-docker compose ps               # status and health of each service
-docker stats --no-stream        # real memory usage
-docker compose down             # stop everything
+docker compose ps                      # status and health
+docker compose logs -f web worker      # follow the API and the worker
+docker stats --no-stream               # real memory usage
+docker compose down                    # stop (volumes are kept)
 ```
+
+**Frontend with hot reload** (optional, needs Node.js 22): run the stack, publish the API port
+temporarily or run Flask locally, then `cd frontend && npm install && API_ORIGIN=http://localhost:8000 npm run dev`.
 
 ---
 
 ## Configuration (`.env`)
 
-Every variable is documented in [`.env.sample`](.env.sample). `.env` is in `.gitignore`:
-**it is never committed**. Configuration is validated at startup ([`app/config.py`](app/config.py));
-if something is missing, the app refuses to start and says what is missing.
+Every variable is documented in [`.env.sample`](.env.sample); `.env` and any copy of it are
+git-ignored. Settings are validated at startup ([`app/config.py`](app/config.py)): a missing or
+invalid value stops the app with a clear message.
 
-| Variable | Example | Description |
+| Group | Variables |
+|---|---|
+| LLM | `LLM_PROVIDER` (`gemini`/`openai`), `LLM_MODEL`, `GEMINI_API_KEY`, `OPENAI_API_KEY` |
+| Database | `DATABASE_URL` (Supabase **Session pooler**, pasted as shown) |
+| Site | `PUBLIC_BASE_URL`, `SITE_ADDRESS`, `HTTP_PORT`, `HTTPS_PORT` |
+| Sessions | `SECRET_KEY` (≥ 32 chars), `SESSION_COOKIE_SECURE` (`true` with HTTPS) |
+| Accounts | `REQUIRE_MANUAL_APPROVAL`, `ADMIN_PASSWORD` (≥ 12 chars; empty disables /admin) |
+| Google sign-in | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (redirect URI: `PUBLIC_BASE_URL/api/auth/google/callback`) |
+| PayPal | `PAYPAL_ENV` (`sandbox`/`live`), `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` |
+| Queue | `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`, `RESULT_TTL_SECONDS` |
+| Uploads | `UPLOAD_DIR`, `MAX_UPLOAD_MB`, `ORPHAN_MAX_AGE_HOURS` |
+
+To switch the LLM to OpenAI: set `LLM_PROVIDER=openai`, `LLM_MODEL` and `OPENAI_API_KEY`, then
+`docker compose build --build-arg POETRY_EXTRAS=openai web`.
+
+---
+
+## Administration
+
+Open `/admin` and enter `ADMIN_PASSWORD` (5 attempts per 15 minutes; the admin session lasts
+2 hours and is separate from user accounts). For every account you see its status, effective
+plan, **explicit privileges** (PDFs per 24 h, MB per file, files per upload, save to history),
+usage, sign-in methods and payments, and you can:
+
+- **Approve / reject / suspend**: rejected and suspended accounts are signed out at once.
+- **Assign a plan** (e.g. premium for free) with an expiry date or none.
+- **Set a custom daily limit** that overrides the plan's.
+
+With `REQUIRE_MANUAL_APPROVAL=true`, new accounts wait as *pending* (they can sign in but not
+upload) until you approve them.
+
+---
+
+## HTTP API
+
+All routes are under `/api` and use the session cookie (`HttpOnly`, `SameSite=Lax`, `Secure` in
+production). State-changing requests from other origins are refused.
+
+| Method | Path | Purpose |
 |---|---|---|
-| `LLM_PROVIDER` | `gemini` | `gemini` or `openai` |
-| `LLM_MODEL` | `gemini-3.1-flash-lite` | Model of the selected provider |
-| `GEMINI_API_KEY` | — | Required when `LLM_PROVIDER=gemini` |
-| `OPENAI_API_KEY` | — | Required when `LLM_PROVIDER=openai` |
-| `DATABASE_URL` | `postgresql://postgres.<ref>:<pass>@aws-0-<region>.pooler.supabase.com:5432/postgres` | Supabase connection (paste it as shown; the app switches it to the psycopg 3 driver) |
-| `CELERY_BROKER_URL` | `redis://redis:6379/0` | Task queue (Redis inside Compose) |
-| `CELERY_RESULT_BACKEND` | `redis://redis:6379/1` | Where task results (the extracted JSON) are kept |
-| `RESULT_TTL_SECONDS` | `3600` | How long results stay in Redis; ephemeral data exists only there and in the browser |
-| `UPLOAD_DIR` | `/tmp_uploads` | Volume shared by web and worker |
-| `MAX_UPLOAD_MB` | `50` | Maximum size per PDF |
-| `SECRET_KEY` | — | **Required**, ≥ 32 chars: signs the session cookie that ties tasks to a browser. Generate with `python3 -c "import secrets; print(secrets.token_urlsafe(48))"` |
-| `SESSION_COOKIE_SECURE` | `false` | `true` in production (HTTPS only) |
-
-### Which Supabase connection string?
-
-In the dashboard: **Connect → Connection String**. There are three; use the **Session pooler**:
-
-| Option | Port | Use |
-|---|---|---|
-| Direct connection | 5432 | ❌ IPv6 only: many VPS and Docker networks cannot reach it |
-| **Session pooler** | **5432** | ✅ IPv4, long-lived connections (web + worker) |
-| Transaction pooler | 6543 | ❌ Meant for serverless; breaks psycopg 3 prepared statements |
-
-### Switching LLM provider
-
-1. In `.env`: `LLM_PROVIDER=openai`, `LLM_MODEL=<model>` and `OPENAI_API_KEY=...`
-2. Rebuild the image with the optional SDK:
-   ```bash
-   docker compose build --build-arg POETRY_EXTRAS=openai
-   ```
-
-No code changes: every provider uses the same interface and the same schema.
+| `POST` | `/api/auth/register`, `/api/auth/login`, `/api/auth/logout` | Accounts (JSON) |
+| `GET` | `/api/auth/me` | Current account with plan and usage (`user: null` when signed out) |
+| `GET` | `/api/auth/google/login` → `/api/auth/google/callback` | Google sign-in |
+| `POST` | `/api/upload?save_to_db=true\|false` | Multipart `files`; plan and quota enforced |
+| `POST` | `/api/tasks/status` | `{"task_ids": [...]}` → status and result of your tasks |
+| `GET` | `/api/tasks/<id>` | One task (404 if it is not yours) |
+| `GET`, `DELETE` | `/api/documents`, `/api/documents/<id>` | Saved history |
+| `POST` | `/api/export/{csv\|xlsx\|json}/{individual\|unified}` | File downloads |
+| `GET` | `/api/plans`, `/api/billing/config`, `/api/billing/payments` | Plans and your payments |
+| `POST` | `/api/billing/orders`, `/api/billing/orders/<id>/capture` | PayPal checkout |
+| `*` | `/api/admin/...` | Admin (session from `ADMIN_PASSWORD`) |
+| `GET` | `/api/health` | Health check |
 
 ---
 
 ## Development: tests and quality
 
-The project is built with **TDD**: first a failing test (🔴), then the minimum code that makes
-it pass (🟢). The tools run inside a `dev` image:
+The backend is built test-first. Unit tests use an in-memory SQLite database and fakes for
+Redis, Celery, Google and PayPal; integration tests hit the real Supabase and Gemini.
 
 ```bash
-# Once (or whenever dependencies change)
+# Backend (inside the dev image: no local Python needed)
 docker build -f docker/Dockerfile --target dev -t pdf-process-pipeline:dev .
-
-# Tests + coverage
 docker run --rm -v "$PWD":/src -w /src pdf-process-pipeline:dev pytest
-
-# Format and lint
 docker run --rm -v "$PWD":/src -w /src pdf-process-pipeline:dev ruff format app tests
 docker run --rm -v "$PWD":/src -w /src pdf-process-pipeline:dev ruff check app tests
-
-# Types
 docker run --rm -v "$PWD":/src -w /src pdf-process-pipeline:dev mypy app tests
-
-# Integration tests against your real Supabase and LLM provider (reads .env; costs < USD 0.01)
 docker run --rm --env-file .env -v "$PWD":/src -w /src pdf-process-pipeline:dev pytest -m integration
+
+# Frontend
+docker run --rm -v "$PWD/frontend":/app -w /app node:22-alpine sh -c "npm ci && npx tsc --noEmit && npx eslint . && npm run build"
+
+# Database migrations (applied automatically when the web container starts)
+docker compose run --rm --no-deps web python -m app.migrate
 ```
 
-| Tool | What it checks | Bar |
+| Tool | Checks | Bar |
 |---|---|---|
-| **pytest** + pytest-cov | The code does what it should | All green; ≥ 70% coverage on changed code |
-| **ruff** | Style and common mistakes | Zero findings |
-| **mypy** | Types (`str`, `int`, `Settings`…) line up | Zero errors |
+| pytest + pytest-cov | Behavior (250+ tests) | All green; ≥ 70% coverage on changed code (currently ~95%) |
+| ruff | Style and common bugs | Zero findings |
+| mypy | Types | Zero errors |
+| tsc + eslint | Frontend types and React rules | Zero errors |
+| Trivy | Known vulnerabilities with an available fix | Zero HIGH/CRITICAL in both images |
 
-The code is mounted at `/src` so it does not hide the image's virtualenv (`/app/.venv`).
+**CI** ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs all of the above on every push
+and pull request and scans both images every Monday. **Dependabot** proposes weekly updates for
+Python, npm, Docker base images and GitHub Actions.
 
-### Dependencies with Poetry
-
-- Declared in [`pyproject.toml`](pyproject.toml) and pinned in `poetry.lock` (exact versions).
-- Groups: production dependencies, a `dev` group (pytest, ruff, mypy) and the optional `openai` extra.
-- Without a local Poetry, run it from a container, e.g. to add a package:
-  ```bash
-  docker run --rm -v "$PWD":/work -w /work python:3.12-slim \
-    sh -c 'pip install -q poetry==2.5.1 && poetry add <package>'
-  ```
+Dependencies are managed with **Poetry** (`pyproject.toml` + `poetry.lock`) and **npm**
+(`frontend/package-lock.json`).
 
 ---
 
 ## Ruff: what it is and how to use it
 
-[**Ruff**](https://docs.astral.sh/ruff/) is a Python linter and formatter written in Rust (very
-fast). It does **two different jobs**:
+[**Ruff**](https://docs.astral.sh/ruff/) is a Python linter and formatter written in Rust. It does
+two different jobs:
 
 | Command | What it does | Analogy |
 |---|---|---|
 | `ruff check` | **Linter**: finds bugs and bad practices (unused imports, undefined names, unsorted imports, outdated syntax, overlong lines…) and **reports** them | Spell checker |
-| `ruff format` | **Formatter**: **rewrites** the code in one consistent style (spacing, quotes, line breaks) | An editor's auto-format |
+| `ruff format` | **Formatter**: **rewrites** the code in one consistent style | An editor's auto-format |
 
-**Why use it:** all code looks the same no matter who wrote it, so reviews focus on logic, not
-whitespace.
+Configuration (`pyproject.toml`): `line-length = 120` (comments included) and rule sets `E`
+(PEP 8), `F` (real errors), `I` (import order), `B` (common bugs), `UP` (modern syntax) and `SIM`
+(simplifications). Comments to the right of code are welcome as long as the line fits in 120
+characters; `ruff format` adds the two spaces before `#` that PEP 8 asks for.
 
-**Configuration** (in `pyproject.toml`):
-
-```toml
-[tool.ruff]
-line-length = 120          # maximum line width, comments included
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "SIM"]
-```
-
-| Rule set | What it checks |
-|---|---|
-| `E` | PEP 8 style (e.g. `E501`: line too long) |
-| `F` | Real errors: undefined names, unused imports |
-| `I` | Import order |
-| `B` | Common bugs (bugbear), e.g. mutable default arguments |
-| `UP` | Modern Python syntax (`str \| None` instead of `Optional[str]`) |
-| `SIM` | Code simplifications |
-
-**Comments to the right of code** are allowed. The 120-character limit leaves room for them;
-the formatter counts the comment in the line width, so if a commented line goes past 120,
-`ruff format` would split the code to make room. `ruff format` also adds the **two spaces before
-`#`** that PEP 8 asks for:
-
-```python
-app.extensions["settings"] = settings or get_settings()  # get_settings() is cached: .env is read once per process
-```
-
-**Recommended flow:** after editing, run `ruff format` (fixes things itself), then `ruff check`
-(fix what is left by hand or with `ruff check --fix`).
+Recommended flow: after editing, `ruff format` (fixes things itself), then `ruff check` (fix the
+rest by hand or with `ruff check --fix`).
 
 ---
 
 ## Project structure
 
 ```
-pdf_process_pipeline/
-├── app/
-│   ├── __init__.py          ✅ create_app(): Flask app factory + /health
-│   ├── config.py            ✅ Settings validated from .env
-│   ├── schemas.py           ✅ DocumentSchema: what the LLM must return
-│   ├── db.py, models.py     ✅ Supabase connection and documents table (RLS on)
-│   ├── storage.py           ✅ Streaming upload to /tmp_uploads
-│   ├── pdf_text.py          ✅ Text extraction with pdfplumber
-│   ├── llm/                 ✅ Common interface + Gemini + OpenAI + selector
-│   ├── tasks.py             ✅ Celery task (extract → LLM → save → delete PDF)
-│   ├── export.py            ✅ Individual and unified export: CSV, XLSX, JSON
-│   ├── celery_app.py        ✅ Celery app shared by web (enqueue) and worker (run)
-│   └── web/                 ✅ HTTP API, task ownership, Jinja2 page, JS and charts
-├── tests/                   Tests (pytest)
-├── docker/Dockerfile        Multi-stage image: builder → dev → runtime
-├── docker-compose.yml       web + worker + redis with memory limits
-├── pyproject.toml           Dependencies (Poetry) and ruff/mypy/pytest config
-├── poetry.lock              Exact versions
-├── .env.sample              Documented configuration template
-├── 02-DOCS/wiki/            Constitution, decisions and roadmap
-└── CLAUDE.md / GEMINI.md    Index for AI assistants
+├── app/                         Python backend
+│   ├── __init__.py              create_app(): the Flask API
+│   ├── config.py                Settings validated from .env
+│   ├── plans.py                 Plans, prices and privileges
+│   ├── accounts.py              Registration, sign-in, Google, quota
+│   ├── models.py, db.py         Tables (users, usage_events, payments, documents) and sessions
+│   ├── migrations/, migrate.py  Alembic migrations (run on start)
+│   ├── schemas.py               DocumentSchema: what the LLM must return
+│   ├── storage.py               Streaming uploads, orphan sweep
+│   ├── pdf_text.py              Text extraction (pdfplumber)
+│   ├── llm/                     Gemini, OpenAI and the provider selector
+│   ├── celery_app.py, tasks.py  Queue and the processing task
+│   ├── export.py                CSV, XLSX and JSON exports
+│   └── web/                     Routes: documents, auth, admin, billing, security helpers
+├── frontend/                    Next.js site (static export) + Caddyfile + Dockerfile
+│   └── src/app/                 /, /login, /register, /app, /pricing, /account, /admin
+├── tests/                       pytest suite (unit + integration)
+├── docker/Dockerfile            API/worker image: builder → dev → runtime
+├── docker-compose.yml           frontend + web + worker + redis with memory limits
+├── docs/DEPLOY.md               Production deployment guide
+├── scripts/docker-cleanup.sh    Free disk space after builds
+└── 02-DOCS/wiki/                Constitution, decisions and roadmaps
 ```
-
-✅ done · ⏳ in progress · ⬜ pending
-
----
-
-## Conventions
-
-- **Language:** everything in the repository is in **English** — code, identifiers, comments,
-  docs and commit messages.
-- **Branches:** work happens on branches (`feat/...`) and reaches `main` only after tests, ruff
-  and mypy pass.
-- **Commits:** [Conventional Commits](https://www.conventionalcommits.org), no emoji, with a
-  descriptive subject that starts with an imperative verb:
-  ```
-  feat(config): add validated settings loaded from .env
-  feat(llm): add provider-agnostic LLM extraction with Gemini and optional OpenAI
-  docs(readme): translate README to English
-  ```
-- **Significant decisions** are logged in [`02-DOCS/wiki/sdd/decisions.md`](02-DOCS/wiki/sdd/decisions.md).
 
 ---
 
 ## Security
 
-- **Secrets** only in `.env` (ignored by git and by `.dockerignore`, so it never enters the
-  image); settings use `SecretStr` so secrets never show up in logs.
-- **Non-root container**: the app runs as `appuser`.
-- **Browser hardening**: a Content-Security-Policy with no inline scripts (only our files and the
-  pinned Chart.js from jsDelivr, verified with Subresource Integrity), `X-Content-Type-Options:
-  nosniff`, `Referrer-Policy: no-referrer` and no framing. Document data is always inserted as
-  text, never as HTML, so a malicious PDF cannot inject scripts into the page.
-- **Task ownership** (no user accounts yet): each browser gets a random owner token in a signed
-  session cookie (`HttpOnly`, `SameSite=Lax`, `Secure` in production) and only that browser can
-  read its tasks; any other request for a task id gets `404`. Ownership expires with the results.
-- **No access logs of task URLs**: gunicorn runs without an access log, so task ids do not end up
-  in log files.
-- **Supabase**: the `documents` table has Row Level Security enabled (no policies), so
-  Supabase's public REST API cannot read it; the app connects as the table owner.
-- **Privacy**: only the last 4 digits of bank accounts are stored; ephemeral mode never writes
-  to the database.
-- **Exports**: CSV text cells starting with `=`, `+`, `-` or `@` are escaped, and XLSX writes text as
-  plain string cells, so a malicious PDF cannot inject spreadsheet formulas.
-- **Vulnerabilities**: dependencies scanned with [Trivy](https://trivy.dev) (0 CVEs in
-  `poetry.lock`); the base image is reviewed on every release
-  ([logged decision](02-DOCS/wiki/sdd/decisions.md)).
+- **Secrets** only in `.env` (git- and Docker-ignored); `SecretStr` keeps them out of logs.
+- **Passwords**: PBKDF2-SHA256 with 600,000 iterations; unknown emails take as long as wrong
+  passwords; login, registration and the admin password are rate limited.
+- **Sessions**: signed `HttpOnly`, `SameSite=Lax` cookie (`Secure` in production); cross-site
+  state-changing requests are refused; rejected or suspended accounts are signed out at once.
+- **Authorization**: plans and quotas are enforced on the server before the upload body is read;
+  tasks, results and saved documents are only served to their owner (404 otherwise).
+- **Payments**: the server sets the price, then verifies owner, plan, amount and currency before
+  capturing; captures are idempotent.
+- **Uploads**: streamed to disk in 64 KB chunks, checked by content (`%PDF-`), stored under
+  server-generated names, deleted after processing; a periodic sweep removes orphans.
+- **LLM output** is validated against a strict schema; document content never reaches error
+  messages; bank accounts keep only their last 4 digits.
+- **Exports**: CSV cells that look like formulas are escaped; XLSX writes text as text.
+- **Browser**: Content-Security-Policy, `nosniff`, no framing, `Referrer-Policy`; React escapes
+  all output and the app never injects HTML.
+- **Database**: Row Level Security on every table, so Supabase's public REST API cannot read them.
+- **Containers**: non-root API image without pip; Debian patches applied on every build; Caddy
+  compiled with the latest Go; Trivy: 0 fixable HIGH/CRITICAL vulnerabilities in both images.
 
 ---
 
-## Internal docs and AI harness
+## Conventions
 
-- [`02-DOCS/wiki/sdd/constitution.md`](02-DOCS/wiki/sdd/constitution.md): the project's
-  non-negotiable rules (stack, quality, RAM limits, security).
-- [`02-DOCS/wiki/sdd/decisions.md`](02-DOCS/wiki/sdd/decisions.md): decision log with
-  alternatives and reasons.
-- [`02-DOCS/wiki/ftd/idp-mvp.md`](02-DOCS/wiki/ftd/idp-mvp.md): step-by-step roadmap with the
-  evidence for each step.
+- Everything in the repository is in **English**: code, comments, docs and commit messages.
+- Work happens on branches and reaches `main` through pull requests after CI passes.
+- Commits follow [Conventional Commits](https://www.conventionalcommits.org) with a descriptive
+  subject that starts with an imperative verb, no emoji.
+- Significant decisions are logged in [`02-DOCS/wiki/sdd/decisions.md`](02-DOCS/wiki/sdd/decisions.md).
 
-The project uses [rsc-harness](https://ericrisco.github.io/rsc-harness/) to configure AI
-assistants (Claude Code and Gemini CLI): skills, reviewer agents and hooks. Only the declaration
-(`.rsc.json`) is committed; generated files (`.rsc/`, links in `.claude/` and `.gemini/`) are
-machine-local. After cloning, regenerate them with:
-
-```bash
-npx @ericrisco/rsc@latest sync
-```
+The repository also carries an [rsc-harness](https://ericrisco.github.io/rsc-harness/)
+configuration for AI assistants (Claude Code and Gemini CLI); regenerate its local files after
+cloning with `npx @ericrisco/rsc@latest sync`.

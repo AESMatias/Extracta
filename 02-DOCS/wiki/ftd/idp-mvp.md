@@ -168,5 +168,5 @@ docker run --rm --env-file .env -v "$PWD":/src -w /src pdf-process-pipeline:dev 
 
 ## Next
 
-Step 15 — End to end: a batch of real PDFs (not generated ones) in both modes under the 2 GB
-memory limits, then merge `feat/project-skeleton` into `main` through a pull request.
+Step 15 — End to end with real PDFs, now through the full SaaS (accounts, plans, Caddy): see
+`02-DOCS/wiki/ftd/accounts-billing-nextjs.md`.

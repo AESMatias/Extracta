@@ -5,12 +5,12 @@ description: The non-negotiable principles every rsc-sdd phase obeys.
 tags: [sdd, constitution]
 timestamp: 2026-09-24T00:00:00Z
 topic: sdd
-version: v2.5.0
+version: v3.0.0
 ---
 
 # pdf_process_pipeline (IDP) — Constitution
 
-> Version: v2.5.0 · Ratified: 2026-09-24 · Last amended: 2026-09-24
+> Version: v3.0.0 · Ratified: 2026-09-24 · Last amended: 2026-09-24
 > The non-negotiable principles every rsc-sdd phase obeys. Stack mechanics live in the
 > installed stack skills (`python`, `docker`, `redis`, `supabase`, `postgresdb`); this file
 > ratifies the principle and points at the detail.
@@ -121,6 +121,23 @@ version: v2.5.0
     same answer as for an unknown id. The session cookie is HttpOnly and SameSite=Lax, and
     Secure in production. `SECRET_KEY` is required (≥ 32 characters).
 
+## 15. Amendments v3.0.0 (accounts, payments, Next.js frontend)
+
+27. The frontend is Next.js (TypeScript, Tailwind CSS) built as a static export and served by
+    Caddy, which also terminates HTTPS and proxies `/api` to Flask. Flask serves only JSON and
+    files under `/api`. Replacing either is a MAJOR amendment.
+28. Every document route requires an account. Plans, quotas and privileges are enforced on the
+    server only (`app/plans.py`, `app/accounts.py`); the frontend never decides what a user may
+    do. The frontend plan catalog is generated from `app/plans.py` and a test fails on drift.
+29. Payments: the server sets every price and verifies owner, plan, amount and currency with
+    PayPal before capturing; each capture is recorded once. No card data ever touches the app.
+30. Database schema changes go through Alembic migrations (`app/migrations`), never by hand;
+    every table has Row Level Security enabled.
+31. Memory limits (supersedes the 1.5 GB sum of principle 13): frontend 64 MB, web 384 MB,
+    worker 768 MB, redis 128 MB — 1344 MB in total on a 2 GB server with 2 GB of swap.
+32. CI (tests, ruff, mypy, tsc, eslint, build) must pass before merging to `main`, and both
+    images must have zero fixable HIGH/CRITICAL vulnerabilities (Trivy).
+
 ## Definition of Done (the merge bar `verify` runs against)
 
 A change ships only when ALL hold:
@@ -135,7 +152,10 @@ A change ships only when ALL hold:
 - [ ] RAM/disk rules intact: concurrency 1, memory limits, streaming, cleanup (principles 12-14, 21-22).
 - [ ] UI floor met where UI changed (principle 16).
 - [ ] CSV exports escaped and validated (principle 23).
-- [ ] Task data readable only by its owner session (principle 26).
+- [ ] Task data readable only by its owner (principles 26, 28).
+- [ ] Plans and payments enforced and verified on the server (principles 28-29).
+- [ ] Schema changes shipped as Alembic migrations (principle 30).
+- [ ] CI green and Trivy clean (principle 32).
 - [ ] Significant decisions logged (principle 17).
 
 ## Amendment log (append-only)
@@ -149,3 +169,4 @@ A change ships only when ALL hold:
 | 2026-09-24 | v2.3.0 | Struck 7 → 24: every repository artifact in English; Spanish only in the chat. | Owner clarified after a README was written in Spanish. |
 | 2026-09-24 | v2.4.0 | Struck 20 → 25: no emoji in commit messages; Conventional Commits only. | Owner prefers a more serious history. |
 | 2026-09-24 | v2.5.0 | Added 26: task results only for the owning browser session. | Close the "anyone with the task id" gap without user accounts. |
+| 2026-09-25 | v3.0.0 | Added 27-32: Next.js + Caddy frontend, server-side plans and quotas, verified PayPal payments, Alembic, new memory budget, CI and image scanning. | Accounts, plans, admin and payments turned the MVP into a SaaS. |
