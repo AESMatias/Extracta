@@ -254,14 +254,45 @@ an event was lost. A refund made from PayPal's dashboard ends the plan time it p
 
 ```bash
 cd /opt/extracta
-git pull
-docker compose build
-docker compose up -d
-./scripts/docker-cleanup.sh
+./deploy/deploy.sh
 ```
 
-Migrations run automatically on start. Rebuilding also installs the latest Debian security
-patches into the images.
+It pulls `main`, builds the images while the old version keeps serving, restarts the containers
+and waits until `web`, `frontend` and `worker` are healthy. If the new version does not come up
+within 4 minutes it goes back to the previous images and commit on its own. A build failure
+restarts nothing. `./deploy/deploy.sh --force` rebuilds even when `main` has not changed (for
+example, to pick up new Debian security patches). Migrations run automatically on start and are
+not undone by a rollback, so keep them backward compatible.
+
+### Automatic deploys (push to main → production)
+
+The `deploy` job in `.github/workflows/ci.yml` runs `deploy/deploy.sh` on the server over SSH
+after every push to `main` whose backend and frontend checks pass. It stays skipped until these
+steps are done once.
+
+1. **A key that can only deploy.** On the server:
+
+   ```bash
+   ssh-keygen -t ed25519 -N "" -C github-actions-deploy -f ~/.ssh/extracta_deploy
+   echo "command=\"$PWD/deploy/deploy.sh\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $(cat ~/.ssh/extracta_deploy.pub)" >> ~/.ssh/authorized_keys
+   ```
+
+   The `command=` prefix pins the key to the deploy script: whoever holds it can trigger a deploy
+   of what is already on `main`, and nothing else. Run the `echo` from the project folder.
+2. **The server's identity**, so GitHub refuses to talk to an impostor:
+
+   ```bash
+   echo "YOUR_SERVER_IP $(cut -d' ' -f1,2 /etc/ssh/ssh_host_ed25519_key.pub)"
+   ```
+
+3. **In GitHub** → the repository → **Settings → Secrets and variables → Actions**:
+   - Secrets: `DEPLOY_SSH_KEY` = the whole output of `cat ~/.ssh/extracta_deploy` (then delete
+     that file from the server: `rm ~/.ssh/extracta_deploy`); `DEPLOY_KNOWN_HOSTS` = the line
+     from step 2.
+   - Variables: `DEPLOY_HOST` = the server's IP; `DEPLOY_USER` = `root` (or the user that owns the
+     project folder).
+4. Push to `main`. **Actions** shows the run, and **Deployments → production** keeps the history.
+   A red deploy job means the server kept (or went back to) the previous version: its log says why.
 
 ## 11. Operations
 
