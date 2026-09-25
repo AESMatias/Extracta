@@ -38,7 +38,8 @@ database migrations.
 | 8 | Next.js frontend | `tsc`, `eslint`, static build of 8 routes; reviewed in a browser on desktop and mobile | ✅ |
 | 9 | Caddy, compose, deploy guide | Stack up through Caddy; HTTP end-to-end run; `docs/DEPLOY.md` | ✅ |
 | 10 | CI, Dependabot, image patching | `.github/`; Trivy: 0 fixable HIGH/CRITICAL in both images | ✅ |
-| 11 | Real PDFs, PayPal sandbox, Google credentials | Needs the owner's documents and credentials | ⏳ |
+| 11 | Realistic batch end to end | 8 PDFs in one upload through Caddy, real Gemini and Supabase: 28/28 checks | ✅ |
+| 12 | PayPal sandbox, Google credentials | Needs the owner's credentials | ⏳ |
 
 ## Evidence
 
@@ -53,6 +54,15 @@ database migrations.
   (wrong 401, right 200), upgrade to Pro, saved document listed, suspension ends the session,
   cross-site POST refused (403). Test accounts deleted afterwards.
 - Memory under that run: frontend 12 MiB, web 210 MiB, worker 237 MiB, redis 14 MiB.
+- Realistic batch (step 15 of the MVP): one upload of 8 generated but realistic PDFs on a
+  Business account with save-to-DB: a Chilean invoice (19% VAT, RUT), a supermarket receipt,
+  a US purchase order, a bank statement, a payslip, a résumé, a 2-page report with tables and
+  an image-only "scan". All finished in 29 s; 7 classified correctly with every checked field
+  exact (numbers, dates, tax IDs, totals, currency, line-item counts, account last 4 digits,
+  net pay); the scan failed with the clear "needs OCR" message: 28/28 checks. 7 rows saved,
+  unified CSV (UTF-8 with BOM, accents intact), XLSX and JSON exported, 0 files left in the
+  uploads volume. Peak memory: worker 235 MiB, web 205 MiB, redis 11 MiB, frontend 12 MiB.
+  Note: the failed scan still counted against the daily quota (usage is recorded on upload).
 - Browser review: landing, pricing, sign-in, registration, admin gate and 404 on desktop and
   375 px mobile; no horizontal overflow. Fixed during review: cramped 5-column plans at 1024 px,
   logo gradient lost when two logos shared an SVG id, 401 noise in the console for visitors.
@@ -65,5 +75,6 @@ database migrations.
 
 ## Next
 
-Owner: test the dashboard with real PDFs, create PayPal sandbox and Google OAuth credentials,
-then deploy with `docs/DEPLOY.md`.
+Owner: try the dashboard and /admin in the browser with your own PDFs, create PayPal sandbox
+and Google OAuth credentials, then deploy with `docs/DEPLOY.md`. Open question: should failed
+documents give their quota slot back?
