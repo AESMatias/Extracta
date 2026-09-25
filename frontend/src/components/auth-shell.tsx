@@ -17,7 +17,7 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
         <div className="absolute -top-40 -left-40 size-[30rem] bg-brand-600/40 blur-3xl" />
         <div className="absolute -right-32 -bottom-40 size-[28rem] bg-emerald-600/30 blur-3xl" />
         <div className="relative">
-          <Logo />
+          <Logo className="logo-on-dark" />
         </div>
         <div className="relative">
           <h2 className="text-4xl leading-tight font-bold tracking-tight text-balance">

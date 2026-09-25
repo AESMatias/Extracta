@@ -148,8 +148,9 @@
   color: transparent;
   transition: background-position 0.7s var(--ease-out);
 }
-.dark .logo-text {
-  --logo-ink: #fff;
+.dark .logo-text,
+.logo-on-dark .logo-text {
+  --logo-ink: #fff; /* white name on dark backgrounds, whatever the theme */
 }
 .group\/logo:hover .logo-text,
 .group\/logo:focus-visible .logo-text {

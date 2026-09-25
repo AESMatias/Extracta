@@ -67,7 +67,7 @@ function LoginForm() {
         <Field label={a.email} name="email" type="email" autoComplete="email" required placeholder={a.emailPlaceholder} />
         <div>
           <Field label={a.password} name="password" type="password" autoComplete="current-password" required placeholder="••••••••••" />
-          <p className="mt-2 text-right text-sm">
+          <p className="mt-3 text-center text-sm">
             <Link href="/forgot-password" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
               {a.login.forgot}
             </Link>
