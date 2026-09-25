@@ -27,6 +27,10 @@ def celery_config(settings: Settings) -> dict[str, Any]:
         "result_serializer": "json",
         "accept_content": ["json"],  # never unpickle messages
         "broker_connection_retry_on_startup": True,
+        # A PDF built to make the parser loop forever is stopped: the soft limit raises inside the
+        # task (it fails cleanly and gives its pages back), the hard one kills the child if needed.
+        "task_soft_time_limit": 300,
+        "task_time_limit": 330,
         # Embedded beat (worker --beat): the orphan sweep every 30 minutes, and a check of PayPal
         # subscriptions every 6 hours in case a webhook was lost.
         "beat_schedule": {

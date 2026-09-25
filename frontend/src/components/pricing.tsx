@@ -140,7 +140,7 @@ export function PackPicker({ selected, onSelect, action }: { selected: string; o
               onClick={() => onSelect(option.id)}
               aria-pressed={option.id === pack.id}
               className={clsx(
-                "group relative cursor-pointer border px-3 py-4 text-center transition duration-300 ease-out hover:-translate-y-0.5",
+                "group relative cursor-pointer border px-3 py-4 text-center transition-[background-color,border-color,box-shadow] duration-300 ease-out select-none",
                 option.id === pack.id
                   ? "border-amber-400 bg-gradient-to-br from-amber-100 via-yellow-300 to-amber-400 text-slate-900 shadow-lg shadow-amber-500/30"
                   : "border-slate-200 hover:border-brand-300 hover:shadow-md dark:border-slate-700 dark:hover:border-brand-500/50",

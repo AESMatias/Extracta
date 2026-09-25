@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from celery import Task
+from celery.signals import worker_process_init
 from sqlalchemy.exc import OperationalError
 
 from app import accounts, billing
@@ -24,9 +25,24 @@ from app.db import session_scope, utcnow
 from app.llm import DocumentExtractor, LLMTransientError, build_extractor
 from app.models import Document
 from app.pdf_text import extract_text
-from app.storage import delete_file, sweep_orphans
+from app.storage import check_expansion, delete_file, sweep_orphans
 
 log = logging.getLogger(__name__)
+
+# Data memory each worker child may use. A hostile PDF that gets past check_expansion raises
+# MemoryError inside the task (which then fails cleanly, gives the pages back and deletes the file)
+# instead of making the kernel kill the whole worker. A child uses ~90 MB at rest.
+TASK_MEMORY_LIMIT_BYTES = 450 * 1024 * 1024
+
+
+@worker_process_init.connect
+def limit_child_memory(**_: object) -> None:
+    try:
+        import resource
+
+        resource.setrlimit(resource.RLIMIT_DATA, (TASK_MEMORY_LIMIT_BYTES, TASK_MEMORY_LIMIT_BYTES))
+    except (ImportError, ValueError, OSError):  # not Linux, or not allowed: keep the container limit only
+        log.warning("Could not set the per-task memory limit")
 
 
 class UploadExpiredError(RuntimeError):
@@ -50,6 +66,7 @@ def run_pipeline(
 ) -> dict[str, Any]:
     if not path.exists():
         raise UploadExpiredError("the uploaded file is no longer on disk")
+    check_expansion(path)  # defense in depth: the upload already checked it
     extracted = extract_text(path)  # raises NoTextLayerError before any LLM cost for scans
     document = extractor.extract(extracted.text)
 

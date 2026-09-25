@@ -29,7 +29,7 @@ from app.export import (
 )
 from app.models import Document, User
 from app.schemas import summarize_validation_error
-from app.storage import UploadError, count_pages, delete_file, display_name, save_stream
+from app.storage import UploadError, check_expansion, count_pages, delete_file, display_name, save_stream
 from app.web.ownership import TaskOwnership
 from app.web.queue import TaskQueue
 from app.web.security import ApiError, UploadLock, require_active, require_user, require_verified, settings
@@ -125,6 +125,7 @@ def upload() -> Body:
                 rejected.append({"filename": name, "error": str(exc)})
                 continue
             try:
+                check_expansion(stored.path)  # before any PDF parser opens it
                 pages = count_pages(stored.path)
                 if pages > max_pages:
                     raise UploadError(f"{pages} pages: your plan reads up to {max_pages} pages per PDF.")

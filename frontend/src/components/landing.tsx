@@ -267,9 +267,11 @@ function Security() {
           <p className="text-center text-xs font-bold tracking-[0.2em] text-slate-500 uppercase">{s.standardsTitle}</p>
           <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
             {s.standards.map(({ name, text }) => (
-              <div key={name} className="group border border-white/10 p-4 text-center transition duration-500 ease-out hover:-translate-y-1 hover:border-emerald-400/50">
-                <BadgeCheck className="mx-auto size-6 text-accent transition duration-500 ease-out group-hover:scale-110" />
-                <p className="mt-2 font-bold tracking-tight">{name}</p>
+              <div key={name} className="group border border-white/10 p-4 text-center transition-colors duration-500 ease-out hover:border-emerald-400/50 hover:bg-white/[0.03]">
+                <span className="mx-auto grid size-9 place-items-center" aria-hidden>
+                  <BadgeCheck className="size-6 text-accent transition-transform duration-500 ease-out will-change-transform group-hover:scale-125" />
+                </span>
+                <p className="mt-1 font-bold tracking-tight">{name}</p>
                 <p className="mt-1 text-xs text-slate-400">{text}</p>
               </div>
             ))}
@@ -335,9 +337,9 @@ function Faq() {
       <div className="mt-12 divide-y divide-slate-200 border-y border-slate-200 dark:divide-slate-800 dark:border-slate-800">
         {m.faq.items.map(({ q, a }, index) => (
           <Reveal as="details" key={q} delay={index * 60} className="group py-4">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold transition duration-300 ease-out hover:text-brand-600 dark:hover:text-brand-400">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold transition duration-300 ease-out select-none hover:text-brand-600 dark:hover:text-brand-400 [&::-webkit-details-marker]:hidden">
               {q}
-              <span className="grid size-7 shrink-0 place-items-center bg-slate-100 text-lg leading-none transition duration-500 ease-out group-open:rotate-45 group-open:bg-accent group-open:text-slate-900 dark:bg-slate-800">
+              <span aria-hidden className="grid size-7 shrink-0 place-items-center bg-slate-100 text-lg leading-none transition duration-500 ease-out select-none group-open:rotate-45 group-open:bg-accent group-open:text-slate-900 dark:bg-slate-800">
                 +
               </span>
             </summary>

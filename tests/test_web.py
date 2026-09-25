@@ -375,3 +375,14 @@ def test_unknown_api_routes_answer_json(harness: Harness) -> None:
 
     assert response.status_code == 404
     assert "error" in response.get_json()
+
+
+def test_decompression_bombs_are_rejected_before_parsing(harness: Harness) -> None:
+    from tests.test_storage import pdf_with_stream
+
+    bomb = pdf_with_stream(b" " * (40 * 1024 * 1024))
+    body = upload(harness.signed_up(), [(io.BytesIO(bomb), "bomb.pdf")]).get_json()
+
+    assert body["tasks"] == []
+    assert "decompression bomb" in body["rejected"][0]["error"]
+    assert harness.upload_dir_files() == []  # deleted at once

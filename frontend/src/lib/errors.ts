@@ -50,6 +50,11 @@ const EXACT_ES: Record<string, string> = {
     "El servicio de IA está ocupado. Vuelve a subir el documento en unos minutos.",
   "The document could not be converted into structured data.": "El documento no se pudo convertir en datos estructurados.",
   "The file waited too long in the queue and was removed. Upload it again.": "El archivo esperó demasiado en la cola y se eliminó. Súbelo de nuevo.",
+  "This PDF expands to an unsafe size when opened (a possible decompression bomb) and was rejected.":
+    "Este PDF se expande a un tamaño inseguro al abrirse (una posible bomba de descompresión) y fue rechazado.",
+  "This PDF is too complex to process safely and was rejected.": "Este PDF es demasiado complejo para procesarlo de forma segura y fue rechazado.",
+  "This PDF took too long to read and was stopped.": "Este PDF tardó demasiado en leerse y se detuvo.",
+  "This PDF could not be processed safely and was rejected.": "Este PDF no se pudo procesar de forma segura y fue rechazado.",
   "Network error: check your connection and try again.": "Error de red: revisa tu conexión e inténtalo de nuevo.",
   "Network error: the upload did not reach the server.": "Error de red: la subida no llegó al servidor.",
 };
