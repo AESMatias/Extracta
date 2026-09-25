@@ -83,6 +83,7 @@ def create_order() -> Body:
     with session_scope() as db:
         user = require_user(db)
         _can_pay(user)
+        _run(lambda: billing.ensure_no_live_subscription(db, user), "")
         custom_id = f"{user.id}:{plan_id}"
     order_id = _run(
         lambda: client.create_order(plan=PLANS[plan_id], custom_id=custom_id),

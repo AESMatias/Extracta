@@ -199,13 +199,18 @@ def _plan_of_paypal_plan(db: Session, env: str, paypal_plan: object) -> str | No
     )
 
 
-def start_subscription(db: Session, client: PayPalApi, user: User, plan: Plan, now: datetime) -> str:
-    """Create the subscription at PayPal; the buyer then approves it in PayPal's window."""
+def ensure_no_live_subscription(db: Session, user: User) -> None:
+    """One subscription at a time, and no one-time pass on top of one (its renewal would win)."""
     blocking = db.scalar(
         select(Subscription.id).where(Subscription.user_id == user.id, Subscription.status.in_(BLOCKING_STATUSES))
     )
     if blocking is not None:
         raise BillingError(409, "You already have a subscription. Cancel it first to change plans.")
+
+
+def start_subscription(db: Session, client: PayPalApi, user: User, plan: Plan, now: datetime) -> str:
+    """Create the subscription at PayPal; the buyer then approves it in PayPal's window."""
+    ensure_no_live_subscription(db, user)
     # Already paid for this plan (a one-time pass)? The first charge waits until it ends.
     start: datetime | None = None
     if user.plan == plan.id and user.plan_expires_at is not None and user.plan_expires_at > now + timedelta(days=1):

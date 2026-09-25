@@ -138,6 +138,15 @@ def test_one_subscription_at_a_time(harness: Harness) -> None:
     assert response.status_code == 409 and "Cancel it first" in response.get_json()["error"]
 
 
+def test_no_one_time_pass_on_top_of_a_subscription(harness: Harness) -> None:
+    client = harness.signed_up()
+    active(harness, client)
+
+    response = client.post("/api/billing/orders", json={"plan": "ultra"})
+
+    assert response.status_code == 409 and "Cancel it first" in response.get_json()["error"]
+
+
 def test_an_abandoned_checkout_does_not_block_a_new_one(harness: Harness) -> None:
     client = harness.signed_up()
     subscribe(client)  # the buyer closed PayPal's window
