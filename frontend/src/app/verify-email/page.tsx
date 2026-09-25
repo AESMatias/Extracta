@@ -50,7 +50,7 @@ export default function VerifyEmailPage() {
     return (
       <AuthShell title="Email confirmed" subtitle="Thanks! Your account is ready to process documents.">
         <div className="flex flex-col items-center gap-6 text-center">
-          <span className="grid size-16 place-items-center rounded-2xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-600/15 dark:bg-emerald-500/10 dark:text-emerald-300">
+          <span className="grid size-16 place-items-center bg-emerald-50 text-emerald-600 ring-1 ring-emerald-600/15 dark:bg-emerald-500/10 dark:text-emerald-300">
             <MailCheck className="size-8" />
           </span>
           <ButtonLink href={user ? "/app" : "/login"} size="lg" className="w-full" icon={<ArrowRight className="size-5" />}>

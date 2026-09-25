@@ -259,7 +259,7 @@ export default function DashboardPage() {
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               <label
                 className={clsx(
-                  "flex cursor-pointer items-start gap-3 rounded-2xl border p-3.5 transition",
+                  "flex cursor-pointer items-start gap-3 border p-3.5 transition",
                   !saveToDb ? "border-brand-500 bg-brand-50/70 ring-4 ring-brand-500/10 dark:bg-brand-500/10" : "border-slate-200 dark:border-slate-800",
                 )}
               >
@@ -272,7 +272,7 @@ export default function DashboardPage() {
               </label>
               <label
                 className={clsx(
-                  "relative flex items-start gap-3 rounded-2xl border p-3.5 transition",
+                  "relative flex items-start gap-3 border p-3.5 transition",
                   canSave ? "cursor-pointer" : "cursor-not-allowed opacity-70",
                   saveToDb ? "border-brand-500 bg-brand-50/70 ring-4 ring-brand-500/10 dark:bg-brand-500/10" : "border-slate-200 dark:border-slate-800",
                 )}
@@ -285,12 +285,12 @@ export default function DashboardPage() {
                   disabled={!canSave}
                   onChange={() => setSaveToDb(true)}
                 />
-                {canSave ? <Database className="mt-0.5 size-5 shrink-0 text-violet-500" /> : <Lock className="mt-0.5 size-5 shrink-0 text-slate-400" />}
+                {canSave ? <Database className="mt-0.5 size-5 shrink-0 text-teal-500" /> : <Lock className="mt-0.5 size-5 shrink-0 text-slate-400" />}
                 <span>
                   <span className="flex items-center gap-1.5 text-sm font-semibold">
                     Save to history
                     {!canSave && (
-                      <span className="inline-flex items-center gap-0.5 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">
+                      <span className="inline-flex items-center gap-0.5 bg-teal-100 px-1.5 py-0.5 text-[10px] font-bold text-teal-700 dark:bg-teal-500/20 dark:text-teal-300">
                         <Crown className="size-2.5" /> PAID
                       </span>
                     )}
@@ -399,7 +399,7 @@ export default function DashboardPage() {
         <section className="mt-10" aria-labelledby="history-title">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 id="history-title" className="flex items-center gap-2 text-xl font-bold tracking-tight">
-              <History className="size-5 text-violet-500" /> Saved documents
+              <History className="size-5 text-teal-500" /> Saved documents
             </h2>
             {saved && saved.length > 0 && (
               <FormatButtons

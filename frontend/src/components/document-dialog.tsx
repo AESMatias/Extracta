@@ -45,7 +45,7 @@ export function DocumentDialog({ filename, document, onClose }: { filename: stri
       ref={dialog}
       onClose={onClose}
       onClick={(event) => event.target === dialog.current && dialog.current?.close()}
-      className="m-auto max-h-[90dvh] w-[min(42rem,calc(100vw-1.5rem))] overflow-hidden rounded-3xl border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-950/60 backdrop:backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+      className="m-auto max-h-[90dvh] w-[min(42rem,calc(100vw-1.5rem))] overflow-hidden border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-950/60 backdrop:backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
     >
       <div className="flex max-h-[90dvh] flex-col">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5 dark:border-slate-800">
@@ -58,24 +58,24 @@ export function DocumentDialog({ filename, document, onClose }: { filename: stri
           </div>
           <button
             onClick={() => dialog.current?.close()}
-            className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
+            className="p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
             aria-label="Close"
           >
             <X className="size-5" />
           </button>
         </div>
         <div className="overflow-y-auto p-5">
-          <p className="rounded-2xl bg-slate-50 p-4 text-sm leading-relaxed text-slate-700 dark:bg-slate-800/60 dark:text-slate-300">{summary}</p>
+          <p className="bg-slate-50 p-4 text-sm leading-relaxed text-slate-700 dark:bg-slate-800/60 dark:text-slate-300">{summary}</p>
           <div className="mt-4 flex justify-end">
             <button
               onClick={() => setRaw((value) => !value)}
-              className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-500/10"
+              className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-500/10"
             >
               {raw ? <List className="size-3.5" /> : <Braces className="size-3.5" />} {raw ? "Show fields" : "Show JSON"}
             </button>
           </div>
           {raw ? (
-            <pre className="mt-2 overflow-x-auto rounded-2xl bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-100">
+            <pre className="mt-2 overflow-x-auto bg-slate-950 p-4 font-mono text-xs leading-relaxed text-slate-100">
               {JSON.stringify({ document_type, summary, ...fields }, null, 2)}
             </pre>
           ) : (

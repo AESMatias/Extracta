@@ -14,7 +14,7 @@ export function UsageCard({ user }: { user: User }) {
 
   return (
     <Card className="relative overflow-hidden p-5 sm:p-6">
-      <div className="absolute -top-16 -right-16 size-48 rounded-full bg-gradient-to-br from-brand-500/20 to-fuchsia-500/20 blur-2xl" />
+      <div className="absolute -top-16 -right-16 size-48 bg-gradient-to-br from-brand-500/20 to-emerald-500/20 blur-2xl" />
       <div className="relative flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="flex items-center gap-2 text-sm font-medium text-slate-500 dark:text-slate-400">

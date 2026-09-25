@@ -52,7 +52,7 @@ export function BatchCharts({ documents }: { documents: ExtractedDocument[] }) {
             {byType.map((entry) => (
               <li key={entry.type} className="flex items-center justify-between gap-2 text-sm">
                 <span className="flex items-center gap-2">
-                  <span className="size-2.5 rounded-full" style={{ background: DOCUMENT_TYPES[entry.type as keyof typeof DOCUMENT_TYPES].color }} />
+                  <span className="size-2.5 " style={{ background: DOCUMENT_TYPES[entry.type as keyof typeof DOCUMENT_TYPES].color }} />
                   {entry.name}
                 </span>
                 <span className="font-semibold">{entry.count}</span>
@@ -73,8 +73,8 @@ export function BatchCharts({ documents }: { documents: ExtractedDocument[] }) {
               <BarChart data={byCurrency} margin={{ left: 8, right: 8 }}>
                 <defs>
                   <linearGradient id="bar-gradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#8b5cf6" />
-                    <stop offset="100%" stopColor="#6366f1" />
+                    <stop offset="0%" stopColor="#10b981" />
+                    <stop offset="100%" stopColor="#2f6fed" />
                   </linearGradient>
                 </defs>
                 <CartesianGrid vertical={false} stroke="rgb(148 163 184 / 0.2)" />
@@ -87,12 +87,12 @@ export function BatchCharts({ documents }: { documents: ExtractedDocument[] }) {
                   tickFormatter={(value: number) => Intl.NumberFormat(undefined, { notation: "compact" }).format(value)}
                 />
                 <Tooltip
-                  cursor={{ fill: "rgb(99 102 241 / 0.08)" }}
+                  cursor={{ fill: "rgb(47 111 237 / 0.08)" }}
                   contentStyle={tooltipStyle}
                   itemStyle={{ color: "#fff" }}
                   formatter={(value) => Intl.NumberFormat().format(Number(value))}
                 />
-                <Bar dataKey="total" name="Total" fill="url(#bar-gradient)" radius={[10, 10, 4, 4]} maxBarSize={72} />
+                <Bar dataKey="total" name="Total" fill="url(#bar-gradient)" radius={0} maxBarSize={72} />
               </BarChart>
             </ResponsiveContainer>
           </div>

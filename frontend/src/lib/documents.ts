@@ -15,14 +15,14 @@ import {
 import type { DocumentType, ExtractedDocument } from "./api";
 
 export const DOCUMENT_TYPES: Record<DocumentType, { label: string; icon: LucideIcon; color: string; examples: string }> = {
-  invoice: { label: "Invoice", icon: FileText, color: "#6366f1", examples: "Invoices, utility bills" },
-  receipt: { label: "Receipt", icon: Receipt, color: "#8b5cf6", examples: "Receipts, sales tickets" },
+  invoice: { label: "Invoice", icon: FileText, color: "#2f6fed", examples: "Invoices, utility bills" },
+  receipt: { label: "Receipt", icon: Receipt, color: "#10b981", examples: "Receipts, sales tickets" },
   purchase_order: { label: "Purchase order", icon: ShoppingCart, color: "#0ea5e9", examples: "Orders to suppliers" },
   quote: { label: "Quote", icon: ClipboardList, color: "#14b8a6", examples: "Quotes, estimates" },
   bank_statement: { label: "Bank statement", icon: Landmark, color: "#22c55e", examples: "Account statements" },
   contract: { label: "Contract", icon: FileSignature, color: "#f59e0b", examples: "Service, lease, employment" },
-  payslip: { label: "Payslip", icon: Banknote, color: "#ec4899", examples: "Salary statements" },
-  resume: { label: "Resume", icon: BriefcaseBusiness, color: "#f97316", examples: "CVs and resumes" },
+  payslip: { label: "Payslip", icon: Banknote, color: "#eab308", examples: "Salary statements" },
+  resume: { label: "Resume", icon: BriefcaseBusiness, color: "#0d9488", examples: "CVs and resumes" },
   report: { label: "Report", icon: FileBarChart2, color: "#06b6d4", examples: "Financial, technical, periodic" },
   other: { label: "Other", icon: FileQuestion, color: "#94a3b8", examples: "Anything else, summarized" },
 };

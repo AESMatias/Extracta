@@ -54,7 +54,7 @@ export default function AccountPage() {
         <div className="space-y-6">
           <Card className="p-6">
             <div className="flex items-center gap-4">
-              <div className="grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-fuchsia-500 text-xl font-bold text-white">
+              <div className="grid size-14 place-items-center bg-signature text-xl font-bold text-white">
                 {(user.name ?? user.email).charAt(0).toUpperCase()}
               </div>
               <div className="min-w-0">
@@ -111,7 +111,7 @@ export default function AccountPage() {
           <Card className="p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="flex items-center gap-2 text-lg font-semibold">
-                <Crown className="size-5 text-violet-500" /> {user.plan.name} plan
+                <Crown className="size-5 text-teal-500" /> {user.plan.name} plan
               </h2>
               {!subscriptionIsLive(user.subscription) && (
                 <ButtonLink href="/pricing" size="sm" variant={user.plan.id === "free" ? "primary" : "outline"}>
@@ -132,7 +132,7 @@ export default function AccountPage() {
               {planFeatures(user.plan).map((feature) => (
                 <li
                   key={feature.label}
-                  className={`rounded-xl border px-3 py-2 text-sm ${
+                  className={` border px-3 py-2 text-sm ${
                     feature.included
                       ? "border-slate-200 dark:border-slate-800"
                       : "border-dashed border-slate-200 text-slate-400 line-through dark:border-slate-800"
@@ -142,7 +142,7 @@ export default function AccountPage() {
                 </li>
               ))}
               {user.daily_limit !== user.plan.privileges.docs_per_24h && (
-                <li className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-800 sm:col-span-2 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-200">
+                <li className="border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-800 sm:col-span-2 dark:border-teal-500/30 dark:bg-teal-500/10 dark:text-teal-200">
                   Custom limit set by the administrator: {user.daily_limit} PDFs every 24 hours
                 </li>
               )}

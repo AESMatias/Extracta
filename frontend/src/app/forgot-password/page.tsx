@@ -33,7 +33,7 @@ function ForgotForm() {
   if (sentTo) {
     return (
       <div className="space-y-6 text-center">
-        <span className="mx-auto grid size-16 place-items-center rounded-2xl bg-brand-50 text-brand-600 ring-1 ring-brand-600/15 dark:bg-brand-500/10 dark:text-brand-300">
+        <span className="mx-auto grid size-16 place-items-center bg-brand-50 text-brand-600 ring-1 ring-brand-600/15 dark:bg-brand-500/10 dark:text-brand-300">
           <MailOpen className="size-8" />
         </span>
         <p className="text-sm text-slate-600 dark:text-slate-400">

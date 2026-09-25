@@ -37,7 +37,7 @@ export function AppHeader() {
                 key={href}
                 href={href}
                 className={clsx(
-                  "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition",
+                  "inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition",
                   pathname === href
                     ? "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300"
                     : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white",
@@ -55,7 +55,7 @@ export function AppHeader() {
             )}
             <button
               onClick={signOut}
-              className="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
             >
               <LogOut className="size-4" /> <span className="hidden sm:inline">Sign out</span>
             </button>

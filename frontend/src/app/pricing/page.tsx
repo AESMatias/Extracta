@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef } from "react";
 
 import { PayPalCheckout } from "@/components/paypal-checkout";
-import { PlanCard } from "@/components/pricing";
+import { PlanCard, PlanGrid } from "@/components/pricing";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { subscriptionIsLive } from "@/components/subscription-panel";
@@ -24,7 +24,7 @@ function BillingToggle({ mode, onChange }: { mode: BillingMode; onChange: (mode:
     { id: "once", label: "30-day pass", hint: "pay once" },
   ];
   return (
-    <div role="radiogroup" aria-label="Billing" className="mx-auto mt-10 grid w-full max-w-md grid-cols-2 gap-1 rounded-2xl border border-slate-200 bg-white/80 p-1 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/70">
+    <div role="radiogroup" aria-label="Billing" className="mx-auto mt-10 grid w-full max-w-md grid-cols-2 gap-1 border border-slate-200 bg-white/80 p-1 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/70">
       {options.map((option) => (
         <button
           key={option.id}
@@ -32,9 +32,9 @@ function BillingToggle({ mode, onChange }: { mode: BillingMode; onChange: (mode:
           aria-checked={mode === option.id}
           onClick={() => onChange(option.id)}
           className={clsx(
-            "cursor-pointer rounded-xl px-3 py-2.5 text-center transition",
+            "cursor-pointer px-3 py-2.5 text-center transition",
             mode === option.id
-              ? "bg-gradient-to-r from-brand-600 to-fuchsia-600 text-white shadow-md shadow-brand-600/25"
+              ? "bg-signature text-white shadow-md shadow-brand-600/25"
               : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800",
           )}
         >
@@ -84,7 +84,7 @@ function Checkout({ planId, mode }: { planId: PlanId; mode: BillingMode }) {
   return (
     <Card className="mx-auto mt-12 max-w-3xl overflow-hidden">
       <div className="grid md:grid-cols-2">
-        <div className="bg-gradient-to-br from-brand-600 via-violet-600 to-fuchsia-600 p-6 text-white sm:p-8">
+        <div className="bg-signature animate-pan p-6 text-white sm:p-8">
           <p className="text-sm font-medium text-white/70">{monthly ? "You are subscribing to" : "You are buying"}</p>
           <h2 className="mt-1 text-2xl font-bold">Extracta {plan.name}</h2>
           <p className="mt-4 flex items-baseline gap-1">
@@ -176,7 +176,8 @@ function PricingContent() {
         </div>
       )}
 
-      <div className="mt-12 flex flex-wrap justify-center gap-5 *:w-full sm:*:w-[calc(50%-0.625rem)] lg:*:w-[calc(33.333%-0.834rem)] xl:*:w-[calc(20%-1rem)]">
+      <div className="mt-10">
+        <PlanGrid>
         {PLANS.map((plan) => {
           const current = user?.plan.id === plan.id;
           let action;
@@ -212,6 +213,7 @@ function PricingContent() {
           }
           return <PlanCard key={plan.id} plan={plan} action={action} current={current} period={mode === "monthly" ? "/ month" : "/ 30 days"} />;
         })}
+        </PlanGrid>
       </div>
 
       <div ref={checkoutRef} className="scroll-mt-24">

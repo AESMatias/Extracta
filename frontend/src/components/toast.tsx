@@ -49,7 +49,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div
               key={item.id}
               role={item.tone === "error" ? "alert" : "status"}
-              className="glass pointer-events-auto flex w-full max-w-sm animate-fade-up items-start gap-3 rounded-2xl p-4 shadow-xl shadow-slate-900/10"
+              className="glass pointer-events-auto flex w-full max-w-sm animate-fade-up items-start gap-3 p-4 shadow-xl shadow-slate-900/10"
             >
               <Icon
                 className={clsx(
@@ -66,7 +66,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               </div>
               <button
                 onClick={() => dismiss(item.id)}
-                className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
+                className="p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
                 aria-label="Dismiss notification"
               >
                 <X className="size-4" />

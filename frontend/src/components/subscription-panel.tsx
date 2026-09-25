@@ -54,7 +54,7 @@ export function SubscriptionPanel({ user }: { user: User }) {
   }
 
   return (
-    <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 dark:border-slate-800 dark:bg-slate-900/40">
+    <div className="mt-5 border border-slate-200 bg-slate-50/60 p-4 dark:border-slate-800 dark:bg-slate-900/40">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="flex items-center gap-2 text-sm font-semibold">
           <RefreshCw className="size-4 text-brand-500" /> Monthly subscription · {plan?.name ?? subscription.plan}
@@ -84,7 +84,7 @@ export function SubscriptionPanel({ user }: { user: User }) {
 
       {live &&
         (confirming ? (
-          <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-100">
+          <div className="mt-4 border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-100">
             <p className="font-semibold">Cancel the subscription?</p>
             <p className="mt-1 opacity-90">There will be no more charges. You keep {plan?.name ?? "your plan"} until the end of the period you paid for.</p>
             <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

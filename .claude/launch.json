@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frontend-dev",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "cd frontend && API_ORIGIN=http://localhost:8080 PATH=/opt/homebrew/bin:$PATH npx next dev -p 3100"],
+      "port": 3100
+    }
+  ]
+}

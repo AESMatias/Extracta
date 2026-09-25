@@ -30,7 +30,7 @@ const STATUS_TONE = { active: "green", pending: "amber", rejected: "red", suspen
 const SUBSCRIPTION_TONE = { ACTIVE: "green", APPROVED: "amber", SUSPENDED: "red" } as const;
 const PAYMENT_TONE: Record<string, "green" | "red" | "amber"> = { COMPLETED: "green", REFUNDED: "red", REVERSED: "red" };
 const selectClass =
-  "h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 outline-none";
+  "h-10 w-full border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 outline-none";
 
 // ---------------------------------------------------------------- sign in
 
@@ -175,7 +175,7 @@ function UserCard({ user, plans, onSaved }: { user: AdminUser; plans: Plan[]; on
             ? [["Next charge", formatDate(user.subscription.next_billing_at)]]
             : []),
         ].map(([label, value]) => (
-          <div key={label as string} className="rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/60">
+          <div key={label as string} className="bg-slate-50 px-3 py-2 dark:bg-slate-800/60">
             <p className="text-[11px] font-medium text-slate-500 uppercase">{label}</p>
             <p className="text-sm font-semibold">{value}</p>
           </div>
@@ -350,7 +350,7 @@ export default function AdminPage() {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search by email or name"
-                  className="h-10 w-full rounded-xl border border-slate-300 bg-white pr-3 pl-9 text-sm outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 dark:border-slate-700 dark:bg-slate-900"
+                  className="h-10 w-full border border-slate-300 bg-white pr-3 pl-9 text-sm outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 dark:border-slate-700 dark:bg-slate-900"
                 />
               </div>
               <div className="flex gap-1.5 overflow-x-auto">
@@ -359,7 +359,7 @@ export default function AdminPage() {
                     key={s || "all"}
                     onClick={() => setStatus(s)}
                     className={clsx(
-                      "rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap capitalize transition",
+                      " px-3 py-1.5 text-xs font-semibold whitespace-nowrap capitalize transition",
                       status === s ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "bg-white text-slate-600 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700",
                     )}
                   >

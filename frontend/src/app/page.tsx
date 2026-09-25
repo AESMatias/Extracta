@@ -1,19 +1,21 @@
 import {
   ArrowRight,
   BarChart3,
+  ChevronRight,
+  FileDown,
   Globe2,
   Layers,
   Lock,
   ScanText,
   ShieldCheck,
-  Sparkles,
   UploadCloud,
   Zap,
 } from "lucide-react";
 import type { Metadata } from "next";
 
 import { HeroVisual } from "@/components/hero-visual";
-import { PlanCard } from "@/components/pricing";
+import { PlanCard, PlanGrid } from "@/components/pricing";
+import { Reveal } from "@/components/reveal";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { ButtonLink, SectionTitle } from "@/components/ui";
@@ -32,9 +34,16 @@ const FEATURES = [
 ];
 
 const STEPS = [
-  { icon: UploadCloud, title: "Upload your PDFs", text: "Drag and drop one or many digital PDFs, up to 50 MB each on paid plans." },
-  { icon: ScanText, title: "AI reads them", text: "Gemini classifies each document and extracts every relevant field, in any language." },
-  { icon: Sparkles, title: "Use your data", text: "Review it on screen, see charts, and download Excel, CSV or JSON in one click." },
+  { icon: UploadCloud, title: "Upload", text: "Drop one PDF or dozens" },
+  { icon: ScanText, title: "AI reads", text: "Classified and extracted" },
+  { icon: FileDown, title: "Export", text: "Excel, CSV or JSON" },
+];
+
+const STATS = [
+  ["10", "document types"],
+  ["3", "export formats"],
+  ["Any", "language"],
+  ["< 10 s", "per document"],
 ];
 
 const FAQ = [
@@ -68,11 +77,11 @@ export default function HomePage() {
         {/* ------------------------------------------------ hero */}
         <section className="relative overflow-hidden">
           <div className="bg-dots absolute inset-0 -z-10 [mask-image:radial-gradient(ellipse_at_top,black,transparent_70%)]" />
-          <div className="absolute top-[-10rem] left-1/2 -z-10 size-[40rem] -translate-x-1/2 rounded-full bg-brand-500/15 blur-3xl" />
-          <div className="mx-auto grid max-w-6xl items-center gap-14 px-4 pt-12 pb-20 sm:px-6 sm:pt-20 lg:grid-cols-[1.05fr_1fr] lg:pb-28">
+          <div className="absolute top-[-12rem] left-1/2 -z-10 size-[38rem] -translate-x-1/2 rotate-45 bg-gradient-to-br from-emerald-400/15 via-cyan-400/10 to-brand-500/20 blur-3xl" />
+          <div className="mx-auto grid max-w-6xl items-center gap-14 px-4 pt-12 pb-16 sm:px-6 sm:pt-20 lg:grid-cols-[1.05fr_1fr] lg:pb-20">
             <div className="animate-fade-up text-center lg:text-left">
-              <span className="inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50/80 px-3 py-1 text-xs font-semibold text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300">
-                <Sparkles className="size-3.5" /> AI document extraction, powered by Gemini
+              <span className="inline-flex items-center gap-2 border border-brand-200 bg-white/80 px-3 py-1 text-xs font-semibold text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300">
+                <span className="size-1.5 animate-blink bg-accent" /> AI document extraction, powered by Gemini
               </span>
               <h1 className="mt-6 text-4xl leading-[1.05] font-bold tracking-tight text-balance sm:text-5xl lg:text-6xl">
                 Turn any PDF into <span className="text-gradient">clean, structured data</span>
@@ -97,148 +106,178 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ------------------------------------------------ stats strip */}
-        <section className="border-y border-slate-200/70 bg-slate-50/60 dark:border-slate-800/70 dark:bg-slate-900/40">
-          <dl className="mx-auto grid max-w-6xl grid-cols-2 gap-6 px-4 py-8 sm:px-6 md:grid-cols-4">
-            {[
-              ["10", "document types"],
-              ["3", "export formats"],
-              ["Any", "language"],
-              ["< 10 s", "per document"],
-            ].map(([value, label]) => (
-              <div key={label} className="text-center">
-                <dt className="text-3xl font-bold tracking-tight">{value}</dt>
-                <dd className="mt-1 text-sm text-slate-600 dark:text-slate-400">{label}</dd>
-              </div>
-            ))}
-          </dl>
+        {/* ------------------------------------------------ how it works (compact) + numbers */}
+        <section id="how-it-works" className="scroll-mt-20 border-y border-slate-200/70 bg-slate-50/70 dark:border-slate-800/70 dark:bg-slate-900/40">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6">
+            <ol className="grid gap-2 py-5 sm:grid-cols-3 sm:gap-0">
+              {STEPS.map(({ icon: Icon, title, text }, index) => (
+                <Reveal as="li" key={title} delay={index * 120} className="group flex items-center gap-3 sm:justify-center">
+                  <span className="grid size-9 shrink-0 place-items-center bg-signature text-white transition duration-300 group-hover:rotate-90">
+                    <Icon className="size-4 transition duration-300 group-hover:-rotate-90" />
+                  </span>
+                  <p className="text-sm leading-tight">
+                    <span className="font-mono text-[11px] text-slate-400">0{index + 1}</span>{" "}
+                    <span className="font-semibold">{title}</span>
+                    <span className="block text-xs text-slate-500 dark:text-slate-400">{text}</span>
+                  </p>
+                  {index < STEPS.length - 1 && <ChevronRight className="ml-auto hidden size-4 text-slate-300 sm:ml-6 sm:block dark:text-slate-600" />}
+                </Reveal>
+              ))}
+            </ol>
+            <div className="bg-signature animate-grow-x h-px origin-left opacity-60" />
+            <dl className="grid grid-cols-4 py-4">
+              {STATS.map(([value, label], index) => (
+                <Reveal key={label} delay={index * 90} className="text-center">
+                  <dt className="text-lg font-bold tracking-tight tabular-nums sm:text-xl">{value}</dt>
+                  <dd className="text-[11px] text-slate-500 sm:text-xs dark:text-slate-400">{label}</dd>
+                </Reveal>
+              ))}
+            </dl>
+          </div>
         </section>
 
         {/* ------------------------------------------------ features */}
-        <section id="features" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20 sm:px-6 sm:py-28">
-          <SectionTitle
-            center
-            eyebrow="Features"
-            title="Everything you need to get data out of PDFs"
-            subtitle="Built for freelancers, accountants and teams that are tired of copying numbers by hand."
-          />
-          <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map(({ icon: Icon, title, text }) => (
-              <div
-                key={title}
-                className="group rounded-3xl border border-slate-200/80 bg-white p-6 transition duration-300 hover:-translate-y-1 hover:border-brand-200 hover:shadow-xl hover:shadow-brand-600/5 dark:border-slate-800 dark:bg-slate-900/50 dark:hover:border-brand-500/40"
-              >
-                <div className="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-fuchsia-500 text-white shadow-lg shadow-brand-600/20 transition group-hover:scale-110">
-                  <Icon className="size-5" />
-                </div>
-                <h3 className="mt-5 text-lg font-semibold">{title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{text}</p>
-              </div>
-            ))}
+        <section id="features" className="relative scroll-mt-20 overflow-hidden py-20 sm:py-28">
+          <div className="bg-dots absolute inset-0 -z-10 opacity-60 [mask-image:linear-gradient(to_bottom,transparent,black_30%,black_70%,transparent)]" />
+          <div className="mx-auto max-w-6xl px-4 sm:px-6">
+            <Reveal>
+              <SectionTitle
+                center
+                eyebrow="Features"
+                title="Everything you need to get data out of PDFs"
+                subtitle="Built for freelancers, accountants and teams that are tired of copying numbers by hand."
+              />
+            </Reveal>
+            <div className="mt-14 grid gap-px bg-slate-200/80 sm:grid-cols-2 lg:grid-cols-3 dark:bg-slate-800">
+              {FEATURES.map(({ icon: Icon, title, text }, index) => (
+                <Reveal
+                  key={title}
+                  delay={(index % 3) * 110}
+                  className="group relative isolate overflow-hidden bg-white px-6 py-10 text-center sm:px-8 dark:bg-slate-950"
+                >
+                  {/* A wash of color rises from the bottom on hover. */}
+                  <span
+                    aria-hidden
+                    className="absolute inset-0 -z-10 origin-bottom scale-y-0 bg-gradient-to-t from-brand-50 via-emerald-50/40 to-transparent transition-transform duration-500 group-hover:scale-y-100 dark:from-brand-500/10 dark:via-emerald-500/5"
+                  />
+                  <p className="font-mono text-[11px] tracking-[0.25em] text-slate-400">{String(index + 1).padStart(2, "0")}</p>
+                  <div className="relative mx-auto mt-5 size-12">
+                    <span
+                      aria-hidden
+                      className="absolute inset-0 translate-x-1.5 translate-y-1.5 border border-brand-200 transition-all duration-300 group-hover:translate-x-2.5 group-hover:translate-y-2.5 group-hover:border-accent dark:border-brand-500/40"
+                    />
+                    <span className="bg-signature animate-pan relative grid size-12 place-items-center text-white">
+                      <Icon className="size-5 transition duration-500 group-hover:scale-110" />
+                    </span>
+                  </div>
+                  <h3 className="mt-6 text-lg font-semibold">{title}</h3>
+                  <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-slate-600 dark:text-slate-400">{text}</p>
+                  <span aria-hidden className="bg-signature mx-auto mt-5 block h-0.5 w-10 scale-x-0 transition-transform duration-500 group-hover:scale-x-100" />
+                </Reveal>
+              ))}
+            </div>
           </div>
         </section>
 
         {/* ------------------------------------------------ document types */}
-        <section id="document-types" className="scroll-mt-20 bg-slate-950 py-20 text-white sm:py-28">
-          <div className="mx-auto max-w-6xl px-4 sm:px-6">
-            <div className="max-w-2xl">
-              <p className="text-sm font-semibold tracking-wide text-brand-300 uppercase">Document types</p>
+        <section id="document-types" className="relative scroll-mt-20 overflow-hidden bg-slate-950 py-20 text-white sm:py-24">
+          <div className="absolute -right-40 -bottom-40 size-[32rem] rotate-12 bg-gradient-to-tr from-brand-600/25 via-cyan-500/10 to-emerald-500/20 blur-3xl" />
+          <div className="relative mx-auto max-w-6xl px-4 sm:px-6">
+            <Reveal className="max-w-2xl">
+              <p className="flex items-center gap-2 text-sm font-semibold tracking-wide text-emerald-300 uppercase">
+                <span className="size-2 bg-accent" /> Document types
+              </p>
               <h2 className="mt-2 text-3xl font-bold tracking-tight text-balance sm:text-4xl">It knows what it is reading</h2>
               <p className="mt-4 text-lg text-slate-400">
                 Each PDF is classified first, then the fields that matter for that type are extracted: totals and line items for an
                 invoice, parties and renewal terms for a contract, balances for a statement.
               </p>
-            </div>
-            <div className="mt-12 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              {Object.entries(DOCUMENT_TYPES).map(([id, { label, icon: Icon, color, examples }]) => (
-                <div key={id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-white/25 hover:bg-white/[0.06]">
-                  <Icon className="size-6" style={{ color }} />
+            </Reveal>
+            <ul className="mt-14 grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-3 lg:grid-cols-5">
+              {Object.entries(DOCUMENT_TYPES).map(([id, { label, icon: Icon, color, examples }], index) => (
+                <Reveal as="li" key={id} delay={(index % 5) * 70} className="group">
+                  <Icon className="size-7 transition duration-300 group-hover:-translate-y-1" style={{ color }} />
+                  <span
+                    aria-hidden
+                    className="mt-3 block h-0.5 w-6 transition-all duration-500 group-hover:w-full"
+                    style={{ backgroundColor: color }}
+                  />
                   <p className="mt-3 font-semibold">{label}</p>
                   <p className="mt-1 text-xs text-slate-400">{examples}</p>
-                </div>
+                </Reveal>
               ))}
-            </div>
+            </ul>
           </div>
         </section>
 
-        {/* ------------------------------------------------ how it works */}
-        <section id="how-it-works" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20 sm:px-6 sm:py-28">
-          <SectionTitle center eyebrow="How it works" title="From PDF to spreadsheet in three steps" />
-          <ol className="mt-14 grid gap-6 md:grid-cols-3">
-            {STEPS.map(({ icon: Icon, title, text }, index) => (
-              <li key={title} className="relative rounded-3xl border border-slate-200/80 p-6 dark:border-slate-800">
-                <span className="text-gradient text-5xl font-black">{index + 1}</span>
-                <Icon className="absolute top-6 right-6 size-6 text-slate-300 dark:text-slate-600" />
-                <h3 className="mt-3 text-lg font-semibold">{title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{text}</p>
-              </li>
-            ))}
-          </ol>
-        </section>
-
         {/* ------------------------------------------------ pricing */}
-        <section id="pricing" className="scroll-mt-20 bg-slate-50/70 py-20 sm:py-28 dark:bg-slate-900/40">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6">
-            <SectionTitle
-              center
-              eyebrow="Pricing"
-              title="Simple, tiny prices"
-              subtitle="Start free. Subscribe monthly and cancel anytime, or buy a single 30-day pass — no surprises."
-            />
-            <div className="mt-14 flex flex-wrap justify-center gap-5 *:w-full sm:*:w-[calc(50%-0.625rem)] lg:*:w-[calc(33.333%-0.834rem)] xl:*:w-[calc(20%-1rem)]">
-              {PLANS.map((plan) => (
-                <PlanCard
-                  key={plan.id}
-                  plan={plan}
-                  period="/ month"
-                  action={
-                    <ButtonLink
-                      href={plan.id === "free" ? "/register" : `/pricing?plan=${plan.id}`}
-                      variant={plan.highlight ? "primary" : "outline"}
-                      className="w-full"
-                    >
-                      {plan.id === "free" ? "Start free" : `Get ${plan.name}`}
-                    </ButtonLink>
-                  }
-                />
-              ))}
-            </div>
+        <section id="pricing" className="scroll-mt-20 bg-slate-50/70 py-20 sm:py-24 dark:bg-slate-900/40">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6">
+            <Reveal>
+              <SectionTitle
+                center
+                eyebrow="Pricing"
+                title="Simple, tiny prices"
+                subtitle="Start free. Subscribe monthly and cancel anytime, or buy a single 30-day pass — no surprises."
+              />
+            </Reveal>
+            <Reveal className="mt-10" delay={100}>
+              <PlanGrid>
+                {PLANS.map((plan) => (
+                  <PlanCard
+                    key={plan.id}
+                    plan={plan}
+                    period="/ month"
+                    action={
+                      <ButtonLink
+                        href={plan.id === "free" ? "/register" : `/pricing?plan=${plan.id}`}
+                        variant={plan.highlight ? "primary" : "outline"}
+                        className="w-full"
+                      >
+                        {plan.id === "free" ? "Start free" : `Get ${plan.name}`}
+                      </ButtonLink>
+                    }
+                  />
+                ))}
+              </PlanGrid>
+            </Reveal>
           </div>
         </section>
 
         {/* ------------------------------------------------ FAQ */}
-        <section id="faq" className="mx-auto max-w-3xl scroll-mt-20 px-4 py-20 sm:px-6 sm:py-28">
-          <SectionTitle center eyebrow="FAQ" title="Questions, answered" />
-          <div className="mt-12 space-y-3">
-            {FAQ.map(({ q, a }) => (
-              <details
-                key={q}
-                className="group rounded-2xl border border-slate-200 bg-white px-5 py-4 transition open:shadow-lg open:shadow-slate-200/50 dark:border-slate-800 dark:bg-slate-900/50 dark:open:shadow-none"
-              >
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold">
+        <section id="faq" className="mx-auto max-w-3xl scroll-mt-20 px-4 py-20 sm:px-6 sm:py-24">
+          <Reveal>
+            <SectionTitle center eyebrow="FAQ" title="Questions, answered" />
+          </Reveal>
+          <div className="mt-12 divide-y divide-slate-200 border-y border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+            {FAQ.map(({ q, a }, index) => (
+              <Reveal as="details" key={q} delay={index * 60} className="group py-4">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold transition hover:text-brand-600 dark:hover:text-brand-400">
                   {q}
-                  <span className="grid size-7 shrink-0 place-items-center rounded-full bg-slate-100 text-lg leading-none transition group-open:rotate-45 dark:bg-slate-800">
+                  <span className="grid size-7 shrink-0 place-items-center bg-slate-100 text-lg leading-none transition duration-300 group-open:rotate-45 group-open:bg-accent group-open:text-slate-900 dark:bg-slate-800">
                     +
                   </span>
                 </summary>
-                <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{a}</p>
-              </details>
+                <p className="mt-3 pr-10 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{a}</p>
+              </Reveal>
             ))}
           </div>
         </section>
 
         {/* ------------------------------------------------ final CTA */}
         <section className="px-4 pb-20 sm:px-6">
-          <div className="relative mx-auto max-w-5xl overflow-hidden rounded-[2rem] bg-gradient-to-br from-brand-600 via-violet-600 to-fuchsia-600 px-6 py-14 text-center text-white shadow-2xl shadow-brand-600/30 sm:px-12">
-            <div className="bg-dots absolute inset-0 opacity-30" />
+          <Reveal className="bg-signature animate-pan relative mx-auto max-w-5xl overflow-hidden px-6 py-14 text-center text-white shadow-2xl shadow-brand-900/30 sm:px-12">
+            <div className="bg-grid-light absolute inset-0 [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
+            <span aria-hidden className="absolute top-0 left-0 h-1 w-24 bg-accent" />
+            <span aria-hidden className="absolute right-0 bottom-0 size-3 bg-accent" />
             <h2 className="relative text-3xl font-bold tracking-tight text-balance sm:text-4xl">Stop copying numbers by hand</h2>
-            <p className="relative mx-auto mt-4 max-w-xl text-lg text-white/80">Create your free account and extract your first PDFs in under a minute.</p>
+            <p className="relative mx-auto mt-4 max-w-xl text-lg text-white/85">Create your free account and extract your first PDFs in under a minute.</p>
             <div className="relative mt-8 flex justify-center">
-              <ButtonLink href="/register" size="lg" variant="secondary" className="bg-white! text-slate-900! hover:bg-slate-100!">
+              <ButtonLink href="/register" size="lg" variant="secondary" className="bg-white! text-slate-900! hover:bg-accent!">
                 Create free account <ArrowRight className="size-5" />
               </ButtonLink>
             </div>
-          </div>
+          </Reveal>
         </section>
       </main>
       <SiteFooter />

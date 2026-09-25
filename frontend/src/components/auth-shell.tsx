@@ -15,8 +15,8 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
     <div className="grid min-h-dvh lg:grid-cols-[1fr_1.1fr]">
       <aside className="relative hidden overflow-hidden bg-slate-950 p-12 text-white lg:flex lg:flex-col lg:justify-between">
         <div className="bg-dots absolute inset-0 opacity-40" />
-        <div className="absolute -top-40 -left-40 size-[30rem] rounded-full bg-brand-600/40 blur-3xl" />
-        <div className="absolute -right-32 -bottom-40 size-[28rem] rounded-full bg-fuchsia-600/30 blur-3xl" />
+        <div className="absolute -top-40 -left-40 size-[30rem] bg-brand-600/40 blur-3xl" />
+        <div className="absolute -right-32 -bottom-40 size-[28rem] bg-emerald-600/30 blur-3xl" />
         <div className="relative">
           <Logo />
         </div>
@@ -55,7 +55,7 @@ export function GoogleButton({ label = "Continue with Google" }: { label?: strin
     // A plain link: the API redirects to Google and back (/api/auth/google/callback).
     <a
       href="/api/auth/google/login"
-      className="flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 active:scale-[0.99] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+      className="flex h-11 w-full items-center justify-center gap-3 border border-slate-300 bg-white text-sm font-semibold text-slate-800 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 active:scale-[0.99] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
     >
       <svg viewBox="0 0 24 24" className="size-5" aria-hidden>
         <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.4h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.7Z" />

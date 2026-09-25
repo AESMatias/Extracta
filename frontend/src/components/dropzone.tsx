@@ -43,7 +43,7 @@ export function Dropzone({ onFiles, disabled, hint }: { onFiles: (files: File[])
       onDragLeave={() => setActive(false)}
       onDrop={onDrop}
       className={clsx(
-        "group relative flex cursor-pointer flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed px-6 py-10 text-center transition duration-200 has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-brand-500/20 sm:py-14",
+        "group relative flex cursor-pointer flex-col items-center justify-center gap-3 border-2 border-dashed px-6 py-10 text-center transition duration-200 has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-brand-500/20 sm:py-14",
         active
           ? "scale-[1.01] border-brand-500 bg-brand-50/80 dark:bg-brand-500/10"
           : "border-slate-300 bg-slate-50/50 hover:border-brand-400 hover:bg-brand-50/40 dark:border-slate-700 dark:bg-slate-900/40 dark:hover:border-brand-500/60 dark:hover:bg-brand-500/5",
@@ -62,7 +62,7 @@ export function Dropzone({ onFiles, disabled, hint }: { onFiles: (files: File[])
           event.target.value = ""; // allow picking the same file again after removing it
         }}
       />
-      <div className="grid size-14 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-fuchsia-500 text-white shadow-lg shadow-brand-600/25 transition group-hover:scale-110 group-hover:rotate-3">
+      <div className="grid size-14 place-items-center bg-signature text-white shadow-lg shadow-brand-600/25 transition group-hover:scale-110 group-hover:rotate-3">
         <UploadCloud className="size-7" />
       </div>
       <div>
@@ -87,7 +87,7 @@ export function PickedList({ items, onRemove }: { items: Picked[]; onRemove: (in
         <li
           key={`${item.file.name}-${item.file.size}`}
           className={clsx(
-            "flex items-center gap-3 rounded-2xl border px-3 py-2.5",
+            "flex items-center gap-3 border px-3 py-2.5",
             item.error
               ? "border-rose-200 bg-rose-50 dark:border-rose-500/30 dark:bg-rose-500/10"
               : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900",
@@ -105,7 +105,7 @@ export function PickedList({ items, onRemove }: { items: Picked[]; onRemove: (in
           <button
             type="button"
             onClick={() => onRemove(index)}
-            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
+            className="p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
             aria-label={`Remove ${item.file.name}`}
           >
             <X className="size-4" />

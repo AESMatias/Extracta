@@ -66,10 +66,10 @@ export function ResultCard({
   const type = entry.document ? DOCUMENT_TYPES[entry.document.document_type] : null;
   const Icon = type?.icon;
   return (
-    <li className="animate-fade-up rounded-2xl border border-slate-200 bg-white p-4 transition hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
+    <li className="animate-fade-up border border-slate-200 bg-white p-4 transition hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-start gap-3">
         <div
-          className="grid size-11 shrink-0 place-items-center rounded-xl"
+          className="grid size-11 shrink-0 place-items-center"
           style={{ backgroundColor: `${type?.color ?? "#94a3b8"}1f`, color: type?.color ?? "#94a3b8" }}
         >
           {Icon ? <Icon className="size-5" /> : <Hourglass className="size-5" />}
