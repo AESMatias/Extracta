@@ -307,6 +307,7 @@ Run them in the project folder (`cd ~/Extracta`).
 | Pay button: "PayPal is not available right now" | Run the check in [docs/DEPLOY.md](docs/DEPLOY.md#9-optional-payments-with-paypal); `PAYEE_ACCOUNT_RESTRICTED` means PayPal has not finished verifying your business account. |
 | The build stops with `Killed` | Not enough memory: turn on swap (step 1). |
 | A change to `.env` has no effect (e.g. Resend shows no logs at all) | The containers still use the old values: `docker compose up -d --force-recreate web worker`. |
+| Google says `Error 400: redirect_uri_mismatch`, or email links point to `localhost` | `PUBLIC_BASE_URL` in `.env` is still the local value: set `https://your-domain` (no trailing slash), recreate `web` and `worker`, and check with `curl -s -o /dev/null -w '%{redirect_url}\n' https://your-domain/api/auth/google/login \| grep -o 'redirect_uri=[^&]*'`. It must match the redirect URI in Google Cloud exactly. |
 | Confirmation or password emails never arrive | Run the email check in [docs/DEPLOY.md](docs/DEPLOY.md#7-email-required-in-production): it sends one message and prints the provider's answer. |
 
 ---
