@@ -5,12 +5,12 @@ description: The non-negotiable principles every rsc-sdd phase obeys.
 tags: [sdd, constitution]
 timestamp: 2026-09-24T00:00:00Z
 topic: sdd
-version: v4.0.0
+version: v4.1.0
 ---
 
 # pdf_process_pipeline (IDP) — Constitution
 
-> Version: v4.0.0 · Ratified: 2026-09-24 · Last amended: 2026-09-25
+> Version: v4.1.0 · Ratified: 2026-09-24 · Last amended: 2026-09-25
 > The non-negotiable principles every rsc-sdd phase obeys. Stack mechanics live in the
 > installed stack skills (`python`, `docker`, `redis`, `supabase`, `postgresdb`); this file
 > ratifies the principle and points at the detail.
@@ -151,6 +151,15 @@ version: v4.0.0
 35. Principle 32 applies to every image the project builds: API/worker, frontend (Nginx) and
     certbot.
 
+## 17. Amendments v4.1.0 (email, passwords, subscriptions, webhooks)
+
+36. A PayPal webhook changes nothing until PayPal has verified its signature, and each event is
+    applied at most once. Subscriptions are checked with PayPal (owner and billing plan) before
+    they grant a plan, exactly like one-time orders (principle 29).
+37. Links sent by email are signed and expire (verification 3 days, password reset 1 hour and
+    single-use) and carry their token in the URL fragment. Responses about accounts never reveal
+    whether an email is registered, except registration itself.
+
 ## Definition of Done (the merge bar `verify` runs against)
 
 A change ships only when ALL hold:
@@ -184,3 +193,4 @@ A change ships only when ALL hold:
 | 2026-09-24 | v2.5.0 | Added 26: task results only for the owning browser session. | Close the "anyone with the task id" gap without user accounts. |
 | 2026-09-25 | v3.0.0 | Added 27-32: Next.js + Caddy frontend, server-side plans and quotas, verified PayPal payments, Alembic, new memory budget, CI and image scanning. | Accounts, plans, admin and payments turned the MVP into a SaaS. |
 | 2026-09-25 | v4.0.0 | Struck 27 → 33 (Nginx + certbot instead of Caddy) and 31 → 34 (certbot memory); added 35 (all three images scanned). | Owner's preference: Nginx is the more widespread server and the one they want to learn. |
+| 2026-09-25 | v4.1.0 | Added 36 (verified, idempotent webhooks; verified subscriptions) and 37 (signed, expiring email links; no account enumeration). | Email verification, password reset, subscriptions and webhooks. |

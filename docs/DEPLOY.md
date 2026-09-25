@@ -23,8 +23,9 @@ inside Docker's private network.
 | A domain name | e.g. `extracta.example.com`, from any registrar |
 | Supabase project | Its **Session pooler** connection string (see `.env.sample`) |
 | Gemini API key | <https://aistudio.google.com/apikey> |
-| Optional: Google sign-in | OAuth client ID and secret (step 7) |
-| Optional: PayPal payments | Live REST app Client ID and secret (step 8) |
+| An SMTP provider | Sends verification and password emails (step 7) |
+| Optional: Google sign-in | OAuth client ID and secret (step 8) |
+| Optional: PayPal payments | Live REST app Client ID, secret and webhook ID (step 9) |
 
 ## 1. Point the domain to the server
 
@@ -109,6 +110,7 @@ Every variable is explained inside the file. For production, change at least the
 | `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` |
 | `SESSION_COOKIE_SECURE` | `true` |
 | `REQUIRE_MANUAL_APPROVAL` | `true` if you want to approve every new account in /admin |
+| `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `MAIL_FROM` | your email provider (step 7) |
 
 Protect the file: `chmod 600 .env`. Never commit it.
 
@@ -147,7 +149,33 @@ curl -I https://extracta.example.com/api/health
 Then open `https://extracta.example.com`, create an account and process a PDF. Open
 `https://extracta.example.com/admin` and sign in with `ADMIN_PASSWORD`.
 
-## 7. Optional: Sign in with Google
+## 7. Email (required in production)
+
+Extracta emails a link to confirm each new address, password-reset links and a notice when a
+password changes. Without SMTP settings those emails only go to the logs, so nobody could
+confirm their address.
+
+1. Pick any provider with SMTP: Brevo, Resend, Mailgun or Amazon SES (free tiers are plenty to
+   start), or Gmail with an [app password](https://myaccount.google.com/apppasswords) for low
+   volume.
+2. In the provider, verify your domain (it gives you DNS records: SPF, DKIM) so emails do not
+   land in spam.
+3. Fill `.env`:
+
+   | Variable | Example |
+   |---|---|
+   | `SMTP_HOST` / `SMTP_PORT` | `smtp-relay.brevo.com` / `587` |
+   | `SMTP_USERNAME` / `SMTP_PASSWORD` | the SMTP credentials the provider shows |
+   | `SMTP_SECURITY` | `starttls` for port 587, `ssl` for port 465 |
+   | `MAIL_FROM` | `Extracta <no-reply@extracta.example.com>` |
+
+4. Apply: `docker compose up -d`, register a test account and check the email arrives. If it
+   does not: `docker compose logs web | grep -i email`.
+
+`REQUIRE_EMAIL_VERIFICATION=true` (the default) means users confirm their email before
+uploading or paying. From `/admin` you can mark an address as verified by hand.
+
+## 8. Optional: Sign in with Google
 
 1. Open <https://console.cloud.google.com/apis/credentials> and create a project if needed.
 2. **OAuth consent screen**: External, app name "Extracta", your support email, scopes
@@ -159,7 +187,7 @@ Then open `https://extracta.example.com`, create an account and process a PDF. O
 
 The Google button appears automatically on the sign-in and registration pages.
 
-## 8. Optional: Payments with PayPal
+## 9. Optional: Payments with PayPal
 
 1. Open <https://developer.paypal.com/dashboard/applications> with your PayPal **business**
    account.
@@ -168,12 +196,24 @@ The Google button appears automatically on the sign-in and registration pages.
    (Sandbox → Accounts). No real money moves.
 3. **Go live**: in the **Live** tab create an app, then set `PAYPAL_ENV=live` and the live
    `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET`.
-4. Apply: `docker compose up -d`.
+4. **Webhook** (needed for monthly renewals, cancellations made on PayPal's website and
+   refunds): in the same app, **Webhooks → Add Webhook**:
+   - URL: `https://extracta.example.com/api/billing/webhook`
+   - Events: `Billing subscription activated`, `updated`, `re-activated`, `cancelled`,
+     `suspended`, `expired`, `payment failed`; `Payment sale completed`, `refunded`, `reversed`;
+     `Checkout order approved`; `Payment capture completed`, `refunded`, `reversed`.
+   - Copy the **Webhook ID** it shows into `.env` as `PAYPAL_WEBHOOK_ID`.
+5. Apply: `docker compose up -d`.
 
-Plans and prices are in `app/plans.py` (USD, 30-day passes). The server always decides the
-price and verifies every order before capturing it; the browser only shows PayPal's buttons.
+Users choose a **monthly subscription** (renews automatically, cancel anytime from their account;
+they keep the plan until the paid period ends) or a **one-time 30-day pass**. Plans and prices
+are in `app/plans.py` (USD); the PayPal billing plans are created automatically the first time
+someone subscribes. The server always decides the price and verifies every order and
+subscription with PayPal; the browser only shows PayPal's buttons. Every webhook is verified
+with PayPal and applied exactly once, and a task re-checks subscriptions every 6 hours in case
+an event was lost. A refund made from PayPal's dashboard ends the plan time it paid for.
 
-## 9. Updating to a new version
+## 10. Updating to a new version
 
 ```bash
 cd /opt/extracta
@@ -186,7 +226,7 @@ docker compose up -d
 Migrations run automatically on start. Rebuilding also installs the latest Debian security
 patches into the images.
 
-## 10. Operations
+## 11. Operations
 
 | Task | Command |
 |---|---|
@@ -209,6 +249,8 @@ without the other values the app cannot start.
 | The browser warns about the certificate for more than a few minutes | certbot has not obtained the real certificate yet: `docker compose logs certbot`. Check that `.env` has `COMPOSE_PROFILES=https` and `LETSENCRYPT_EMAIL`, that DNS points here and port 80 is open. It retries every 30 minutes. |
 | `Cross-site request refused` (403) | `PUBLIC_BASE_URL` does not match the address in the browser (http vs https, www vs no www). |
 | The build stops with `Killed` / exit 137 | Not enough memory: check that swap is on (`swapon --show`). |
+| Verification emails do not arrive | `SMTP_HOST` is empty (they go to `docker compose logs web`), or the provider refused them: `docker compose logs web \| grep -i email`. Check the spam folder and the domain's SPF/DKIM records. |
+| Renewals do not extend plans | `PAYPAL_WEBHOOK_ID` missing or the webhook URL is wrong; PayPal's dashboard shows each delivery and its response. The 6-hourly check still catches up. |
 | Google says `redirect_uri_mismatch` | The redirect URI in Google Cloud must be exactly `PUBLIC_BASE_URL` + `/api/auth/google/callback`. |
 | Uploads fail at once for everyone | `docker compose logs worker`; check `GEMINI_API_KEY` and the Gemini quota. |
 | `web` is unhealthy | `docker compose logs web`: usually `DATABASE_URL` (use the Session pooler) or a missing variable. |

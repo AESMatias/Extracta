@@ -68,15 +68,38 @@ whose billing date has passed, so a lost webhook never leaves a paying user on F
 
 | # | Task | Proof | Status |
 |---|------|-------|--------|
-| 1 | Email sending (SMTP, log fallback, background thread) | unit tests | ⏳ |
-| 2 | Tokens | unit tests: expiry, tampering, single-use reset | ⏳ |
-| 3 | Migration 0003 (email_verified_at, subscriptions, paypal_plans, webhook_events, payment columns) | applied to Supabase; RLS on new tables | ⏳ |
-| 4 | Email verification + gates on upload and payments | route tests | ⏳ |
-| 5 | Forgot / reset / change password, session invalidation | route tests | ⏳ |
-| 6 | Subscriptions: create, activate, cancel, deferred start | tests with a fake PayPal | ⏳ |
-| 7 | Webhooks: signature, idempotency, every handled event | tests with a fake PayPal | ⏳ |
-| 8 | Reconciliation task | unit test | ⏳ |
-| 9 | Admin: verified flag, subscriptions, refunded payments | route tests | ⏳ |
-| 10 | Frontend: verify, forgot, reset pages; account security and subscription; pricing toggle; admin | tsc, eslint, build, browser check | ⏳ |
-| 11 | End to end on the running stack | HTTP script: register → email in logs → verify → reset | ⏳ |
-| 12 | Docs: `.env.sample`, DEPLOY (SMTP, webhooks), README | — | ⏳ |
+| 1 | Email sending (SMTP, log fallback, background thread) | `tests/test_mail.py`: STARTTLS/SSL/none, login, escaping, failures swallowed | ✅ |
+| 2 | Tokens | `tests/test_tokens.py`: expiry, tampering, wrong purpose, single-use reset | ✅ |
+| 3 | Migration 0003 (email_verified_at, subscriptions, paypal_plans, webhook_events, payment columns) | Applied to Supabase; the integration test now checks RLS on every model table and the head revision | ✅ |
+| 4 | Email verification + gates on upload and payments | `tests/test_account_lifecycle.py` | ✅ |
+| 5 | Forgot / reset / change password, session invalidation | `tests/test_account_lifecycle.py` | ✅ |
+| 6 | Subscriptions: create, activate, cancel, deferred start, no pass on top | `tests/test_subscriptions.py`, `tests/test_paypal_client.py` | ✅ |
+| 7 | Webhooks: signature, idempotency, every handled event | `tests/test_subscriptions.py`; raw-body forwarding and smuggling attempt in `tests/test_paypal_client.py` | ✅ |
+| 8 | Reconciliation task | `tests/test_subscriptions.py`, `tests/test_tasks.py` | ✅ |
+| 9 | Admin: verified flag, subscriptions, refunded payments | route tests | ✅ |
+| 10 | Frontend: verify, forgot, reset pages; account security and subscription; pricing toggle; admin | tsc and eslint clean, static build of 11 routes; public pages checked in a browser at desktop and 375 px | ✅ |
+| 11 | End to end on the running stack | HTTP script through Nginx with the real Supabase (below) | ✅ |
+| 12 | Docs: `.env.sample`, DEPLOY (SMTP, webhooks), README | — | ✅ |
+| 13 | Real PayPal sandbox subscription and webhook | Needs the owner's sandbox credentials and a public HTTPS URL | ⏳ |
+
+## Evidence
+
+- 332 unit tests pass (96% coverage); ruff and mypy clean. New modules: `billing.py` 92%,
+  `mail.py`, `emails.py` and `tokens.py` 100%.
+- Integration: migration 0003 applied to the real Supabase; RLS on every table.
+- End to end through Nginx with the real Supabase and SMTP unset (emails in the web logs):
+  registration sends the link; upload before verifying → 403 with `verify_email`; the link
+  opened from a browser without a session verifies the account; upload → 202; a tampered link →
+  400. Forgot password answers the same for known and unknown emails; the reset link signs in,
+  signs out the two other sessions, works once, and only the new password works afterwards.
+  Change password with a wrong current one → 401, right one → 200 and the session stays.
+  Subscribing and the webhook answer 503 while PayPal and the webhook ID are not configured.
+  No token appears in Nginx's access log.
+- Design review: a pass bought on top of a live subscription would be overwritten by the next
+  renewal; refused with 409 (fixed during review).
+
+## Next
+
+Owner: configure an SMTP provider and the PayPal sandbox (client ID, secret and a webhook to a
+public HTTPS URL), then run one real sandbox subscription: subscribe, see the renewal date in
+/account, cancel, and check the payments tab in /admin.

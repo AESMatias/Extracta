@@ -13,9 +13,9 @@ Upload PDFs and get their data back as structured JSON, tables, charts and Excel
 Each document is **classified** (invoice, receipt, contract, bank statement, payslip, resume,
 report…), its text is extracted and an LLM (Gemini by default) turns it into validated data.
 
-Extracta is a complete SaaS: accounts (email + password or Google), a free plan and four cheap
-paid plans with daily quotas, PayPal checkout, and an admin panel to approve accounts and assign
-privileges. It is built to run on a **2 GB RAM server** behind automatic HTTPS.
+Extracta is a complete SaaS: accounts (email + password or Google) with email verification and
+password recovery, a free plan and four cheap paid plans with daily quotas, PayPal monthly
+subscriptions or one-time passes, and an admin panel to approve accounts and assign privileges. It is built to run on a **2 GB RAM server** behind automatic HTTPS.
 
 - **Deploy it**: [docs/DEPLOY.md](docs/DEPLOY.md) — from an empty VPS to HTTPS, step by step.
 - **Progress and decisions**: [roadmap](02-DOCS/wiki/ftd/idp-mvp.md),
@@ -49,8 +49,8 @@ privileges. It is built to run on a **2 GB RAM server** behind automatic HTTPS.
 | **Processing modes** | *Process only*: nothing is stored, results expire after 1 hour. *Save to history* (paid plans): results are kept in the account. The PDF file is deleted right after processing in both modes. |
 | **Exports** | Excel (XLSX with typed numbers and dates), CSV (UTF-8 with BOM) and JSON, per document or for the whole batch. |
 | **Dashboard** | Drag and drop, upload progress, live status per document, detail view, charts by type and by currency, saved history. |
-| **Accounts** | Email + password or Google sign-in. Optional manual approval of new accounts. |
-| **Plans** | Free (2 PDFs every 24 hours) and four 30-day passes paid with PayPal. |
+| **Accounts** | Email + password or Google sign-in, email verification, forgot/reset/change password. Optional manual approval of new accounts. |
+| **Plans** | Free (2 PDFs every 24 hours) and four paid plans: monthly PayPal subscription (cancel anytime) or one-time 30-day pass. |
 | **Admin** | `/admin` with `ADMIN_PASSWORD`: approve/reject/suspend accounts, assign plans with or without expiry, custom daily limits, payments and stats. |
 
 Document types and extracted fields:
@@ -68,7 +68,8 @@ Document types and extracted fields:
 ## Plans
 
 Defined in [`app/plans.py`](app/plans.py) (the frontend catalog is generated from it and a test
-fails if they drift). Paid plans are 30-day passes, with no automatic renewal.
+fails if they drift). Each paid plan is sold as a monthly PayPal subscription that renews until
+cancelled (the plan stays until the paid period ends) or as a one-time 30-day pass.
 
 | Plan | Price | PDFs / 24 h | MB per file | Files per upload | Save to history |
 |---|---|---|---|---|---|
@@ -96,7 +97,9 @@ flowchart LR
     K -- "text + schema" --> L[Gemini / OpenAI]
     K -- "save (paid plans)" --> S[(Supabase<br/>PostgreSQL)]
     W -- "accounts, quotas, payments" --> S
-    W -- "orders" --> P[PayPal]
+    W -- "orders, subscriptions" --> P[PayPal]
+    P -- "webhooks" --> W
+    W -- "emails" --> M[SMTP provider]
     W -- "sign-in" --> G[Google OAuth]
     CB[certbot<br/>production only] -- "Let's Encrypt certificates" --> C
 ```
@@ -109,7 +112,8 @@ flowchart LR
 | Queue | Celery 5.6 + Redis 8 | One document at a time, results with a TTL, periodic cleanup |
 | Extraction | pdfplumber + Gemini (`google-genai`), optional OpenAI | Text, then structured data validated by Pydantic |
 | Database | Supabase PostgreSQL + SQLAlchemy 2 + Alembic | Accounts, usage, payments, saved documents (Row Level Security on) |
-| Payments / sign-in | PayPal Orders v2, Google OAuth 2.0 (PKCE) | Optional; enabled by `.env` |
+| Payments / sign-in | PayPal Orders v2 + Subscriptions + webhooks, Google OAuth 2.0 (PKCE) | Optional; enabled by `.env` |
+| Email | Any SMTP provider (logs locally) | Verification, password reset, security notices |
 
 **Memory on a 2 GB server** (limits in `docker-compose.yml`): frontend 64 MB, web 384 MB,
 worker 768 MB, redis 128 MB, plus certbot 128 MB in production: 1344 MB locally, 1472 MB in
@@ -160,9 +164,10 @@ invalid value stops the app with a clear message.
 | Database | `DATABASE_URL` (Supabase **Session pooler**, pasted as shown) |
 | Site | `PUBLIC_BASE_URL`, `SITE_DOMAIN`, `LETSENCRYPT_EMAIL`, `COMPOSE_PROFILES`, `HTTP_PORT`, `HTTPS_PORT` |
 | Sessions | `SECRET_KEY` (≥ 32 chars), `SESSION_COOKIE_SECURE` (`true` with HTTPS) |
-| Accounts | `REQUIRE_MANUAL_APPROVAL`, `ADMIN_PASSWORD` (≥ 12 chars; empty disables /admin) |
+| Accounts | `REQUIRE_MANUAL_APPROVAL`, `REQUIRE_EMAIL_VERIFICATION`, `ADMIN_PASSWORD` (≥ 12 chars; empty disables /admin) |
+| Email | `SMTP_HOST` (empty = emails go to the logs), `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_SECURITY`, `MAIL_FROM` |
 | Google sign-in | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (redirect URI: `PUBLIC_BASE_URL/api/auth/google/callback`) |
-| PayPal | `PAYPAL_ENV` (`sandbox`/`live`), `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` |
+| PayPal | `PAYPAL_ENV` (`sandbox`/`live`), `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_WEBHOOK_ID` |
 | Queue | `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`, `RESULT_TTL_SECONDS` |
 | Uploads | `UPLOAD_DIR`, `MAX_UPLOAD_MB`, `ORPHAN_MAX_AGE_HOURS` |
 
@@ -197,13 +202,17 @@ production). State-changing requests from other origins are refused.
 | `POST` | `/api/auth/register`, `/api/auth/login`, `/api/auth/logout` | Accounts (JSON) |
 | `GET` | `/api/auth/me` | Current account with plan and usage (`user: null` when signed out) |
 | `GET` | `/api/auth/google/login` → `/api/auth/google/callback` | Google sign-in |
+| `POST` | `/api/auth/email/verify`, `/api/auth/email/resend` | Email verification |
+| `POST` | `/api/auth/password/forgot`, `/api/auth/password/reset`, `/api/auth/password/change` | Passwords |
 | `POST` | `/api/upload?save_to_db=true\|false` | Multipart `files`; plan and quota enforced |
 | `POST` | `/api/tasks/status` | `{"task_ids": [...]}` → status and result of your tasks |
 | `GET` | `/api/tasks/<id>` | One task (404 if it is not yours) |
 | `GET`, `DELETE` | `/api/documents`, `/api/documents/<id>` | Saved history |
 | `POST` | `/api/export/{csv\|xlsx\|json}/{individual\|unified}` | File downloads |
 | `GET` | `/api/plans`, `/api/billing/config`, `/api/billing/payments` | Plans and your payments |
-| `POST` | `/api/billing/orders`, `/api/billing/orders/<id>/capture` | PayPal checkout |
+| `POST` | `/api/billing/orders`, `/api/billing/orders/<id>/capture` | One-time pass (PayPal) |
+| `POST` | `/api/billing/subscriptions`, `/api/billing/subscriptions/<id>/activate`, `/api/billing/subscription/cancel` | Monthly subscription (PayPal) |
+| `POST` | `/api/billing/webhook` | PayPal events (signature verified with PayPal) |
 | `*` | `/api/admin/...` | Admin (session from `ADMIN_PASSWORD`) |
 | `GET` | `/api/health` | Health check |
 
@@ -274,8 +283,11 @@ rest by hand or with `ruff check --fix`).
 │   ├── __init__.py              create_app(): the Flask API
 │   ├── config.py                Settings validated from .env
 │   ├── plans.py                 Plans, prices and privileges
-│   ├── accounts.py              Registration, sign-in, Google, quota
-│   ├── models.py, db.py         Tables (users, usage_events, payments, documents) and sessions
+│   ├── accounts.py              Registration, sign-in, Google, passwords, quota
+│   ├── billing.py               Passes, subscriptions, refunds, webhooks, reconciliation
+│   ├── mail.py, emails.py       SMTP (or logs) and the email templates
+│   ├── tokens.py                Signed, expiring links for verification and password reset
+│   ├── models.py, db.py         Tables (users, usage, payments, subscriptions, documents...) and sessions
 │   ├── migrations/, migrate.py  Alembic migrations (run on start)
 │   ├── schemas.py               DocumentSchema: what the LLM must return
 │   ├── storage.py               Streaming uploads, orphan sweep
@@ -301,13 +313,20 @@ rest by hand or with `ruff check --fix`).
 
 - **Secrets** only in `.env` (git- and Docker-ignored); `SecretStr` keeps them out of logs.
 - **Passwords**: PBKDF2-SHA256 with 600,000 iterations; unknown emails take as long as wrong
-  passwords; login, registration and the admin password are rate limited.
+  passwords; login, registration, password reset and the admin password are rate limited.
+  Changing a password signs out every other session.
+- **Email links**: signed and expiring (verification 3 days, reset 1 hour and single-use); the
+  token travels after `#`, so it never reaches a server log. "Forgot password" answers the same
+  whether the account exists or not, and emails leave on a background thread so timing does not
+  tell either. Linking Google to an account whose email was never verified removes its password
+  (account pre-hijacking).
 - **Sessions**: signed `HttpOnly`, `SameSite=Lax` cookie (`Secure` in production); cross-site
   state-changing requests are refused; rejected or suspended accounts are signed out at once.
 - **Authorization**: plans and quotas are enforced on the server before the upload body is read;
   tasks, results and saved documents are only served to their owner (404 otherwise).
 - **Payments**: the server sets the price, then verifies owner, plan, amount and currency before
-  capturing; captures are idempotent.
+  capturing, and owner and billing plan before activating a subscription; captures are
+  idempotent. Webhooks are verified with PayPal using the raw body and applied exactly once.
 - **Uploads**: streamed to disk in 64 KB chunks, checked by content (`%PDF-`), stored under
   server-generated names, deleted after processing; a periodic sweep removes orphans.
 - **LLM output** is validated against a strict schema; document content never reaches error
