@@ -242,6 +242,34 @@ The Google button appears automatically on the sign-in and registration pages.
    - Copy the **Webhook ID** it shows into `.env` as `PAYPAL_WEBHOOK_ID`.
 5. Apply: `docker compose up -d`.
 
+**Check the configuration** when the pay button says "PayPal is not available right now". This
+asks PayPal for a token with your credentials and creates a test order, which charges nothing
+(nobody approves it and it expires); it never prints the credentials:
+
+```bash
+docker compose exec -T web python - <<'EOF'
+import os, httpx
+env = os.environ.get("PAYPAL_ENV", "")
+base = "https://api-m.paypal.com" if env == "live" else "https://api-m.sandbox.paypal.com"
+print("PAYPAL_ENV =", env)
+r = httpx.post(base + "/v1/oauth2/token", auth=(os.environ["PAYPAL_CLIENT_ID"], os.environ["PAYPAL_CLIENT_SECRET"]), data={"grant_type": "client_credentials"}, timeout=20)
+print("1) credentials:", r.status_code, "OK" if r.is_success else r.text[:300])
+if r.is_success:
+    token = r.json()["access_token"]
+    o = httpx.post(base + "/v2/checkout/orders", headers={"Authorization": "Bearer " + token}, json={"intent": "CAPTURE", "purchase_units": [{"amount": {"currency_code": "USD", "value": "0.99"}}]}, timeout=20)
+    print("2) test order:", o.status_code, "OK (nothing was charged)" if o.is_success else o.text[:600])
+EOF
+```
+
+| Result | Meaning |
+|---|---|
+| `1) credentials: 401 invalid_client` | Wrong client ID or secret, or they belong to the other environment than `PAYPAL_ENV`. |
+| `2) test order: 422 PAYEE_ACCOUNT_RESTRICTED` | The PayPal business account cannot receive payments yet: finish its verification on paypal.com (Resolution Center). |
+| Both `OK` | PayPal works; look at `docker compose logs web`. |
+
+To pay yourself in a live test, use a **different** PayPal account: PayPal refuses payments to
+the same account that receives them.
+
 Users choose a **monthly subscription** (renews automatically, cancel anytime from their account;
 they keep the plan until the paid period ends) or **page packs** (pay as you go, pages never expire). Plans and prices
 are in `app/plans.py` (USD); the PayPal billing plans are created automatically the first time
