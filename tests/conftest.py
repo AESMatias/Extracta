@@ -1,9 +1,15 @@
 """Shared pytest fixtures."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
+from sqlalchemy import Engine, create_engine, event
+from sqlalchemy.pool import StaticPool
+
+import app.models  # noqa: F401  # registers every table on Base.metadata
+from app.db import Base, use_engine
 
 
 def build_pdf(pages: list[str]) -> bytes:
@@ -61,3 +67,88 @@ def make_pdf(tmp_path: Path) -> Callable[[list[str]], Path]:
         return path
 
     return _make
+
+
+@pytest.fixture
+def db_engine() -> Iterator[Engine]:
+    """An in-memory SQLite database with the app's tables, used by session_scope() during the test."""
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:", poolclass=StaticPool, connect_args={"check_same_thread": False}
+    )
+
+    @event.listens_for(engine, "connect")
+    def enable_foreign_keys(dbapi_connection: Any, _: Any) -> None:
+        dbapi_connection.execute("PRAGMA foreign_keys=ON")  # SQLite ignores FKs unless asked
+
+    Base.metadata.create_all(engine)
+    use_engine(engine)
+    yield engine
+    use_engine(None)
+    engine.dispose()
+
+
+ADMIN_PASSWORD = "admin-password-123"
+USER_PASSWORD = "correct horse battery"
+
+
+class Harness:
+    """A test app wired to fakes, plus helpers to act as a browser."""
+
+    def __init__(self, tmp_path: Path, **overrides: Any) -> None:
+        from pydantic import SecretStr
+
+        from app import create_app
+        from app.config import Settings
+        from tests.fakes import FakeGoogle, FakePayPal, FakeQueue, FakeRedis
+
+        values: dict[str, Any] = {
+            "gemini_api_key": SecretStr("test"),
+            "database_url": SecretStr("postgresql+psycopg://u:p@h:5432/d"),
+            "secret_key": SecretStr("k" * 32),
+            "upload_dir": tmp_path / "uploads",
+            "admin_password": SecretStr(ADMIN_PASSWORD),
+            "public_base_url": "http://localhost:8080",
+            **overrides,
+        }
+        self.settings = Settings(_env_file=None, **values)  # type: ignore[call-arg]
+        self.queue = FakeQueue()
+        self.redis = FakeRedis()
+        self.paypal = FakePayPal()
+        self.google = FakeGoogle()
+        self.app = create_app(
+            self.settings,
+            task_queue=self.queue,
+            redis_client=self.redis,
+            google=self.google,  # type: ignore[arg-type]
+            paypal=self.paypal,  # type: ignore[arg-type]
+        )
+
+    def client(self) -> Any:
+        return self.app.test_client()
+
+    def signed_up(self, email: str = "ana@example.com", **user_changes: Any) -> Any:
+        """A browser signed in to a new account; optional changes to the account (plan, status...)."""
+        from sqlalchemy import select
+
+        from app.db import session_scope
+        from app.models import User
+
+        client = self.client()
+        response = client.post("/api/auth/register", json={"email": email, "password": USER_PASSWORD, "name": "Ana"})
+        assert response.status_code == 201, response.get_json()
+        if user_changes:
+            with session_scope() as db:
+                user = db.execute(select(User).where(User.email == email)).scalar_one()
+                for key, value in user_changes.items():
+                    setattr(user, key, value)
+        return client
+
+    def admin(self) -> Any:
+        client = self.client()
+        assert client.post("/api/admin/login", json={"password": ADMIN_PASSWORD}).status_code == 200
+        return client
+
+
+@pytest.fixture
+def harness(db_engine: Engine, tmp_path: Path) -> Harness:
+    return Harness(tmp_path)

@@ -1,11 +1,10 @@
-from typing import Any
-
 import pytest
 
 from app.llm import LLMExtractionError, LLMTransientError
 from app.pdf_text import NoTextLayerError, UnreadablePdfError
 from app.web.ownership import RedisTaskOwnership
 from app.web.queue import DEFAULT_ERROR, describe_error, to_status
+from tests.fakes import FakeRedis
 
 
 @pytest.mark.parametrize(
@@ -46,6 +45,7 @@ def test_failure_carries_a_user_message_not_the_exception() -> None:
         (UnreadablePdfError("x"), "damaged"),
         (LLMTransientError("x"), "busy"),
         (LLMExtractionError("x"), "structured data"),
+        (type("UploadExpiredError", (Exception,), {})("x"), "Upload it again"),
     ],
 )
 def test_known_errors_get_specific_messages(error: Exception, fragment: str) -> None:
@@ -54,27 +54,6 @@ def test_known_errors_get_specific_messages(error: Exception, fragment: str) -> 
 
 def test_unknown_errors_get_a_generic_message() -> None:
     assert describe_error(ValueError("refusing to process /etc/passwd")) == DEFAULT_ERROR
-
-
-class FakeRedis:
-    def __init__(self) -> None:
-        self.sets: dict[str, set[str]] = {}
-        self.ttls: dict[str, int] = {}
-
-    def pipeline(self) -> "FakeRedis":
-        return self
-
-    def sadd(self, key: str, *values: str) -> None:
-        self.sets.setdefault(key, set()).update(values)
-
-    def expire(self, key: str, seconds: int) -> None:
-        self.ttls[key] = seconds
-
-    def execute(self) -> list[Any]:
-        return []
-
-    def sismember(self, key: str, value: str) -> bool:
-        return value in self.sets.get(key, set())
 
 
 def test_redis_ownership_records_tasks_with_the_result_ttl() -> None:

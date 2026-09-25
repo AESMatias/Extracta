@@ -18,13 +18,9 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+    # Apply database migrations first, then start the API server.
     command: >
-      gunicorn "app:create_app()"
-      --bind 0.0.0.0:8000
-      --workers 2
-      --worker-class gthread
-      --threads 4
-      --timeout 120
+      sh -c "python -m app.migrate && exec gunicorn 'app:create_app()' --bind 0.0.0.0:8000 --workers 2 --worker-class gthread --threads 4 --timeout 120"
     ports:
       - "8000:8000"
     healthcheck:
@@ -47,6 +43,7 @@ services:
     pull_policy: never  # use the image built for web, never look for it on Docker Hub
     command: >
       celery -A app.tasks:celery_app worker
+      --beat --schedule /tmp/celerybeat-schedule
       --loglevel=info
       --concurrency=1
       --prefetch-multiplier=1

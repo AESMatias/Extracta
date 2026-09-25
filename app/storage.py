@@ -7,6 +7,7 @@ filename is kept only for display, never used to build a path.
 """
 
 import re
+import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -99,3 +100,25 @@ def delete_file(path: Path, *, upload_dir: Path) -> bool:
     except FileNotFoundError:
         return False
     return True
+
+
+def sweep_orphans(upload_dir: Path, *, max_age_seconds: float, now: float | None = None) -> list[Path]:
+    """Delete uploads older than `max_age_seconds` (e.g. left behind by a worker killed mid-task).
+
+    Only files this module creates (`<uuid>.pdf` and `<uuid>.pdf.part`) are touched.
+    """
+    if not upload_dir.is_dir():
+        return []
+    cutoff = (time.time() if now is None else now) - max_age_seconds
+    removed: list[Path] = []
+    for path in upload_dir.iterdir():
+        if not (path.name.endswith(".pdf") or path.name.endswith(".pdf.part")) or not path.is_file():
+            continue
+        try:
+            uuid.UUID(path.name.split(".", 1)[0])
+            if path.stat().st_mtime < cutoff:
+                path.unlink()
+                removed.append(path)
+        except (ValueError, FileNotFoundError):  # not ours, or deleted meanwhile by its task
+            continue
+    return removed

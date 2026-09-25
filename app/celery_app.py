@@ -11,6 +11,7 @@ from celery import Celery
 from app.config import Settings, get_settings
 
 PROCESS_DOCUMENT_TASK = "process_document"
+SWEEP_ORPHANS_TASK = "sweep_orphan_uploads"
 
 
 def celery_config(settings: Settings) -> dict[str, Any]:
@@ -25,6 +26,8 @@ def celery_config(settings: Settings) -> dict[str, Any]:
         "result_serializer": "json",
         "accept_content": ["json"],  # never unpickle messages
         "broker_connection_retry_on_startup": True,
+        # Embedded beat (worker --beat) runs the orphan sweep every 30 minutes.
+        "beat_schedule": {"sweep-orphan-uploads": {"task": SWEEP_ORPHANS_TASK, "schedule": 30 * 60}},
     }
 
 

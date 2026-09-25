@@ -1,19 +1,20 @@
 """Database tests.
 
-Unit tests run everywhere. Tests marked `integration` talk to the real Supabase
-database and run only when DATABASE_URL is set, e.g.:
+Unit tests run everywhere. Tests marked `integration` run the real migrations against Supabase and
+need DATABASE_URL, e.g.:
 
     docker run --rm --env-file .env -v "$PWD":/src -w /src pdf-process-pipeline:dev pytest -m integration
 """
 
 import os
 import uuid
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import delete, select, text
+from sqlalchemy import Engine, delete, select, text
 
-from app.db import build_engine, init_db, session_scope
-from app.models import Document
+from app.db import build_engine, session_scope, use_engine
+from app.models import Document, User
 from app.schemas import DocumentSchema
 
 
@@ -25,44 +26,95 @@ def test_engine_uses_a_small_pool() -> None:
     assert engine.url.drivername == "postgresql+psycopg"
 
 
+def test_timestamps_are_stored_in_utc_and_read_back_aware(db_engine: Engine) -> None:
+    santiago = timezone(timedelta(hours=-3))
+    with session_scope() as db:
+        user = User(email="ana@example.com", plan_expires_at=datetime(2026, 9, 24, 9, 0, tzinfo=santiago))
+        db.add(user)
+
+    with session_scope() as db:
+        stored = db.execute(select(User)).scalar_one()
+
+    assert stored.plan_expires_at == datetime(2026, 9, 24, 12, 0, tzinfo=UTC)
+    assert stored.created_at.tzinfo is not None
+
+
+def test_naive_datetimes_are_refused(db_engine: Engine) -> None:
+    with pytest.raises(Exception, match="naive"), session_scope() as db:
+        db.add(User(email="ana@example.com", plan_expires_at=datetime(2026, 9, 24, 12, 0)))
+
+
 integration = pytest.mark.skipif(not os.environ.get("DATABASE_URL"), reason="needs a real DATABASE_URL")
 
 
-@pytest.mark.integration
-@integration
-def test_init_db_creates_the_table_with_row_level_security() -> None:
-    init_db()
+@pytest.fixture
+def supabase() -> Engine:
+    use_engine(None)  # the real engine from DATABASE_URL
+    from app.db import get_engine
 
-    with session_scope() as session:
-        rls_enabled = session.execute(
-            text("select relrowsecurity from pg_class where relname = 'documents' and relkind = 'r'")
-        ).scalar_one()
-
-    assert rls_enabled is True
+    return get_engine()
 
 
 @pytest.mark.integration
 @integration
-def test_document_round_trip() -> None:
-    init_db()
+def test_migrations_create_every_table_with_row_level_security(supabase: Engine) -> None:
+    from app.migrate import upgrade
+
+    upgrade()
+    upgrade()  # idempotent: a second run changes nothing
+
+    with session_scope() as db:
+        rls = dict(
+            db.execute(
+                text(
+                    "select relname, relrowsecurity from pg_class "
+                    "where relname in ('documents', 'users', 'usage_events', 'payments', 'alembic_version') "
+                    "and relkind = 'r'"
+                )
+            )
+            .tuples()
+            .all()
+        )
+        version = db.execute(text("select version_num from alembic_version")).scalar_one()
+
+    assert rls == dict.fromkeys(("documents", "users", "usage_events", "payments", "alembic_version"), True)
+    assert version == "0002"
+
+
+@pytest.mark.integration
+@integration
+def test_document_round_trip_with_its_owner(supabase: Engine) -> None:
+    from app.migrate import upgrade
+
+    upgrade()
     task_id = uuid.uuid4()
-    extraction = DocumentSchema.model_validate(
-        {"document_type": "other", "summary": "Integration test row, deleted at the end."}
-    )
+    email = f"it-{uuid.uuid4().hex[:8]}@example.com"
+    extraction = DocumentSchema.model_validate({"document_type": "other", "summary": "Integration test row."})
 
     try:
-        with session_scope() as session:
-            session.add(
+        with session_scope() as db:
+            owner = User(email=email)
+            db.add(owner)
+            db.flush()
+            db.add(
                 Document.from_extraction(
-                    task_id=task_id, filename="test.pdf", extraction=extraction, llm_provider="test", llm_model="test"
+                    task_id=task_id,
+                    filename="test.pdf",
+                    extraction=extraction,
+                    llm_provider="test",
+                    llm_model="test",
+                    user_id=owner.id,
                 )
             )
 
-        with session_scope() as session:
-            row = session.execute(select(Document).where(Document.id == task_id)).scalar_one()
-            assert row.filename == "test.pdf"
-            assert row.data["summary"] == "Integration test row, deleted at the end."
-            assert row.created_at is not None
+        with session_scope() as db:
+            row = db.execute(select(Document).where(Document.id == task_id)).scalar_one()
+            assert row.data["summary"] == "Integration test row."
+            assert row.user_id is not None
+            assert row.created_at.tzinfo is not None
     finally:
-        with session_scope() as session:
-            session.execute(delete(Document).where(Document.id == task_id))
+        with session_scope() as db:
+            db.execute(delete(User).where(User.email == email))  # cascades to the document
+
+    with session_scope() as db:
+        assert db.get(Document, task_id) is None

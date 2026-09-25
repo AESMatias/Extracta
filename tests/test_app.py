@@ -20,7 +20,7 @@ def settings() -> Settings:
 def test_health_returns_ok(settings: Settings) -> None:
     client = create_app(settings).test_client()
 
-    response = client.get("/health")
+    response = client.get("/api/health")
 
     assert response.status_code == 200
     assert response.get_json() == {"status": "ok"}
@@ -55,3 +55,16 @@ def test_without_arguments_uses_environment_settings(monkeypatch: pytest.MonkeyP
         assert app.extensions["settings"] is get_settings()
     finally:
         get_settings.cache_clear()
+
+
+def test_optional_integrations_are_wired_only_when_configured(settings: Settings) -> None:
+    plain = create_app(settings)
+    settings.google_client_id = "id.apps.googleusercontent.com"
+    settings.google_client_secret = SecretStr("google-secret")
+    settings.paypal_client_id = "paypal-id"
+    settings.paypal_client_secret = SecretStr("paypal-secret")
+    full = create_app(settings)
+
+    assert plain.extensions["google"] is None and plain.extensions["paypal"] is None
+    assert full.extensions["google"].redirect_uri == "http://localhost:8080/api/auth/google/callback"
+    assert full.extensions["paypal"].env == "sandbox"
