@@ -24,7 +24,7 @@ striking landing page (wind particles, a realistic invoice, 3D hovers, slanted n
 | 4 | i18n en/es with detection and switch | browser check; es.ts typed against en.ts | ✅ |
 | 5 | Landing: particles, invoice, steps title, centered types, security, pricing selector, 100svh first screen on phones | browser check desktop and 375 px (stats end at 812/812 px) | ✅ |
 | 6 | Terms (refund clause last) and Privacy, linked from footer and sign-up | browser check | ✅ |
-| 7 | Contact email and governing law reviewed by the owner | `frontend/src/lib/legal.ts` | ⏳ |
+| 7 | Legal texts aligned with the owner's other site (contact email, withdrawal right under Law 19.496, SERNAC, refunds via PayPal, data controller, AI section, transfers, 30-day replies) | `frontend/src/lib/legal.ts`; lawyer review still recommended | ✅ |
 
 ## Notes
 

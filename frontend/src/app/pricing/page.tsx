@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowLeft, ArrowRight, CalendarClock, Check, Coins, RefreshCw, ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 
@@ -94,6 +95,17 @@ function Checkout({ item }: { item: CheckoutItem }) {
               <PayPalCheckout key={item.kind === "plan" ? item.plan.id : item.pack.id} item={item} onPaid={onPaid} />
             )}
           </div>
+          <p className="mt-4 text-center text-xs text-slate-500">
+            {c.accept.split("{terms}")[0]}
+            <Link href="/terms" className="font-semibold text-brand-600 hover:underline dark:text-brand-400">
+              {c.terms}
+            </Link>
+            {c.accept.split("{terms}")[1]?.split("{refunds}")[0]}
+            <Link href="/terms#refunds" className="font-semibold text-brand-600 hover:underline dark:text-brand-400">
+              {c.refunds}
+            </Link>
+            {c.accept.split("{refunds}")[1]}
+          </p>
         </div>
       </div>
     </Card>

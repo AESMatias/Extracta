@@ -172,6 +172,9 @@ export const en = {
       renewsOn: "Your subscription renews on {date}.",
       almost: "Almost there",
       almostText: "PayPal is confirming your first payment. Your plan activates in a minute.",
+      accept: "By paying you accept the {terms}, including the {refunds}.",
+      terms: "Terms and Conditions",
+      refunds: "refund policy",
     },
   },
   planFeatures: {
@@ -478,6 +481,8 @@ export const en = {
   notFound: { title: "This page does not exist", text: "It may have been moved, or the link is wrong.", back: "Back to home" },
   legal: {
     updated: "Last updated: {date}",
+    seeAlso: "See also our",
+    contact: "Questions? Write to",
   },
 };
 

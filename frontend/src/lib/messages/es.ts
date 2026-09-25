@@ -172,6 +172,9 @@ export const es: Messages = {
       renewsOn: "Tu suscripción se renueva el {date}.",
       almost: "Casi listo",
       almostText: "PayPal está confirmando tu primer pago. Tu plan se activa en un minuto.",
+      accept: "Al pagar aceptas los {terms}, incluida la {refunds}.",
+      terms: "Términos y Condiciones",
+      refunds: "política de reembolsos",
     },
   },
   planFeatures: {
@@ -478,5 +481,7 @@ export const es: Messages = {
   notFound: { title: "Esta página no existe", text: "Puede que se haya movido, o el link está mal.", back: "Volver al inicio" },
   legal: {
     updated: "Última actualización: {date}",
+    seeAlso: "Revisa también nuestra",
+    contact: "¿Dudas? Escribe a",
   },
 };
