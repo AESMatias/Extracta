@@ -49,7 +49,7 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
 | 12 | Web routes | `app/web/routes.py` + tests | `POST /upload` (+ `save_to_db`) → task ids; `GET /tasks/<id>` → status + result; `POST /export/csv/individual` and `/unified` stream CSV | ✅ Add the HTTP API with per-browser task ownership |
 | 13 | UI | `app/web/templates/`, `app/web/static/` | Dropzone + mode toggle + polling + results table + Chart.js charts + CSV/XLSX/JSON buttons | ✅ Add the browser UI with live status, charts and exports |
 | 14 | Verify | — | ruff, mypy, pytest ≥ 70% coverage all green; Trivy re-scan | ✅ Verified: 182 tests, 98% coverage, 0 Python CVEs, 5 review fixes |
-| 15 | End-to-end + merge | — | Batch of real PDFs in both modes under the 2 GB limits; merged to `main` | ⏳ next |
+| 15 | End-to-end + merge | — | Batch of real PDFs in both modes under the 2 GB limits; merged to `main` | ✅ 8-PDF batch, 28/28 checks, worker peak 235 MiB (merge by the owner) |
 
 ## Evidence
 
@@ -168,5 +168,5 @@ docker run --rm --env-file .env -v "$PWD":/src -w /src pdf-process-pipeline:dev 
 
 ## Next
 
-Step 15 — End to end: a batch of real PDFs (not generated ones) in both modes under the 2 GB
-memory limits, then merge `feat/project-skeleton` into `main` through a pull request.
+MVP complete. Results of step 15 and the remaining owner tasks are in
+`02-DOCS/wiki/ftd/accounts-billing-nextjs.md`.

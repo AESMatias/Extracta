@@ -2,18 +2,18 @@ import csv
 import io
 import uuid
 from collections.abc import Callable
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 import pytest
-from flask import Flask
-from flask.testing import FlaskClient
-from pydantic import SecretStr
 
-from app import create_app
-from app.config import Settings
+from app.db import session_scope, utcnow
+from app.models import Document, User
+from app.schemas import DocumentSchema
 from app.web.queue import TaskStatus
-from app.web.routes import MAX_EXPORT_BODY_BYTES, MAX_FILES_PER_UPLOAD
+from app.web.routes import MAX_EXPORT_BODY_BYTES
+from tests.conftest import Harness
 
 MakePdf = Callable[[list[str]], Path]
 INVOICE_DOC = {
@@ -23,261 +23,304 @@ INVOICE_DOC = {
 }
 
 
-class FakeQueue:
-    def __init__(self) -> None:
-        self.enqueued: list[tuple[Path, str, bool]] = []
-        self.statuses: dict[str, TaskStatus] = {}
-
-    def enqueue(self, file_path: Path, filename: str, save_to_db: bool) -> str:
-        self.enqueued.append((file_path, filename, save_to_db))
-        task_id = str(uuid.uuid4())
-        self.statuses[task_id] = TaskStatus(status="pending")
-        return task_id
-
-    def status(self, task_id: str) -> TaskStatus:
-        return self.statuses.get(task_id, TaskStatus(status="pending"))
+def paid() -> dict[str, Any]:
+    return {"plan": "starter", "plan_expires_at": utcnow() + timedelta(days=30)}
 
 
-class MemoryOwnership:
-    def __init__(self) -> None:
-        self.owned: dict[str, set[str]] = {}
-
-    def add(self, owner: str, task_ids: list[str]) -> None:
-        self.owned.setdefault(owner, set()).update(task_ids)
-
-    def owns(self, owner: str, task_id: str) -> bool:
-        return task_id in self.owned.get(owner, set())
-
-
-@pytest.fixture
-def queue() -> FakeQueue:
-    return FakeQueue()
-
-
-@pytest.fixture
-def app(tmp_path: Path, queue: FakeQueue) -> Flask:
-    settings = Settings(
-        _env_file=None,  # type: ignore[call-arg]
-        gemini_api_key=SecretStr("test"),
-        database_url=SecretStr("postgresql+psycopg://u:p@h:5432/d"),
-        secret_key=SecretStr("k" * 32),
-        upload_dir=tmp_path / "uploads",
-        max_upload_mb=1,
-    )
-    return create_app(settings, task_queue=queue, ownership=MemoryOwnership())
-
-
-@pytest.fixture
-def client(app: Flask) -> FlaskClient:
-    return app.test_client()
-
-
-def pdf_file(make_pdf: MakePdf, name: str) -> tuple[io.BytesIO, str]:
+def pdf(make_pdf: MakePdf, name: str) -> tuple[io.BytesIO, str]:
     return io.BytesIO(make_pdf([f"Invoice text for {name} with enough characters."]).read_bytes()), name
 
 
-def upload(client: FlaskClient, files: list[tuple[io.BytesIO, str]], **form: str) -> Any:
-    return client.post("/upload", data={"files": files, **form}, content_type="multipart/form-data")
+def upload(client: Any, files: list[tuple[io.BytesIO, str]], **query: str) -> Any:
+    qs = "&".join(f"{k}={v}" for k, v in query.items())
+    return client.post(f"/api/upload?{qs}", data={"files": files}, content_type="multipart/form-data")
 
 
-# --------------------------------------------------------------------------- upload
+# --------------------------------------------------------------------------- upload: accounts and plans
 
 
-def test_upload_enqueues_one_task_per_pdf(client: FlaskClient, queue: FakeQueue, make_pdf: MakePdf) -> None:
-    response = upload(client, [pdf_file(make_pdf, "a.pdf"), pdf_file(make_pdf, "Factura N° 2.pdf")], save_to_db="true")
+def test_upload_needs_an_account(harness: Harness, make_pdf: MakePdf) -> None:
+    response = upload(harness.client(), [pdf(make_pdf, "a.pdf")])
+
+    assert response.status_code == 401
+    assert harness.queue.enqueued == []
+
+
+def test_free_user_uploads_a_pdf(harness: Harness, make_pdf: MakePdf) -> None:
+    client = harness.signed_up()
+
+    response = upload(client, [pdf(make_pdf, "Factura N° 2.pdf")])
 
     assert response.status_code == 202
     body = response.get_json()
-    assert body["save_to_db"] is True
-    assert [t["filename"] for t in body["tasks"]] == ["a.pdf", "Factura N° 2.pdf"]
-    assert body["rejected"] == []
-    assert [(name, save) for _, name, save in queue.enqueued] == [("a.pdf", True), ("Factura N° 2.pdf", True)]
-    assert all(path.exists() for path, _, _ in queue.enqueued)  # the worker will find the files
+    assert [t["filename"] for t in body["tasks"]] == ["Factura N° 2.pdf"]
+    assert body["usage"] == {"used": 1, "limit": 2}
+    [job] = harness.queue.enqueued
+    assert job["save_to_db"] is False
+    assert job["path"].exists()  # the worker will find the file
+    with session_scope() as db:
+        assert job["user_id"] == str(db.query(User).one().id)
 
 
-def test_ephemeral_is_the_default_mode(client: FlaskClient, queue: FakeQueue, make_pdf: MakePdf) -> None:
-    response = upload(client, [pdf_file(make_pdf, "a.pdf")])
+def test_free_plan_allows_two_files_per_upload(harness: Harness, make_pdf: MakePdf) -> None:
+    response = upload(harness.signed_up(), [pdf(make_pdf, f"{i}.pdf") for i in range(3)])
 
-    assert response.get_json()["save_to_db"] is False
-    assert queue.enqueued[0][2] is False
+    assert response.status_code == 400
+    assert "2 files per upload" in response.get_json()["error"]
+    assert response.get_json()["upgrade"] is True
 
 
-def test_bad_files_are_rejected_without_blocking_the_others(
-    client: FlaskClient, queue: FakeQueue, make_pdf: MakePdf
-) -> None:
-    fake_pdf = (io.BytesIO(b"\x89PNG not a pdf"), "photo.pdf")
-    too_big = (io.BytesIO(b"%PDF-1.4\n" + b"0" * (2 * 1024 * 1024)), "huge.pdf")
+def test_free_plan_allows_two_pdfs_per_24_hours(harness: Harness, make_pdf: MakePdf) -> None:
+    client = harness.signed_up()
+    assert upload(client, [pdf(make_pdf, "a.pdf"), pdf(make_pdf, "b.pdf")]).status_code == 202
 
-    response = upload(client, [pdf_file(make_pdf, "ok.pdf"), fake_pdf, too_big])
+    response = upload(client, [pdf(make_pdf, "c.pdf")])
 
+    assert response.status_code == 429
     body = response.get_json()
-    assert response.status_code == 202
+    assert "limit of 2 PDFs in 24 hours" in body["error"]
+    assert body["next_slot_at"] is not None
+    assert len(harness.queue.enqueued) == 2
+
+
+def test_files_beyond_the_remaining_quota_are_rejected(harness: Harness, make_pdf: MakePdf) -> None:
+    client = harness.signed_up(**paid(), daily_limit_override=1)
+
+    body = upload(client, [pdf(make_pdf, "a.pdf"), pdf(make_pdf, "b.pdf")]).get_json()
+
+    assert [t["filename"] for t in body["tasks"]] == ["a.pdf"]
+    assert body["rejected"] == [{"filename": "b.pdf", "error": "Daily limit reached"}]
+
+
+def test_saving_to_the_database_is_a_paid_privilege(harness: Harness, make_pdf: MakePdf) -> None:
+    free = upload(harness.signed_up(), [pdf(make_pdf, "a.pdf")], save_to_db="true")
+    paid_user = upload(harness.signed_up("bob@example.com", **paid()), [pdf(make_pdf, "a.pdf")], save_to_db="true")
+
+    assert free.status_code == 403
+    assert free.get_json()["upgrade"] is True
+    assert paid_user.status_code == 202
+    assert harness.queue.enqueued[-1]["save_to_db"] is True
+
+
+def test_expired_pass_goes_back_to_free_limits(harness: Harness, make_pdf: MakePdf) -> None:
+    client = harness.signed_up(plan="pro", plan_expires_at=utcnow() - timedelta(minutes=1))
+
+    response = upload(client, [pdf(make_pdf, "a.pdf")], save_to_db="true")
+
+    assert response.status_code == 403
+
+
+def test_pending_accounts_cannot_upload(harness: Harness, make_pdf: MakePdf) -> None:
+    response = upload(harness.signed_up(status="pending"), [pdf(make_pdf, "a.pdf")])
+
+    assert response.status_code == 403
+    assert "waiting for approval" in response.get_json()["error"]
+
+
+def test_one_upload_at_a_time_per_account(harness: Harness, make_pdf: MakePdf) -> None:
+    client = harness.signed_up()
+    with session_scope() as db:
+        user_id = db.query(User).one().id
+    harness.redis.set(f"upload-lock:{user_id}", "1")  # another upload is running
+
+    response = upload(client, [pdf(make_pdf, "a.pdf")])
+
+    assert response.status_code == 409
+
+
+def test_bad_files_are_rejected_without_blocking_the_others(harness: Harness, make_pdf: MakePdf) -> None:
+    client = harness.signed_up(**paid())  # Starter: 20 MB per file
+    too_big = (io.BytesIO(b"%PDF-1.4\n" + b"0" * (21 * 1024 * 1024)), "huge.pdf")
+
+    body = upload(client, [pdf(make_pdf, "ok.pdf"), (io.BytesIO(b"\x89PNG"), "photo.pdf"), too_big]).get_json()
+
     assert [t["filename"] for t in body["tasks"]] == ["ok.pdf"]
     assert {r["filename"]: r["error"] for r in body["rejected"]} == {
         "photo.pdf": "file is not a PDF",
-        "huge.pdf": "file is larger than 1 MB",
+        "huge.pdf": "file is larger than 20 MB",
     }
-    assert len(queue.enqueued) == 1
+    assert body["usage"]["used"] == 1  # rejected files do not count against the quota
 
 
-def test_upload_with_only_bad_files_is_a_400(client: FlaskClient) -> None:
-    response = upload(client, [(io.BytesIO(b"hello"), "notes.pdf")])
-
-    assert response.status_code == 400
-    assert response.get_json()["tasks"] == []
-
-
-def test_upload_without_files_is_a_400(client: FlaskClient) -> None:
-    response = client.post("/upload", data={}, content_type="multipart/form-data")
-
-    assert response.status_code == 400
-    assert "files" in response.get_json()["error"]
-
-
-def test_too_many_files_is_a_400(client: FlaskClient, make_pdf: MakePdf) -> None:
-    files = [pdf_file(make_pdf, f"{i}.pdf") for i in range(MAX_FILES_PER_UPLOAD + 1)]
-
-    response = upload(client, files)
+def test_upload_without_files_is_a_400(harness: Harness) -> None:
+    response = harness.signed_up().post("/api/upload", data={}, content_type="multipart/form-data")
 
     assert response.status_code == 400
 
 
-# --------------------------------------------------------------------------- task status + ownership
+# --------------------------------------------------------------------------- task status and ownership
 
 
-def test_owner_can_read_the_status_of_its_tasks(client: FlaskClient, queue: FakeQueue, make_pdf: MakePdf) -> None:
-    task_id = upload(client, [pdf_file(make_pdf, "a.pdf")]).get_json()["tasks"][0]["task_id"]
-    queue.statuses[task_id] = TaskStatus(status="completed", result={"document": INVOICE_DOC})
+def uploaded_task(client: Any, make_pdf: MakePdf) -> str:
+    task_id: str = upload(client, [pdf(make_pdf, "a.pdf")]).get_json()["tasks"][0]["task_id"]
+    return task_id
 
-    response = client.get(f"/tasks/{task_id}")
 
-    assert response.status_code == 200
+def test_owner_reads_its_task(harness: Harness, make_pdf: MakePdf) -> None:
+    client = harness.signed_up()
+    task_id = uploaded_task(client, make_pdf)
+    harness.queue.statuses[task_id] = TaskStatus(status="completed", result={"document": INVOICE_DOC})
+
+    response = client.get(f"/api/tasks/{task_id}")
+
     assert response.get_json() == {"task_id": task_id, "status": "completed", "result": {"document": INVOICE_DOC}}
 
 
-def test_failed_task_returns_a_readable_error(client: FlaskClient, queue: FakeQueue, make_pdf: MakePdf) -> None:
-    task_id = upload(client, [pdf_file(make_pdf, "a.pdf")]).get_json()["tasks"][0]["task_id"]
-    queue.statuses[task_id] = TaskStatus(status="failed", error="This PDF looks scanned.")
+def test_other_accounts_cannot_read_a_task(harness: Harness, make_pdf: MakePdf) -> None:
+    task_id = uploaded_task(harness.signed_up(), make_pdf)
+    stranger = harness.signed_up("eve@example.com")
 
-    body = client.get(f"/tasks/{task_id}").get_json()
-
-    assert body["status"] == "failed"
-    assert body["error"] == "This PDF looks scanned."
-
-
-def test_another_browser_cannot_read_someone_elses_task(app: Flask, make_pdf: MakePdf) -> None:
-    owner, stranger = app.test_client(), app.test_client()
-    task_id = upload(owner, [pdf_file(make_pdf, "a.pdf")]).get_json()["tasks"][0]["task_id"]
-
-    assert owner.get(f"/tasks/{task_id}").status_code == 200
-    assert stranger.get(f"/tasks/{task_id}").status_code == 404  # 404, not 403: do not confirm it exists
+    assert stranger.get(f"/api/tasks/{task_id}").status_code == 404
+    assert harness.client().get(f"/api/tasks/{task_id}").status_code == 401
+    assert stranger.get("/api/tasks/not-a-uuid").status_code == 404
 
 
-def test_unknown_or_malformed_task_ids_are_404(client: FlaskClient) -> None:
-    assert client.get(f"/tasks/{uuid.uuid4()}").status_code == 404
-    assert client.get("/tasks/not-a-uuid").status_code == 404
+def test_batch_status_only_reveals_own_tasks(harness: Harness, make_pdf: MakePdf) -> None:
+    client = harness.signed_up()
+    mine = uploaded_task(client, make_pdf)
+    foreign = uploaded_task(harness.signed_up("eve@example.com"), make_pdf)
+    harness.queue.statuses[mine] = TaskStatus(status="failed", error="This PDF looks scanned.")
+
+    tasks = client.post("/api/tasks/status", json={"task_ids": [mine, foreign, "junk"]}).get_json()["tasks"]
+
+    assert tasks == [
+        {"task_id": mine, "status": "failed", "error": "This PDF looks scanned."},
+        {"task_id": foreign, "status": "not_found"},
+        {"task_id": "junk", "status": "not_found"},
+    ]
 
 
-def test_session_cookie_is_protected(client: FlaskClient, make_pdf: MakePdf) -> None:
-    response = upload(client, [pdf_file(make_pdf, "a.pdf")])
-
-    cookie = response.headers["Set-Cookie"]
-    assert "HttpOnly" in cookie  # not readable from JavaScript
-    assert "SameSite=Lax" in cookie  # not sent on cross-site POSTs (CSRF)
+@pytest.mark.parametrize("payload", [{}, {"task_ids": []}, {"task_ids": ["x"] * 101}, {"task_ids": "x"}])
+def test_batch_status_validates_its_input(harness: Harness, payload: dict[str, Any]) -> None:
+    assert harness.signed_up().post("/api/tasks/status", json=payload).status_code == 400
 
 
-# --------------------------------------------------------------------------- CSV export
+# --------------------------------------------------------------------------- saved documents
+
+
+def save_document(email: str) -> uuid.UUID:
+    doc_id = uuid.uuid4()
+    with session_scope() as db:
+        user = db.query(User).filter_by(email=email).one()
+        extraction = DocumentSchema.model_validate(INVOICE_DOC)
+        db.add(
+            Document.from_extraction(
+                task_id=doc_id,
+                filename="f.pdf",
+                extraction=extraction,
+                llm_provider="x",
+                llm_model="y",
+                user_id=user.id,
+            )
+        )
+    return doc_id
+
+
+def test_users_list_and_delete_only_their_saved_documents(harness: Harness) -> None:
+    ana, eve = harness.signed_up(), harness.signed_up("eve@example.com")
+    doc_id = save_document("ana@example.com")
+
+    [listed] = ana.get("/api/documents").get_json()["documents"]
+    assert listed["id"] == str(doc_id)
+    assert listed["document"]["commercial"]["total_amount"] == 119000
+    assert eve.get("/api/documents").get_json()["documents"] == []
+    assert eve.delete(f"/api/documents/{doc_id}").status_code == 404
+    assert ana.delete(f"/api/documents/{doc_id}").status_code == 200
+    assert ana.get("/api/documents").get_json()["documents"] == []
+
+
+# --------------------------------------------------------------------------- export
 
 
 def rows_of(response: Any) -> list[dict[str, str]]:
-    return list(csv.DictReader(io.StringIO(response.get_data(as_text=True).removeprefix("\ufeff"))))
+    return list(csv.DictReader(io.StringIO(response.get_data(as_text=True).removeprefix("﻿"))))
 
 
-def test_individual_csv_download(client: FlaskClient) -> None:
-    response = client.post("/export/csv/individual", json={"filename": "Factura N° 2.pdf", "document": INVOICE_DOC})
+def test_export_needs_an_account(harness: Harness) -> None:
+    response = harness.client().post("/api/export/csv/individual", json={"filename": "a.pdf", "document": INVOICE_DOC})
+
+    assert response.status_code == 401
+
+
+def test_individual_csv_download(harness: Harness) -> None:
+    response = harness.signed_up().post(
+        "/api/export/csv/individual", json={"filename": "Factura N° 2.pdf", "document": INVOICE_DOC}
+    )
 
     assert response.status_code == 200
     assert response.mimetype == "text/csv"
     disposition = response.headers["Content-Disposition"]
-    assert 'filename="Factura_N_2.csv"' in disposition  # ASCII fallback
-    assert "filename*=UTF-8''Factura%20N%C2%B0%202.csv" in disposition  # exact name for modern browsers
-    [row] = rows_of(response)
-    assert row["issuer.name"] == "Acme SpA"
-
-
-def test_unified_csv_download(client: FlaskClient) -> None:
-    items = [{"filename": "a.pdf", "document": INVOICE_DOC}, {"filename": "b.pdf", "document": INVOICE_DOC}]
-
-    response = client.post("/export/csv/unified", json={"items": items})
-
-    assert response.status_code == 200
-    assert "documents-" in response.headers["Content-Disposition"]
-    assert [r["filename"] for r in rows_of(response)] == ["a.pdf", "b.pdf"]
-
-
-def test_export_rejects_data_that_breaks_the_schema(client: FlaskClient) -> None:
-    bad = {"filename": "a.pdf", "document": {"document_type": "invoice", "summary": "SECRET no section"}}
-
-    response = client.post("/export/csv/individual", json=bad)
-
-    assert response.status_code == 400
-    body = response.get_json()
-    assert body["error"] == "Invalid document data."
-    assert "SECRET" not in response.get_data(as_text=True)  # never echo the submitted content
-
-
-def test_export_needs_a_json_body(client: FlaskClient) -> None:
-    response = client.post("/export/csv/unified", data="not json", content_type="text/plain")
-
-    assert response.status_code == 400
-
-
-def test_export_does_not_need_a_session(app: Flask) -> None:
-    # Exports only transform the JSON the browser sends; they never read server data.
-    fresh = app.test_client()
-
-    response = fresh.post("/export/csv/individual", json={"filename": "a.pdf", "document": INVOICE_DOC})
-
-    assert response.status_code == 200
+    assert 'filename="Factura_N_2.csv"' in disposition
+    assert "filename*=UTF-8''Factura%20N%C2%B0%202.csv" in disposition
+    assert rows_of(response)[0]["issuer.name"] == "Acme SpA"
 
 
 @pytest.mark.parametrize(
-    ("fmt", "mimetype", "extension"),
+    ("fmt", "mimetype"),
     [
-        ("csv", "text/csv", ".csv"),
-        ("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xlsx"),
-        ("json", "application/json", ".json"),
+        ("csv", "text/csv"),
+        ("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+        ("json", "application/json"),
     ],
 )
-def test_every_format_downloads_with_its_type_and_extension(
-    client: FlaskClient, fmt: str, mimetype: str, extension: str
-) -> None:
-    requests = [
-        (f"/export/{fmt}/individual", {"filename": "a.pdf", "document": INVOICE_DOC}),
-        (f"/export/{fmt}/unified", {"items": [{"filename": "a.pdf", "document": INVOICE_DOC}]}),
-    ]
-    for url, payload in requests:
+def test_every_format_downloads(harness: Harness, fmt: str, mimetype: str) -> None:
+    client = harness.signed_up()
+    for url, payload in [
+        (f"/api/export/{fmt}/individual", {"filename": "a.pdf", "document": INVOICE_DOC}),
+        (f"/api/export/{fmt}/unified", {"items": [{"filename": "a.pdf", "document": INVOICE_DOC}]}),
+    ]:
         response = client.post(url, json=payload)
-        assert response.get_data()  # read the (possibly streamed) body before the next request
+        assert response.get_data()
         assert response.status_code == 200
         assert response.mimetype == mimetype
-        assert f'{extension}"' in response.headers["Content-Disposition"]
+        assert f'.{fmt}"' in response.headers["Content-Disposition"]
 
 
-def test_unknown_export_format_is_404(client: FlaskClient) -> None:
-    response = client.post("/export/pdf/individual", json={"filename": "a.pdf", "document": INVOICE_DOC})
+def test_export_rejects_bad_input(harness: Harness) -> None:
+    client = harness.signed_up()
+    bad = {"filename": "a.pdf", "document": {"document_type": "invoice", "summary": "SECRET no section"}}
+
+    invalid = client.post("/api/export/csv/individual", json=bad)
+    unknown = client.post("/api/export/pdf/individual", json={"filename": "a.pdf", "document": INVOICE_DOC})
+    not_json = client.post("/api/export/csv/unified", data="x", content_type="text/plain")
+    huge = client.post(
+        "/api/export/csv/unified",
+        data=b'{"items": [' + b" " * (MAX_EXPORT_BODY_BYTES + 1) + b"]}",
+        content_type="application/json",
+    )
+
+    assert invalid.status_code == 400
+    assert "SECRET" not in invalid.get_data(as_text=True)  # never echo submitted content
+    assert unknown.status_code == 404
+    assert not_json.status_code == 400
+    assert huge.status_code == 413
+
+
+# --------------------------------------------------------------------------- cross-cutting
+
+
+def test_cross_site_requests_are_refused(harness: Harness) -> None:
+    client = harness.signed_up()
+    body = {"filename": "a.pdf", "document": INVOICE_DOC}
+
+    evil = client.post("/api/export/json/individual", json=body, headers={"Origin": "https://evil.example"})
+    ours = client.post("/api/export/json/individual", json=body, headers={"Origin": "http://localhost:8080"})
+
+    assert evil.status_code == 403
+    assert ours.status_code == 200
+
+
+def test_api_responses_are_hardened(harness: Harness) -> None:
+    response = harness.client().get("/api/health")
+
+    assert response.get_json() == {"status": "ok"}
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_unknown_api_routes_answer_json(harness: Harness) -> None:
+    response = harness.client().get("/api/nope")
 
     assert response.status_code == 404
-
-
-# --------------------------------------------------------------------------- review fixes
-
-
-def test_export_bodies_are_capped_well_below_the_upload_limit(client: FlaskClient) -> None:
-    # The upload limit allows ~2.5 GB for 50 PDFs; a JSON body that large would be parsed into the
-    # web process memory (384 MB). Export requests get their own, much smaller cap.
-    huge = b'{"items": [' + b" " * (MAX_EXPORT_BODY_BYTES + 1) + b"]}"
-
-    response = client.post("/export/csv/unified", data=huge, content_type="application/json")
-
-    assert response.status_code == 413
+    assert "error" in response.get_json()

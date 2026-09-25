@@ -1,0 +1,97 @@
+[
+  {
+    "id": "free",
+    "name": "Free",
+    "price_usd": "0.00",
+    "duration_days": 0,
+    "tagline": "Try it with a couple of documents a day.",
+    "highlight": false,
+    "privileges": {
+      "docs_per_24h": 2,
+      "max_file_mb": 10,
+      "max_files_per_upload": 2,
+      "can_save_to_db": false,
+      "export_formats": [
+        "csv",
+        "xlsx",
+        "json"
+      ]
+    }
+  },
+  {
+    "id": "starter",
+    "name": "Starter",
+    "price_usd": "1.99",
+    "duration_days": 30,
+    "tagline": "For freelancers and small monthly batches.",
+    "highlight": false,
+    "privileges": {
+      "docs_per_24h": 25,
+      "max_file_mb": 20,
+      "max_files_per_upload": 10,
+      "can_save_to_db": true,
+      "export_formats": [
+        "csv",
+        "xlsx",
+        "json"
+      ]
+    }
+  },
+  {
+    "id": "pro",
+    "name": "Pro",
+    "price_usd": "4.99",
+    "duration_days": 30,
+    "tagline": "For teams processing documents every day.",
+    "highlight": true,
+    "privileges": {
+      "docs_per_24h": 100,
+      "max_file_mb": 50,
+      "max_files_per_upload": 25,
+      "can_save_to_db": true,
+      "export_formats": [
+        "csv",
+        "xlsx",
+        "json"
+      ]
+    }
+  },
+  {
+    "id": "business",
+    "name": "Business",
+    "price_usd": "9.99",
+    "duration_days": 30,
+    "tagline": "High volume for growing businesses.",
+    "highlight": false,
+    "privileges": {
+      "docs_per_24h": 250,
+      "max_file_mb": 50,
+      "max_files_per_upload": 50,
+      "can_save_to_db": true,
+      "export_formats": [
+        "csv",
+        "xlsx",
+        "json"
+      ]
+    }
+  },
+  {
+    "id": "ultra",
+    "name": "Ultra",
+    "price_usd": "19.99",
+    "duration_days": 30,
+    "tagline": "Maximum volume for heavy workloads.",
+    "highlight": false,
+    "privileges": {
+      "docs_per_24h": 600,
+      "max_file_mb": 50,
+      "max_files_per_upload": 50,
+      "can_save_to_db": true,
+      "export_formats": [
+        "csv",
+        "xlsx",
+        "json"
+      ]
+    }
+  }
+]

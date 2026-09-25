@@ -1,5 +1,7 @@
-# Secrets
+# Secrets: .env and any copy of it (.env.local, .env.backup...), but not the documented sample
 .env
+.env.*
+!.env.sample
 01-TOOLS/*/.env
 
 # Python

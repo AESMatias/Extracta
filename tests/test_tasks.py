@@ -91,9 +91,9 @@ def upload(settings: Settings, make_pdf: MakePdf, pages: list[str] | None = None
     return save_stream(io.BytesIO(data), "factura.pdf", upload_dir=settings.upload_dir, max_bytes=10**7).path
 
 
-def run(path: Path, save_to_db: bool) -> Any:
+def run(path: Path, save_to_db: bool, user_id: str | None = None) -> Any:
     # apply() runs the task in-process (no broker, no worker), including its retries.
-    return tasks.process_document.apply(args=[str(path), "factura.pdf", save_to_db], task_id=str(uuid.uuid4()))
+    return tasks.process_document.apply(args=[str(path), "factura.pdf", save_to_db, user_id], task_id=str(uuid.uuid4()))
 
 
 def test_ephemeral_mode_returns_data_without_touching_the_database(
@@ -211,3 +211,73 @@ def test_celery_is_configured_for_a_small_server(settings: Settings) -> None:
     assert conf["task_track_started"] is True  # lets the UI show "Processing"
     assert conf["task_acks_late"] is True
     assert conf["accept_content"] == ["json"]
+
+
+def test_persistent_rows_belong_to_the_uploader(env: Any, settings: Settings, make_pdf: MakePdf) -> None:
+    session = env(FakeExtractor(VALID_DOC))
+    owner = uuid.uuid4()
+
+    run(upload(settings, make_pdf), save_to_db=True, user_id=str(owner))
+
+    [row] = session.merged
+    assert row.user_id == owner
+
+
+def test_a_file_removed_by_the_sweep_fails_clearly(env: Any, settings: Settings, make_pdf: MakePdf) -> None:
+    extractor = FakeExtractor(VALID_DOC)
+    env(extractor)
+    path = upload(settings, make_pdf)
+    path.unlink()  # the orphan sweep got to it first
+
+    result = run(path, save_to_db=False)
+
+    assert result.failed()
+    assert type(result.result).__name__ == "UploadExpiredError"
+    assert extractor.calls == 0
+
+
+def test_sweep_task_uses_the_configured_age(env: Any, settings: Settings, make_pdf: MakePdf) -> None:
+    import os
+
+    env(FakeExtractor(VALID_DOC))
+    old, fresh = upload(settings, make_pdf), upload(settings, make_pdf)
+    os.utime(old, (1_000, 1_000))
+
+    removed = tasks.sweep_orphan_uploads.apply().get()
+
+    assert removed == 1
+    assert not old.exists() and fresh.exists()
+
+
+def test_beat_runs_the_sweep_every_30_minutes(settings: Settings) -> None:
+    schedule = celery_module.celery_config(settings)["beat_schedule"]
+
+    assert schedule["sweep-orphan-uploads"] == {"task": "sweep_orphan_uploads", "schedule": 1800}
+
+
+def test_beat_reconciles_subscriptions_every_6_hours(settings: Settings) -> None:
+    schedule = celery_module.celery_config(settings)["beat_schedule"]
+
+    assert schedule["reconcile-subscriptions"] == {"task": "reconcile_subscriptions", "schedule": 6 * 3600}
+
+
+def test_reconcile_task_without_payments_configured(env: Any) -> None:
+    env(FakeExtractor(VALID_DOC))
+
+    assert tasks.reconcile_subscriptions.apply().get() == 0
+
+
+def test_reconcile_task_uses_the_paypal_settings(env: Any, settings: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
+    env(FakeExtractor(VALID_DOC))
+    settings.paypal_client_id = "id"
+    settings.paypal_client_secret = SecretStr("secret")
+    seen: dict[str, Any] = {}
+
+    def fake_reconcile(db: object, client: Any, now: object) -> int:
+        seen.update(env=client.env, currency=client.currency)
+        return 3
+
+    monkeypatch.setattr(tasks.billing, "reconcile_subscriptions", fake_reconcile)
+
+    assert tasks.reconcile_subscriptions.apply().get() == 3
+    assert seen == {"env": "sandbox", "currency": "USD"}

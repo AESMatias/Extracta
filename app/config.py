@@ -42,7 +42,40 @@ class Settings(BaseSettings):
     session_cookie_secure: bool = False  # set to true in production (HTTPS only)
 
     upload_dir: Path = Path("/tmp_uploads")
-    max_upload_mb: int = Field(default=50, gt=0)
+    max_upload_mb: int = Field(default=50, gt=0)  # hard cap for every plan
+    # Files still on disk after this many hours were orphaned (e.g. a worker killed mid-task).
+    orphan_max_age_hours: int = Field(default=6, gt=0)
+
+    # Public URL of the site, as users type it. Used for the Google callback and to reject
+    # cross-site requests (Origin check).
+    public_base_url: str = "http://localhost:8080"
+    trusted_proxies: int = Field(default=1, ge=0)  # reverse proxies in front of Flask (Nginx)
+
+    # Accounts
+    require_manual_approval: bool = False  # true: new accounts wait in "pending" until approved
+    # Password for /admin. Admin is disabled while it is empty.
+    admin_password: SecretStr | None = Field(default=None, min_length=12)
+    google_client_id: str | None = None  # Google sign-in is enabled when both are set
+    google_client_secret: SecretStr | None = None
+
+    # PayPal checkout (30-day plan passes). Payments are enabled when both credentials are set.
+    paypal_client_id: str | None = None
+    paypal_client_secret: SecretStr | None = None
+    paypal_env: Literal["sandbox", "live"] = "sandbox"  # prices are in USD (app/plans.py)
+    # ID of the webhook registered in the PayPal app (renewals, cancellations, refunds). Without
+    # it the webhook endpoint refuses every event, because it cannot verify their signatures.
+    paypal_webhook_id: str | None = None
+
+    # Outgoing email: verification links, password resets, security notices. Any SMTP provider
+    # works. While SMTP_HOST is empty, emails are written to the web logs instead (local testing).
+    smtp_host: str | None = None
+    smtp_port: int = Field(default=587, gt=0, le=65535)
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_security: Literal["starttls", "ssl", "none"] = "starttls"
+    mail_from: str = "Extracta <no-reply@localhost>"
+    # true: uploading and paying need a verified email address (Google accounts are verified).
+    require_email_verification: bool = True
 
     @field_validator("database_url", mode="before")
     @classmethod
@@ -63,9 +96,30 @@ class Settings(BaseSettings):
             raise ValueError(f"{env_name} is required when LLM_PROVIDER={self.llm_provider}")
         return self
 
+    @field_validator("public_base_url")
+    @classmethod
+    def strip_trailing_slash(cls, value: str) -> str:
+        return value.rstrip("/")
+
     @property
     def max_upload_bytes(self) -> int:
         return self.max_upload_mb * 1024 * 1024
+
+    @property
+    def google_enabled(self) -> bool:
+        return bool(self.google_client_id and self.google_client_secret)
+
+    @property
+    def paypal_enabled(self) -> bool:
+        return bool(self.paypal_client_id and self.paypal_client_secret)
+
+    @property
+    def mail_enabled(self) -> bool:
+        return bool(self.smtp_host)
+
+    @property
+    def admin_enabled(self) -> bool:
+        return self.admin_password is not None
 
 
 @lru_cache

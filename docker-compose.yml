@@ -1,5 +1,13 @@
-# Target: a 2 GB RAM server. Memory limits sum to 1280M (constitution principle 13),
-# leaving headroom for the OS and Docker itself. The database lives in Supabase.
+# Target: a 2 GB RAM server. Memory limits sum to 1344M locally and 1472M in production (with
+# certbot), leaving headroom for the OS and Docker itself (constitution principle 13). The
+# database lives in Supabase.
+#
+#   browser ──> frontend (Nginx: static Next.js site + HTTPS) ──/api──> web (Flask) ──> redis <── worker
+#                    └── certificates <── certbot (production only: Let's Encrypt)
+#
+# Only the frontend publishes ports. Local: http://localhost:8080. Production: set SITE_DOMAIN,
+# LETSENCRYPT_EMAIL, COMPOSE_PROFILES=https, HTTP_PORT=80 and HTTPS_PORT=443 in .env
+# (see docs/DEPLOY.md).
 
 x-app: &app
   image: pdf-process-pipeline:latest
@@ -10,6 +18,33 @@ x-app: &app
   restart: unless-stopped
 
 services:
+  frontend:
+    build:
+      context: ./frontend
+    image: extracta-frontend:latest
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:-}  # empty = plain HTTP (local); a domain name = HTTPS
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+      - "${HTTPS_PORT:-8443}:443"
+    volumes:
+      - letsencrypt:/etc/letsencrypt:ro  # written by certbot, read by Nginx
+      - certbot_www:/var/www/certbot:ro  # Let's Encrypt validation files
+    init: true  # a tiny init process as PID 1 reaps the certificate watcher's children
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
   web:
     <<: *app
     # 2 processes x 4 threads: a slow or large upload occupies one thread, not a whole process,
@@ -18,22 +53,17 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+    # Apply database migrations first, then start the API server.
     command: >
-      gunicorn "app:create_app()"
-      --bind 0.0.0.0:8000
-      --workers 2
-      --worker-class gthread
-      --threads 4
-      --timeout 120
-    ports:
-      - "8000:8000"
+      sh -c "python -m app.migrate && exec gunicorn 'app:create_app()' --bind 0.0.0.0:8000 --workers 2 --worker-class gthread --threads 4 --timeout 120"
+    # Not published: the only way in is through Nginx (frontend service).
     healthcheck:
       # The slim image has no curl; the Python stdlib is enough.
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 30s  # migrations run first
     depends_on:
       redis:
         condition: service_healthy
@@ -45,8 +75,10 @@ services:
   worker:
     <<: *app
     pull_policy: never  # use the image built for web, never look for it on Docker Hub
+    # --beat: embedded scheduler for the periodic orphan-upload sweep (one worker only).
     command: >
       celery -A app.tasks:celery_app worker
+      --beat --schedule /tmp/celerybeat-schedule
       --loglevel=info
       --concurrency=1
       --prefetch-multiplier=1
@@ -58,6 +90,28 @@ services:
       resources:
         limits:
           memory: 768M
+
+  certbot:
+    # Production only: runs when .env has COMPOSE_PROFILES=https. Gets the Let's Encrypt
+    # certificate for SITE_DOMAIN and renews it; by running it you accept Let's Encrypt's terms.
+    build:
+      context: ./docker/certbot
+    image: extracta-certbot:latest
+    profiles: ["https"]
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:-}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-}
+    volumes:
+      - letsencrypt:/etc/letsencrypt  # certificates: keep this volume, Let's Encrypt has rate limits
+      - certbot_www:/var/www/certbot
+    depends_on:
+      frontend:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
 
   redis:
     image: redis:8-alpine
@@ -84,3 +138,5 @@ services:
 volumes:
   uploads:
   redis_data:
+  letsencrypt:
+  certbot_www:

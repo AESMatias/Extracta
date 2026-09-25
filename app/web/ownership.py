@@ -1,13 +1,10 @@
 """Which browser uploaded which tasks.
 
-There are no user accounts in the MVP, so each browser gets a random owner token in its signed
-session cookie. The task ids it uploaded are stored in Redis under that token, and a task's
-status is only served to its owner: knowing a task id alone is not enough to read its data.
+The task ids each account uploaded are stored in Redis under its user id, and a task's status is
+only served to its owner: knowing a task id alone is not enough to read its data.
 """
 
 from typing import Any, Protocol
-
-import redis
 
 
 class TaskOwnership(Protocol):
@@ -20,10 +17,6 @@ class RedisTaskOwnership:
     def __init__(self, client: Any, *, ttl_seconds: int) -> None:
         self._client = client
         self._ttl = ttl_seconds
-
-    @classmethod
-    def from_url(cls, url: str, *, ttl_seconds: int) -> "RedisTaskOwnership":
-        return cls(redis.Redis.from_url(url), ttl_seconds=ttl_seconds)  # connects lazily, on first use
 
     @staticmethod
     def _key(owner: str) -> str:

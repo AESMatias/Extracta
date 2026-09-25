@@ -16,6 +16,13 @@ ENV_VARS = (
     "RESULT_TTL_SECONDS",
     "SECRET_KEY",
     "SESSION_COOKIE_SECURE",
+    "ADMIN_PASSWORD",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "PAYPAL_CLIENT_ID",
+    "PAYPAL_CLIENT_SECRET",
+    "PUBLIC_BASE_URL",
+    "REQUIRE_MANUAL_APPROVAL",
     "UPLOAD_DIR",
     "MAX_UPLOAD_MB",
 )
@@ -166,3 +173,38 @@ def test_secret_key_must_be_long(valid_env: None, monkeypatch: pytest.MonkeyPatc
 
     with pytest.raises(ValidationError, match="secret_key"):
         load()
+
+
+def test_optional_integrations_are_disabled_by_default(valid_env: None) -> None:
+    settings = load()
+
+    assert settings.admin_enabled is False
+    assert settings.google_enabled is False
+    assert settings.paypal_enabled is False
+    assert settings.require_manual_approval is False  # new accounts are active by default
+    assert settings.paypal_env == "sandbox"
+
+
+def test_integrations_turn_on_with_their_credentials(valid_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ADMIN_PASSWORD", "a-long-admin-password")
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "id.apps.googleusercontent.com")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "google-secret")
+    monkeypatch.setenv("PAYPAL_CLIENT_ID", "paypal-id")
+    monkeypatch.setenv("PAYPAL_CLIENT_SECRET", "paypal-secret")
+
+    settings = load()
+
+    assert settings.admin_enabled and settings.google_enabled and settings.paypal_enabled
+
+
+def test_admin_password_must_be_long(valid_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ADMIN_PASSWORD", "short")
+
+    with pytest.raises(ValidationError, match="admin_password"):
+        load()
+
+
+def test_public_base_url_has_no_trailing_slash(valid_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://extracta.example.com/")
+
+    assert load().public_base_url == "https://extracta.example.com"

@@ -28,6 +28,7 @@ _USER_MESSAGES = {
     "UnreadablePdfError": "This PDF is damaged or password-protected and cannot be read.",
     "LLMTransientError": "The AI service is busy right now. Please upload the document again in a few minutes.",
     "LLMExtractionError": "The document could not be converted into structured data.",
+    "UploadExpiredError": "The file waited too long in the queue and was removed. Upload it again.",
 }
 DEFAULT_ERROR = "Unexpected error while processing the document."
 
@@ -53,15 +54,15 @@ def to_status(state: str, result: Any) -> TaskStatus:
 
 
 class TaskQueue(Protocol):
-    def enqueue(self, file_path: Path, filename: str, save_to_db: bool) -> str: ...
+    def enqueue(self, file_path: Path, filename: str, save_to_db: bool, user_id: str | None) -> str: ...
 
     def status(self, task_id: str) -> TaskStatus: ...
 
 
 class CeleryTaskQueue:
-    def enqueue(self, file_path: Path, filename: str, save_to_db: bool) -> str:
-        # Sent by name: the web process never imports the task code (pdfplumber, LLM SDKs, SQLAlchemy).
-        result = celery_app.send_task(PROCESS_DOCUMENT_TASK, args=[str(file_path), filename, save_to_db])
+    def enqueue(self, file_path: Path, filename: str, save_to_db: bool, user_id: str | None) -> str:
+        # Sent by name: the web process never imports the task code (pdfplumber, LLM SDKs).
+        result = celery_app.send_task(PROCESS_DOCUMENT_TASK, args=[str(file_path), filename, save_to_db, user_id])
         return str(result.id)
 
     def status(self, task_id: str) -> TaskStatus:

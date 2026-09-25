@@ -1,17 +1,18 @@
 """Database access: SQLAlchemy 2 engine and sessions for Supabase PostgreSQL.
 
-Used only in persistent mode (`save_to_db=True`); ephemeral processing never
-imports a session. Create the tables once with:
-
-    docker compose run --rm web python -m app.db
+The schema is managed by Alembic migrations (app/migrations, run with `python -m app.migrate`).
+Tests plug in an in-memory SQLite engine with `use_engine()`, so column types here stay portable:
+UTCDateTime keeps timestamps timezone-aware on every backend.
 """
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from functools import lru_cache
+from datetime import UTC, datetime
+from typing import Any
 
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import DateTime, Dialect, Engine, create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.types import TypeDecorator
 
 from app.config import get_settings
 
@@ -20,32 +21,70 @@ class Base(DeclarativeBase):
     """Parent class of every table model (see app/models.py)."""
 
 
+def utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+class UTCDateTime(TypeDecorator[datetime]):
+    """A timestamp that is always stored in UTC and always read back timezone-aware."""
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value: datetime | None, dialect: Dialect) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            raise ValueError("naive datetime: use timezone-aware UTC datetimes")
+        return value.astimezone(UTC)
+
+    def process_result_value(self, value: Any, dialect: Dialect) -> datetime | None:
+        if value is None:
+            return None
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)  # SQLite drops the tz
+
+
 def build_engine(url: str) -> Engine:
     return create_engine(
         url,
-        pool_size=2,  # small pool: 2 GB server and a single Celery worker
-        max_overflow=2,
+        pool_size=2,  # small pool: 2 GB server, few concurrent requests
+        max_overflow=3,
         pool_pre_ping=True,  # replace connections the Supabase pooler closed while idle
         pool_recycle=300,
         connect_args={"sslmode": "require", "connect_timeout": 10},
     )
 
 
-@lru_cache
+_engine: Engine | None = None
+_session_factory: sessionmaker[Session] | None = None
+
+
 def get_engine() -> Engine:
     # Built lazily on first use, so each gunicorn/Celery process gets its own connections.
-    return build_engine(get_settings().database_url.get_secret_value())
+    global _engine
+    if _engine is None:
+        _engine = build_engine(get_settings().database_url.get_secret_value())
+    return _engine
 
 
-@lru_cache
-def _session_factory() -> sessionmaker[Session]:
-    return sessionmaker(bind=get_engine(), expire_on_commit=False)
+def use_engine(engine: Engine | None) -> None:
+    """Replace the engine (tests use an in-memory SQLite database). None resets to the default."""
+    global _engine, _session_factory
+    _engine = engine
+    _session_factory = None
+
+
+def _sessions() -> sessionmaker[Session]:
+    global _session_factory
+    if _session_factory is None:
+        _session_factory = sessionmaker(bind=get_engine(), expire_on_commit=False)
+    return _session_factory
 
 
 @contextmanager
 def session_scope() -> Iterator[Session]:
     """Open a session that commits on success and rolls back on any error."""
-    session = _session_factory()()
+    session = _sessions()()
     try:
         yield session
         session.commit()
@@ -54,21 +93,3 @@ def session_scope() -> Iterator[Session]:
         raise
     finally:
         session.close()
-
-
-def init_db() -> None:
-    """Create missing tables and turn on Row Level Security (safe to run many times)."""
-    import app.models  # noqa: F401  # registers the models on Base.metadata
-
-    engine = get_engine()
-    Base.metadata.create_all(engine)
-    with engine.begin() as connection:
-        for table in Base.metadata.sorted_tables:
-            # RLS with no policies blocks Supabase's public REST API from reading the table.
-            # This app connects as the table owner, which RLS does not restrict.
-            connection.execute(text(f'ALTER TABLE "{table.name}" ENABLE ROW LEVEL SECURITY'))
-
-
-if __name__ == "__main__":  # pragma: no cover
-    init_db()
-    print("Database ready: tables created and Row Level Security enabled.")

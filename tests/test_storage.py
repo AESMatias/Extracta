@@ -11,6 +11,7 @@ from app.storage import (
     delete_file,
     display_name,
     save_stream,
+    sweep_orphans,
 )
 
 PDF_BYTES = b"%PDF-1.7\n" + b"x" * 1000 + b"\n%%EOF\n"
@@ -150,3 +151,26 @@ def test_delete_file_refuses_paths_outside_the_upload_dir(tmp_path: Path) -> Non
         delete_file(upload_dir / ".." / "important.txt", upload_dir=upload_dir)
 
     assert outside.exists()
+
+
+def test_sweep_removes_only_old_uploads_created_by_this_module(tmp_path: Path) -> None:
+    import os
+    import uuid as uuid_module
+
+    old_pdf = tmp_path / f"{uuid_module.uuid4()}.pdf"
+    old_part = tmp_path / f"{uuid_module.uuid4()}.pdf.part"
+    fresh = tmp_path / f"{uuid_module.uuid4()}.pdf"
+    foreign = tmp_path / "notes.pdf"  # not a name save_stream() creates: never touched
+    for path in (old_pdf, old_part, fresh, foreign):
+        path.write_bytes(PDF_BYTES)
+    for path in (old_pdf, old_part, foreign):
+        os.utime(path, (1_000, 1_000))
+
+    removed = sweep_orphans(tmp_path, max_age_seconds=3600, now=1_000 + 7200)
+
+    assert sorted(removed) == sorted([old_pdf, old_part])
+    assert fresh.exists() and foreign.exists()
+
+
+def test_sweep_of_a_missing_directory_does_nothing(tmp_path: Path) -> None:
+    assert sweep_orphans(tmp_path / "missing", max_age_seconds=1) == []

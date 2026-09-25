@@ -1,0 +1,17 @@
+# Weekly pull requests with dependency and base-image updates. CI tests each one before merging.
+version: 2
+updates:
+  - package-ecosystem: pip # reads pyproject.toml and poetry.lock
+    directory: /
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+  - package-ecosystem: docker
+    directories: [/docker, /frontend]
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: monthly }
