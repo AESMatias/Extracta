@@ -5,8 +5,9 @@ This guide takes an empty Linux server (VPS) to a running site with HTTPS. It as
 unless it says otherwise.
 
 ```
-Internet ──443/80──> Caddy (frontend container: website + HTTPS) ──/api──> Flask (web) ──> Redis <── Celery (worker)
-                                                                         └──> Supabase (PostgreSQL)   └──> Gemini
+Internet ──443/80──> Nginx (frontend container: website + HTTPS) ──/api──> Flask (web) ──> Redis <── Celery (worker)
+                         ▲                                              └──> Supabase (PostgreSQL)   └──> Gemini
+                         └── certificates ── certbot (Let's Encrypt, renews them by itself)
 ```
 
 Only ports 80 and 443 are open to the world. Flask, Redis and the worker are reachable only
@@ -39,7 +40,7 @@ Wait until it resolves (usually minutes). From your own computer:
 dig +short extracta.example.com
 ```
 
-It must print the server's IP. Caddy cannot get a certificate until it does.
+It must print the server's IP. Let's Encrypt cannot issue the certificate until it does.
 
 ## 2. Prepare the server
 
@@ -56,11 +57,10 @@ apt update && apt upgrade -y
 ufw allow OpenSSH
 ufw allow 80/tcp
 ufw allow 443/tcp
-ufw allow 443/udp
 ufw --force enable
 ```
 
-**Swap (2 GB)**: required on a 2 GB server. Building the images (Next.js and Caddy) needs more
+**Swap (2 GB)**: required on a 2 GB server. Building the images (Next.js in particular) needs more
 memory than the running app, and swap prevents the build from being killed.
 
 ```bash
@@ -103,7 +103,9 @@ Every variable is explained inside the file. For production, change at least the
 | `SECRET_KEY` | a new random value: `python3 -c "import secrets; print(secrets.token_urlsafe(48))"` |
 | `ADMIN_PASSWORD` | a long password only you know (at least 12 characters) |
 | `PUBLIC_BASE_URL` | `https://extracta.example.com` |
-| `SITE_ADDRESS` | `extracta.example.com` |
+| `SITE_DOMAIN` | `extracta.example.com` (turns on HTTPS in Nginx) |
+| `LETSENCRYPT_EMAIL` | your email: Let's Encrypt warns you there if a renewal ever fails |
+| `COMPOSE_PROFILES` | `https` (also starts the certbot service) |
 | `HTTP_PORT` / `HTTPS_PORT` | `80` / `443` |
 | `SESSION_COOKIE_SECURE` | `true` |
 | `REQUIRE_MANUAL_APPROVAL` | `true` if you want to approve every new account in /admin |
@@ -119,7 +121,19 @@ docker compose up -d
 ```
 
 On start, the `web` container applies the database migrations automatically (Alembic), then
-starts the API. Caddy requests the HTTPS certificate on the first visit to the domain.
+starts the API.
+
+**HTTPS, step by step** (automatic, about a minute):
+
+1. Nginx starts with a temporary self-signed certificate (the browser would warn for that minute).
+2. certbot asks Let's Encrypt for the real certificate; Let's Encrypt checks the domain by
+   downloading a file that Nginx serves on port 80.
+3. Nginx notices the new certificate within 60 seconds and reloads without dropping connections.
+4. certbot checks twice a day and renews 30 days before expiry (certificates last 90 days).
+
+By starting the certbot service you accept the Let's Encrypt Subscriber Agreement.
+Follow it with `docker compose logs -f certbot frontend`: you should see
+`Successfully received certificate` and then `new certificate installed, Nginx reloaded`.
 
 ## 6. Check that everything works
 
@@ -191,7 +205,8 @@ without the other values the app cannot start.
 
 | Symptom | Cause and fix |
 |---|---|
-| The site does not load over HTTPS | DNS does not point to the server yet, or ports 80/443 are closed. Check `dig`, `ufw status`, and `docker compose logs frontend`. |
+| The site does not load over HTTPS | DNS does not point to the server yet, or ports 80/443 are closed. Check `dig`, `ufw status`, and `docker compose logs certbot frontend`. |
+| The browser warns about the certificate for more than a few minutes | certbot has not obtained the real certificate yet: `docker compose logs certbot`. Check that `.env` has `COMPOSE_PROFILES=https` and `LETSENCRYPT_EMAIL`, that DNS points here and port 80 is open. It retries every 30 minutes. |
 | `Cross-site request refused` (403) | `PUBLIC_BASE_URL` does not match the address in the browser (http vs https, www vs no www). |
 | The build stops with `Killed` / exit 137 | Not enough memory: check that swap is on (`swapon --show`). |
 | Google says `redirect_uri_mismatch` | The redirect URI in Google Cloud must be exactly `PUBLIC_BASE_URL` + `/api/auth/google/callback`. |

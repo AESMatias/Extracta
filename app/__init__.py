@@ -52,7 +52,7 @@ def create_app(
         MAX_CONTENT_LENGTH=MAX_FILES_PER_UPLOAD * settings.max_upload_bytes + 1024 * 1024,
     )
     if settings.trusted_proxies:
-        # Behind Caddy: trust its X-Forwarded-* headers for the client IP, scheme and host.
+        # Behind Nginx: trust its X-Forwarded-* headers for the client IP, scheme and host.
         hops = settings.trusted_proxies
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=hops, x_proto=hops, x_host=hops)  # type: ignore[method-assign]
 

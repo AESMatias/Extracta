@@ -6,7 +6,7 @@
 ![Celery](https://img.shields.io/badge/celery-5.6-37814A?logo=celery&logoColor=white)
 ![Supabase](https://img.shields.io/badge/supabase-postgres%2017-3FCF8E?logo=supabase&logoColor=white)
 ![Gemini](https://img.shields.io/badge/LLM-Gemini%20Flash--Lite-4285F4?logo=googlegemini&logoColor=white)
-![Caddy](https://img.shields.io/badge/caddy-2.11-1F88C0?logo=caddy&logoColor=white)
+![Nginx](https://img.shields.io/badge/nginx-1.30-009639?logo=nginx&logoColor=white)
 ![Ruff](https://img.shields.io/badge/code%20style-ruff-D7FF64?logo=ruff&logoColor=black)
 
 Upload PDFs and get their data back as structured JSON, tables, charts and Excel/CSV/JSON files.
@@ -87,7 +87,7 @@ Flash-Lite), which is checked by a test.
 
 ```mermaid
 flowchart LR
-    B[Browser] -- "HTTPS" --> C[frontend<br/>Caddy: static Next.js site<br/>+ automatic HTTPS]
+    B[Browser] -- "HTTPS" --> C[frontend<br/>Nginx: static Next.js site<br/>+ HTTPS]
     C -- "/api/*" --> W[web<br/>Flask API + gunicorn]
     W -- "streams PDFs" --> V[(volume<br/>/tmp_uploads)]
     W -- "enqueue" --> R[(Redis<br/>queue, results, sessions data)]
@@ -98,20 +98,22 @@ flowchart LR
     W -- "accounts, quotas, payments" --> S
     W -- "orders" --> P[PayPal]
     W -- "sign-in" --> G[Google OAuth]
+    CB[certbot<br/>production only] -- "Let's Encrypt certificates" --> C
 ```
 
 | Piece | Technology | Role |
 |---|---|---|
 | Frontend | Next.js 16 (static export), React 19, Tailwind CSS 4, Recharts | The website and dashboard; no Node.js at runtime |
-| Edge | Caddy 2.11 (compiled with patched Go) | Serves the site, proxies `/api`, obtains and renews HTTPS certificates |
+| Edge | Nginx 1.30 + certbot (Let's Encrypt) | Nginx serves the site, proxies `/api` and terminates HTTPS; certbot obtains and renews the certificates |
 | API | Flask 3.1, gunicorn (2 × 4 threads) | Accounts, quotas, uploads, task status, exports, admin, billing |
 | Queue | Celery 5.6 + Redis 8 | One document at a time, results with a TTL, periodic cleanup |
 | Extraction | pdfplumber + Gemini (`google-genai`), optional OpenAI | Text, then structured data validated by Pydantic |
 | Database | Supabase PostgreSQL + SQLAlchemy 2 + Alembic | Accounts, usage, payments, saved documents (Row Level Security on) |
 | Payments / sign-in | PayPal Orders v2, Google OAuth 2.0 (PKCE) | Optional; enabled by `.env` |
 
-**Memory on a 2 GB server** (limits in `docker-compose.yml`, total 1344 MB): frontend 64 MB,
-web 384 MB, worker 768 MB, redis 128 MB. Measured under load: ~12 / 210 / 240 / 14 MB.
+**Memory on a 2 GB server** (limits in `docker-compose.yml`): frontend 64 MB, web 384 MB,
+worker 768 MB, redis 128 MB, plus certbot 128 MB in production: 1344 MB locally, 1472 MB in
+production. Measured under load: ~4 / 210 / 240 / 14 MB.
 
 ---
 
@@ -156,7 +158,7 @@ invalid value stops the app with a clear message.
 |---|---|
 | LLM | `LLM_PROVIDER` (`gemini`/`openai`), `LLM_MODEL`, `GEMINI_API_KEY`, `OPENAI_API_KEY` |
 | Database | `DATABASE_URL` (Supabase **Session pooler**, pasted as shown) |
-| Site | `PUBLIC_BASE_URL`, `SITE_ADDRESS`, `HTTP_PORT`, `HTTPS_PORT` |
+| Site | `PUBLIC_BASE_URL`, `SITE_DOMAIN`, `LETSENCRYPT_EMAIL`, `COMPOSE_PROFILES`, `HTTP_PORT`, `HTTPS_PORT` |
 | Sessions | `SECRET_KEY` (≥ 32 chars), `SESSION_COOKIE_SECURE` (`true` with HTTPS) |
 | Accounts | `REQUIRE_MANUAL_APPROVAL`, `ADMIN_PASSWORD` (≥ 12 chars; empty disables /admin) |
 | Google sign-in | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (redirect URI: `PUBLIC_BASE_URL/api/auth/google/callback`) |
@@ -282,10 +284,11 @@ rest by hand or with `ruff check --fix`).
 │   ├── celery_app.py, tasks.py  Queue and the processing task
 │   ├── export.py                CSV, XLSX and JSON exports
 │   └── web/                     Routes: documents, auth, admin, billing, security helpers
-├── frontend/                    Next.js site (static export) + Caddyfile + Dockerfile
+├── frontend/                    Next.js site (static export) + nginx/ config + Dockerfile
 │   └── src/app/                 /, /login, /register, /app, /pricing, /account, /admin
 ├── tests/                       pytest suite (unit + integration)
 ├── docker/Dockerfile            API/worker image: builder → dev → runtime
+├── docker/certbot/             Image that gets and renews the HTTPS certificate (production)
 ├── docker-compose.yml           frontend + web + worker + redis with memory limits
 ├── docs/DEPLOY.md               Production deployment guide
 ├── scripts/docker-cleanup.sh    Free disk space after builds
@@ -313,8 +316,8 @@ rest by hand or with `ruff check --fix`).
 - **Browser**: Content-Security-Policy, `nosniff`, no framing, `Referrer-Policy`; React escapes
   all output and the app never injects HTML.
 - **Database**: Row Level Security on every table, so Supabase's public REST API cannot read them.
-- **Containers**: non-root API image without pip; Debian patches applied on every build; Caddy
-  compiled with the latest Go; Trivy: 0 fixable HIGH/CRITICAL vulnerabilities in both images.
+- **Containers**: non-root API image without pip; Debian and Alpine patches applied on every
+  build; Nginx hides its version, refuses TLS for unknown host names and sends HSTS; Trivy: 0 fixable HIGH/CRITICAL vulnerabilities in all three images (API, Nginx, certbot).
 
 ---
 

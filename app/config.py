@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     # Public URL of the site, as users type it. Used for the Google callback and to reject
     # cross-site requests (Origin check).
     public_base_url: str = "http://localhost:8080"
-    trusted_proxies: int = Field(default=1, ge=0)  # reverse proxies in front of Flask (Caddy)
+    trusted_proxies: int = Field(default=1, ge=0)  # reverse proxies in front of Flask (Nginx)
 
     # Accounts
     require_manual_approval: bool = False  # true: new accounts wait in "pending" until approved

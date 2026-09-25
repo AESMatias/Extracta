@@ -5,12 +5,12 @@ description: The non-negotiable principles every rsc-sdd phase obeys.
 tags: [sdd, constitution]
 timestamp: 2026-09-24T00:00:00Z
 topic: sdd
-version: v3.0.0
+version: v4.0.0
 ---
 
 # pdf_process_pipeline (IDP) — Constitution
 
-> Version: v3.0.0 · Ratified: 2026-09-24 · Last amended: 2026-09-24
+> Version: v4.0.0 · Ratified: 2026-09-24 · Last amended: 2026-09-25
 > The non-negotiable principles every rsc-sdd phase obeys. Stack mechanics live in the
 > installed stack skills (`python`, `docker`, `redis`, `supabase`, `postgresdb`); this file
 > ratifies the principle and points at the detail.
@@ -123,9 +123,9 @@ version: v3.0.0
 
 ## 15. Amendments v3.0.0 (accounts, payments, Next.js frontend)
 
-27. The frontend is Next.js (TypeScript, Tailwind CSS) built as a static export and served by
+~~27. The frontend is Next.js (TypeScript, Tailwind CSS) built as a static export and served by
     Caddy, which also terminates HTTPS and proxies `/api` to Flask. Flask serves only JSON and
-    files under `/api`. Replacing either is a MAJOR amendment.
+    files under `/api`. Replacing either is a MAJOR amendment.~~ (superseded by 33)
 28. Every document route requires an account. Plans, quotas and privileges are enforced on the
     server only (`app/plans.py`, `app/accounts.py`); the frontend never decides what a user may
     do. The frontend plan catalog is generated from `app/plans.py` and a test fails on drift.
@@ -133,10 +133,23 @@ version: v3.0.0
     PayPal before capturing; each capture is recorded once. No card data ever touches the app.
 30. Database schema changes go through Alembic migrations (`app/migrations`), never by hand;
     every table has Row Level Security enabled.
-31. Memory limits (supersedes the 1.5 GB sum of principle 13): frontend 64 MB, web 384 MB,
-    worker 768 MB, redis 128 MB — 1344 MB in total on a 2 GB server with 2 GB of swap.
+~~31. Memory limits (supersedes the 1.5 GB sum of principle 13): frontend 64 MB, web 384 MB,
+    worker 768 MB, redis 128 MB — 1344 MB in total on a 2 GB server with 2 GB of swap.~~
+    (superseded by 34)
 32. CI (tests, ruff, mypy, tsc, eslint, build) must pass before merging to `main`, and both
     images must have zero fixable HIGH/CRITICAL vulnerabilities (Trivy).
+
+## 16. Amendments v4.0.0 (Nginx instead of Caddy)
+
+33. The frontend is Next.js (TypeScript, Tailwind CSS) built as a static export and served by
+    **Nginx**, which also terminates HTTPS and proxies `/api` to Flask. HTTPS certificates come
+    from Let's Encrypt through a separate `certbot` service (production only). Flask serves only
+    JSON and files under `/api`. Replacing Next.js or Nginx is a MAJOR amendment.
+34. Memory limits (supersedes 31): frontend 64 MB, web 384 MB, worker 768 MB, redis 128 MB,
+    certbot 128 MB (production only) — 1344 MB locally and 1472 MB in production, on a 2 GB
+    server with 2 GB of swap.
+35. Principle 32 applies to every image the project builds: API/worker, frontend (Nginx) and
+    certbot.
 
 ## Definition of Done (the merge bar `verify` runs against)
 
@@ -170,3 +183,4 @@ A change ships only when ALL hold:
 | 2026-09-24 | v2.4.0 | Struck 20 → 25: no emoji in commit messages; Conventional Commits only. | Owner prefers a more serious history. |
 | 2026-09-24 | v2.5.0 | Added 26: task results only for the owning browser session. | Close the "anyone with the task id" gap without user accounts. |
 | 2026-09-25 | v3.0.0 | Added 27-32: Next.js + Caddy frontend, server-side plans and quotas, verified PayPal payments, Alembic, new memory budget, CI and image scanning. | Accounts, plans, admin and payments turned the MVP into a SaaS. |
+| 2026-09-25 | v4.0.0 | Struck 27 → 33 (Nginx + certbot instead of Caddy) and 31 → 34 (certbot memory); added 35 (all three images scanned). | Owner's preference: Nginx is the more widespread server and the one they want to learn. |

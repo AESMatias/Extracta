@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-// Production: a static export (plain HTML/JS/CSS in out/) served by Caddy, which also proxies
+// Production: a static export (plain HTML/JS/CSS in out/) served by Nginx, which also proxies
 // /api to Flask. No Node.js server runs on the 2 GB machine.
 // Development (`npm run dev`): Next.js serves the pages and forwards /api to the Flask API.
 const isDev = process.env.NODE_ENV === "development";

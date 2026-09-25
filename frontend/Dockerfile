@@ -13,25 +13,18 @@ COPY . .
 RUN npm run build
 
 # ---------------------------------------------------------------------------
-# Stage 2: compile Caddy with the latest Go toolchain and patched Go libraries (what xcaddy does).
-# The official binary lags behind Go security releases; this is the internet-facing process.
+# Stage 2: Nginx serves the files and proxies /api. No Node.js at runtime.
 # ---------------------------------------------------------------------------
-FROM golang:1.26-alpine AS caddy
-ARG CADDY_VERSION=v2.11.4
-WORKDIR /src
-ENV CGO_ENABLED=0 GOFLAGS=-trimpath
-RUN go mod init extracta/caddy \
-    && printf 'package main\n\nimport (\n\tcaddycmd "github.com/caddyserver/caddy/v2/cmd"\n\t_ "github.com/caddyserver/caddy/v2/modules/standard"\n)\n\nfunc main() { caddycmd.Main() }\n' > main.go \
-    && go get github.com/caddyserver/caddy/v2@${CADDY_VERSION} \
-    && go get -u golang.org/x/crypto golang.org/x/net golang.org/x/text \
-    && go get google.golang.org/grpc@v1.83.2 `# 1.84.0 is affected by CVE-2026-84445; 1.83.2 has the fix` \
-    && go mod tidy \
-    && go build -ldflags "-s -w" -o /usr/bin/caddy .
-
-# ---------------------------------------------------------------------------
-# Stage 3: Caddy serves the files and proxies /api. No Node.js at runtime.
-# ---------------------------------------------------------------------------
-FROM caddy:2.11-alpine
-COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
-COPY Caddyfile /etc/caddy/Caddyfile
-COPY --from=build /app/out /srv
+FROM nginx:1.30-alpine
+# apk upgrade: Alpine security patches on every build. openssl: the temporary self-signed
+# certificate used only until certbot gets the real one (see nginx/40-extracta-site.sh).
+RUN apk upgrade --no-cache \
+    && apk add --no-cache openssl \
+    && rm -f /etc/nginx/conf.d/default.conf /usr/share/nginx/html/*
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
+COPY nginx/snippets/ /etc/nginx/snippets/
+COPY nginx/sites/ /etc/nginx/extracta/
+# The script keeps its executable bit from git.
+COPY nginx/40-extracta-site.sh /docker-entrypoint.d/
+COPY --from=build /app/out /usr/share/nginx/html
+EXPOSE 80 443

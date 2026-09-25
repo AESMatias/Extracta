@@ -38,7 +38,7 @@ def settings() -> Settings:
 
 
 def client_ip() -> str:
-    # ProxyFix (see create_app) has already replaced remote_addr with the client behind Caddy.
+    # ProxyFix (see create_app) has already replaced remote_addr with the client behind Nginx.
     return request.remote_addr or "unknown"
 
 

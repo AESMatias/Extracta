@@ -59,6 +59,7 @@ jobs:
         run: |
           docker build -f docker/Dockerfile -t pdf-process-pipeline:ci .
           docker build -t extracta-frontend:ci frontend
+          docker build -t extracta-certbot:ci docker/certbot
       - name: Scan the API/worker image
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -70,6 +71,13 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: extracta-frontend:ci
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Scan the certbot image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: extracta-certbot:ci
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
