@@ -52,7 +52,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # without pip (POETRY_VIRTUALENVS_OPTIONS_NO_PIP above).
 # Unprivileged user; the uploads dir is created here so the named volume
 # mounted on it inherits this ownership.
-RUN python -m pip uninstall --yes --quiet pip \
+# Security patches from Debian on every build: fixes published after the base image was
+# released reach the next deploy without waiting for a new python:3.12-slim tag.
+RUN apt-get update \
+    && apt-get upgrade --yes --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip uninstall --yes --quiet pip \
     && useradd --create-home --uid 1000 appuser \
     && mkdir /tmp_uploads \
     && chown appuser:appuser /tmp_uploads
