@@ -61,8 +61,8 @@ def test_login_and_logout(harness: Harness) -> None:
     assert wrong.status_code == 401
     assert wrong.get_json()["error"] == "Incorrect email or password."
     assert right.status_code == 200
-    assert me.status_code == 200
-    assert client.get("/api/auth/me").status_code == 401
+    assert me.get_json()["user"]["email"] == "ana@example.com"
+    assert client.get("/api/auth/me").get_json()["user"] is None
 
 
 def test_login_is_rate_limited_per_account(harness: Harness) -> None:
@@ -81,7 +81,7 @@ def test_suspending_an_account_ends_its_sessions(harness: Harness) -> None:
     with session_scope() as db:
         db.execute(select(User)).scalar_one().status = "suspended"
 
-    assert client.get("/api/auth/me").status_code == 401
+    assert client.get("/api/auth/me").get_json()["user"] is None
 
 
 def test_manual_approval_mode(db_engine: object, tmp_path: object) -> None:
@@ -118,7 +118,7 @@ def test_google_callback_with_a_forged_state_is_refused(harness: Harness) -> Non
     callback = client.get("/api/auth/google/callback?state=forged&code=abc")
 
     assert callback.headers["Location"] == "http://localhost:8080/login?error=google_cancelled"
-    assert client.get("/api/auth/me").status_code == 401
+    assert client.get("/api/auth/me").get_json()["user"] is None
 
 
 def test_google_failure_and_blocked_accounts_return_to_login(harness: Harness) -> None:

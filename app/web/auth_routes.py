@@ -76,11 +76,12 @@ def logout() -> Body:
 
 @auth.get("/me")
 def me() -> Body:
+    """The signed-in account, or null for visitors (200 either way: not being signed in is normal)."""
     now = utcnow()
     with session_scope() as db:
         user = current_user(db)
         if user is None:
-            raise ApiError(401, "Not signed in.")
+            return {"user": None}, 200
         return {"user": accounts.serialize_user(user, now, accounts.usage(db, user, now))}, 200
 
 

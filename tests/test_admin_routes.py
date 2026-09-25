@@ -89,7 +89,7 @@ def test_admin_approves_rejects_and_upgrades_accounts(harness: Harness) -> None:
     assert me["plan"]["id"] == "business" and me["daily_limit"] == 500
 
     admin.patch(f"/api/admin/users/{user_id}", json={"status": "rejected"})
-    assert user_client.get("/api/auth/me").status_code == 401  # rejected accounts are signed out
+    assert user_client.get("/api/auth/me").get_json()["user"] is None  # rejected accounts are signed out
 
 
 def test_premium_without_expiry_and_back_to_free(harness: Harness) -> None:
