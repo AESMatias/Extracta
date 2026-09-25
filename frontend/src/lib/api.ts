@@ -17,7 +17,9 @@ export type DocumentType =
   | "other";
 
 export interface Privileges {
-  docs_per_24h: number;
+  pages: number; // per window
+  window_hours: number; // 24 on Free, 720 (30 days) on paid plans
+  max_pages_per_pdf: number;
   max_file_mb: number;
   max_files_per_upload: number;
   can_save_to_db: boolean;
@@ -46,10 +48,20 @@ export interface Subscription {
 }
 
 export interface Usage {
-  used: number;
+  used: number; // plan pages used in the window
   limit: number;
   remaining: number;
+  credits: number; // prepaid pages left
+  available: number; // remaining + credits
+  window_hours: number;
   next_slot_at: string | null;
+}
+
+export interface PagePack {
+  id: string;
+  pages: number;
+  price_usd: string;
+  price_per_page: string;
 }
 
 export interface User {
@@ -62,7 +74,9 @@ export interface User {
   plan_expires_at: string | null;
   has_password: boolean;
   has_google: boolean;
-  daily_limit: number;
+  page_limit: number;
+  page_credits: number;
+  privileges: Privileges;
   created_at: string;
   usage?: Usage;
   subscription?: Subscription | null;
@@ -127,9 +141,9 @@ export interface TaskStatus {
 
 export interface UploadResponse {
   save_to_db: boolean;
-  tasks: { task_id: string; filename: string }[];
+  tasks: { task_id: string; filename: string; pages: number }[];
   rejected: { filename: string; error: string }[];
-  usage: { used: number; limit: number };
+  usage: { pages: number; used: number; limit: number; credits: number };
 }
 
 export interface SavedDocument {
@@ -143,8 +157,9 @@ export interface SavedDocument {
 }
 
 export interface Payment {
-  plan: PlanId;
-  kind: "pass" | "subscription";
+  plan: string; // plan id, or the pack id for page packs
+  kind: "pass" | "subscription" | "pages";
+  pages: number | null;
   amount: string;
   currency: string;
   status: string;
@@ -154,9 +169,9 @@ export interface Payment {
 export interface AdminUser extends User {
   assigned_plan: PlanId;
   raw_plan_expires_at: string | null;
-  daily_limit_override: number | null;
-  privileges: Privileges;
+  daily_limit_override: number | null; // pages per window
   uploads_24h: number;
+  pages_24h: number;
   uploads_total: number;
   paid_total_usd: string;
   last_login_at: string | null;
@@ -174,6 +189,7 @@ export interface AdminStats {
   users_by_status: Partial<Record<UserStatus, number>>;
   users_by_plan: Partial<Record<PlanId, number>>;
   uploads_24h: number;
+  pages_24h: number;
   revenue_usd: string;
   active_subscriptions: number;
 }
@@ -287,7 +303,7 @@ export const api = {
   changePassword: (body: { current_password?: string; new_password: string }) =>
     request<{ user: User }>("/api/auth/password/change", { method: "POST", json: body }),
 
-  plans: () => request<{ plans: Plan[] }>("/api/plans"),
+  plans: () => request<{ plans: Plan[]; packs: PagePack[] }>("/api/plans"),
   upload: uploadWithProgress,
   taskStatuses: (taskIds: string[]) => request<{ tasks: TaskStatus[] }>("/api/tasks/status", { method: "POST", json: { task_ids: taskIds } }),
   documents: () => request<{ documents: SavedDocument[] }>("/api/documents"),
@@ -295,7 +311,7 @@ export const api = {
   download,
 
   billingConfig: () => request<{ enabled: boolean; client_id?: string; currency?: string; env?: string }>("/api/billing/config"),
-  createOrder: (plan: PlanId) => request<{ order_id: string }>("/api/billing/orders", { method: "POST", json: { plan } }),
+  createOrder: (pack: string) => request<{ order_id: string }>("/api/billing/orders", { method: "POST", json: { pack } }),
   captureOrder: (orderId: string) => request<{ user: User }>(`/api/billing/orders/${orderId}/capture`, { method: "POST" }),
   createSubscription: (plan: PlanId) =>
     request<{ subscription_id: string }>("/api/billing/subscriptions", { method: "POST", json: { plan } }),
@@ -316,7 +332,10 @@ export const api = {
     },
     updateUser: (
       id: string,
-      changes: Partial<Pick<AdminUser, "status" | "daily_limit_override" | "email_verified">> & { plan?: PlanId; plan_expires_at?: string | null },
+      changes: Partial<Pick<AdminUser, "status" | "daily_limit_override" | "email_verified" | "page_credits">> & {
+        plan?: PlanId;
+        plan_expires_at?: string | null;
+      },
     ) =>
       request<{ user: AdminUser }>(`/api/admin/users/${id}`, { method: "PATCH", json: changes }),
     payments: () => request<{ payments: AdminPayment[] }>("/api/admin/payments"),

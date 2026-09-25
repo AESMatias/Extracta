@@ -5,14 +5,18 @@ import { useEffect, useRef, useState } from "react";
 
 import { AuthShell } from "@/components/auth-shell";
 import { Alert, ButtonLink, Spinner } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api } from "@/lib/api";
+import { errorText } from "@/lib/errors";
+import { useI18n } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { takeTokenFromHash } from "@/lib/navigation";
 
-type State = { kind: "checking" } | { kind: "done" } | { kind: "error"; message: string };
+type State = { kind: "checking" } | { kind: "done" } | { kind: "error"; message: string | null };
 
 export default function VerifyEmailPage() {
   const { user, refresh } = useAuth();
+  const { m, locale } = useI18n();
+  const v = m.auth.verify;
   const [state, setState] = useState<State>({ kind: "checking" });
   const started = useRef(false);
 
@@ -23,7 +27,7 @@ export default function VerifyEmailPage() {
     if (!token) {
       // Reading the link from the address bar is what this effect is for.
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setState({ kind: "error", message: "This link is incomplete. Open it again from the email, or ask for a new one." });
+      setState({ kind: "error", message: null });
       return;
     }
     api.verifyEmail(token).then(
@@ -31,14 +35,13 @@ export default function VerifyEmailPage() {
         setState({ kind: "done" });
         void refresh();
       },
-      (err: unknown) =>
-        setState({ kind: "error", message: err instanceof ApiError ? err.message : "The email could not be confirmed. Try again." }),
+      (err: unknown) => setState({ kind: "error", message: errorText(err, locale, v.failAlert) }),
     );
-  }, [refresh]);
+  }, [refresh, locale, v.failAlert]);
 
   if (state.kind === "checking") {
     return (
-      <AuthShell title="Confirming your email" subtitle="One moment…">
+      <AuthShell title={v.checking} subtitle={v.wait}>
         <div className="grid h-24 place-items-center">
           <Spinner className="size-8" />
         </div>
@@ -48,13 +51,13 @@ export default function VerifyEmailPage() {
 
   if (state.kind === "done") {
     return (
-      <AuthShell title="Email confirmed" subtitle="Thanks! Your account is ready to process documents.">
+      <AuthShell title={v.doneTitle} subtitle={v.doneText}>
         <div className="flex flex-col items-center gap-6 text-center">
           <span className="grid size-16 place-items-center bg-emerald-50 text-emerald-600 ring-1 ring-emerald-600/15 dark:bg-emerald-500/10 dark:text-emerald-300">
             <MailCheck className="size-8" />
           </span>
           <ButtonLink href={user ? "/app" : "/login"} size="lg" className="w-full" icon={<ArrowRight className="size-5" />}>
-            {user ? "Go to the dashboard" : "Sign in"}
+            {user ? v.goDashboard : m.common.signIn}
           </ButtonLink>
         </div>
       </AuthShell>
@@ -62,15 +65,15 @@ export default function VerifyEmailPage() {
   }
 
   return (
-    <AuthShell title="This link did not work" subtitle="Links expire after 3 days and only work for the address they were sent to.">
+    <AuthShell title={v.failTitle} subtitle={v.failText}>
       <div className="space-y-5">
-        <Alert title="Could not confirm the email">
+        <Alert title={v.failAlert}>
           <span className="flex items-center gap-2">
-            <MailX className="size-4 shrink-0" /> {state.message}
+            <MailX className="size-4 shrink-0" /> {state.message ?? v.incomplete}
           </span>
         </Alert>
         <ButtonLink href={user ? "/account" : "/login?next=/account"} variant="outline" className="w-full">
-          {user ? "Send a new link from your account" : "Sign in to get a new link"}
+          {user ? v.newFromAccount : v.signInForNew}
         </ButtonLink>
       </div>
     </AuthShell>

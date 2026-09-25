@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Dark mode follows a class on <html> (set by the theme button), not the system setting:
+   the site opens in light mode and remembers the visitor's choice. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /*
  * Extracta's visual system: corporate and square.
  * - Brand: a confident blue; the signature gradient runs green -> teal -> blue; yellow is the accent.
@@ -22,6 +26,11 @@
   --color-brand-950: #0f1d40;
 
   --color-accent: #facc15; /* yellow highlights */
+
+  /* Every hover and transition eases out: fast start, soft landing. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --default-transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  --default-transition-duration: 250ms;
 
   --animate-float: float 7s ease-in-out infinite;
   --animate-fade-up: fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -154,6 +163,11 @@
   background-image: linear-gradient(90deg, rgb(148 163 184 / 0.12) 25%, rgb(148 163 184 / 0.28) 50%, rgb(148 163 184 / 0.12) 75%);
   background-size: 200% 100%;
   @apply animate-shimmer;
+}
+
+/* While a non-English visitor's language loads, hide the English first paint (see lib/preferences.ts). */
+.i18n-pending body {
+  visibility: hidden;
 }
 
 /* Scroll reveal (see components/reveal.tsx): hidden until the element enters the viewport. */

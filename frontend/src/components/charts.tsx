@@ -1,6 +1,7 @@
 "use client";
 
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useI18n } from "@/lib/i18n";
 
 import type { ExtractedDocument } from "@/lib/api";
 import { DOCUMENT_TYPES } from "@/lib/documents";
@@ -16,12 +17,13 @@ const tooltipStyle = {
 };
 
 export function BatchCharts({ documents }: { documents: ExtractedDocument[] }) {
+  const { m } = useI18n();
   const byType = Object.entries(
     documents.reduce<Record<string, number>>((acc, doc) => {
       acc[doc.document_type] = (acc[doc.document_type] ?? 0) + 1;
       return acc;
     }, {}),
-  ).map(([type, count]) => ({ type, name: DOCUMENT_TYPES[type as keyof typeof DOCUMENT_TYPES].label, count }));
+  ).map(([type, count]) => ({ type, name: m.documentTypes.types[type as keyof typeof DOCUMENT_TYPES]?.label ?? type, count }));
 
   const byCurrency = Object.entries(
     documents.reduce<Record<string, number>>((acc, doc) => {
@@ -34,7 +36,7 @@ export function BatchCharts({ documents }: { documents: ExtractedDocument[] }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <Card className="p-5">
-        <h3 className="font-semibold">Documents by type</h3>
+        <h3 className="font-semibold">{m.charts.byType}</h3>
         <div className="mt-2 flex flex-col items-center gap-4 sm:flex-row">
           <div className="h-52 w-full sm:w-1/2">
             <ResponsiveContainer>
@@ -63,10 +65,10 @@ export function BatchCharts({ documents }: { documents: ExtractedDocument[] }) {
       </Card>
       <Card className="p-5">
         <h3 className="font-semibold">
-          Total amount by currency <span className="text-sm font-normal text-slate-500">(invoices, receipts, orders, quotes)</span>
+          {m.charts.byCurrency} <span className="text-sm font-normal text-slate-500">{m.charts.byCurrencyHint}</span>
         </h3>
         {byCurrency.length === 0 ? (
-          <p className="grid h-52 place-items-center text-sm text-slate-500">No amounts in this batch yet.</p>
+          <p className="grid h-52 place-items-center text-sm text-slate-500">{m.charts.noAmounts}</p>
         ) : (
           <div className="mt-4 h-52">
             <ResponsiveContainer>
@@ -92,7 +94,7 @@ export function BatchCharts({ documents }: { documents: ExtractedDocument[] }) {
                   itemStyle={{ color: "#fff" }}
                   formatter={(value) => Intl.NumberFormat().format(Number(value))}
                 />
-                <Bar dataKey="total" name="Total" fill="url(#bar-gradient)" radius={0} maxBarSize={72} />
+                <Bar dataKey="total" name={m.charts.total} fill="url(#bar-gradient)" radius={0} maxBarSize={72} />
               </BarChart>
             </ResponsiveContainer>
           </div>

@@ -6,20 +6,22 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 import { useAuth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
 
 import { Logo } from "./logo";
-
-const LINKS = [
-  { href: "/app", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/pricing", label: "Plans", icon: CreditCard },
-  { href: "/account", label: "Account", icon: UserRound },
-];
+import { ThemeToggle } from "./preferences";
 
 /** Header for signed-in pages. On phones the links move to a bottom tab bar. */
 export function AppHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const { m } = useI18n();
+  const LINKS = [
+    { href: "/app", label: m.common.dashboard, icon: LayoutDashboard },
+    { href: "/pricing", label: m.common.plans, icon: CreditCard },
+    { href: "/account", label: m.common.account, icon: UserRound },
+  ];
 
   async function signOut() {
     await logout();
@@ -48,6 +50,7 @@ export function AppHeader() {
             ))}
           </nav>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             {user && (
               <span className="hidden max-w-48 truncate text-sm text-slate-500 lg:block dark:text-slate-400" title={user.email}>
                 {user.email}
@@ -57,7 +60,7 @@ export function AppHeader() {
               onClick={signOut}
               className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
             >
-              <LogOut className="size-4" /> <span className="hidden sm:inline">Sign out</span>
+              <LogOut className="size-4" /> <span className="hidden sm:inline">{m.common.signOut}</span>
             </button>
           </div>
         </div>

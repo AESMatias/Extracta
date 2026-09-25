@@ -1,16 +1,15 @@
+"use client";
+
 import { CheckCircle2 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { Logo } from "./logo";
+import { useI18n } from "@/lib/i18n";
 
-const POINTS = [
-  "10 document types, any language",
-  "Excel, CSV and JSON exports",
-  "Live charts for every batch",
-  "Free plan: 2 PDFs every 24 hours",
-];
+import { Logo } from "./logo";
+import { Byline, LanguageSwitch, ThemeToggle } from "./preferences";
 
 export function AuthShell({ title, subtitle, children }: { title: string; subtitle: ReactNode; children: ReactNode }) {
+  const { m } = useI18n();
   return (
     <div className="grid min-h-dvh lg:grid-cols-[1fr_1.1fr]">
       <aside className="relative hidden overflow-hidden bg-slate-950 p-12 text-white lg:flex lg:flex-col lg:justify-between">
@@ -22,35 +21,44 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
         </div>
         <div className="relative">
           <h2 className="text-4xl leading-tight font-bold tracking-tight text-balance">
-            Your PDFs, <span className="text-gradient">finally readable</span> by your spreadsheets.
+            {m.auth.shellTitle1} <span className="text-gradient">{m.auth.shellTitle2}</span> {m.auth.shellTitle3}
           </h2>
           <ul className="mt-8 space-y-3">
-            {POINTS.map((point) => (
+            {m.auth.shellPoints.map((point) => (
               <li key={point} className="flex items-center gap-3 text-slate-300">
                 <CheckCircle2 className="size-5 text-brand-400" /> {point}
               </li>
             ))}
           </ul>
         </div>
-        <p className="relative text-sm text-slate-500">Data is extracted by AI. Review important figures before using them.</p>
+        <div className="relative flex items-end justify-between gap-4">
+          <p className="max-w-xs text-sm text-slate-500">{m.auth.shellNote}</p>
+          <Byline className="text-slate-400 hover:text-white [&_.block]:text-slate-200" />
+        </div>
       </aside>
 
       <main className="relative flex flex-col px-4 py-8 sm:px-6">
         <div className="bg-dots absolute inset-0 -z-10 opacity-60 [mask-image:radial-gradient(ellipse_at_top,black,transparent_60%)] lg:hidden" />
-        <div className="lg:hidden">
-          <Logo />
+        <div className="flex items-center justify-between gap-3">
+          <span className="lg:invisible">
+            <Logo />
+          </span>
+          <ThemeToggle />
         </div>
         <div className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center py-10">
           <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
           <p className="mt-2 text-slate-600 dark:text-slate-400">{subtitle}</p>
           <div className="mt-8">{children}</div>
         </div>
+        <div className="flex justify-center">
+          <LanguageSwitch />
+        </div>
       </main>
     </div>
   );
 }
 
-export function GoogleButton({ label = "Continue with Google" }: { label?: string }) {
+export function GoogleButton({ label }: { label: string }) {
   return (
     // A plain link: the API redirects to Google and back (/api/auth/google/callback).
     <a

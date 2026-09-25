@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import { FileText, UploadCloud, X } from "lucide-react";
 import { useId, useState, type DragEvent } from "react";
+import { fill, useI18n } from "@/lib/i18n";
 
 import { formatBytes } from "@/lib/documents";
 
@@ -11,12 +12,17 @@ export interface Picked {
   error: string | null;
 }
 
-export function validateFiles(files: File[], existing: Picked[], maxFileMb: number): Picked[] {
+export function validateFiles(
+  files: File[],
+  existing: Picked[],
+  maxFileMb: number,
+  texts: { notPdf: string; tooLarge: string },
+): Picked[] {
   const next = [...existing];
   for (const file of files) {
     if (next.some((p) => p.file.name === file.name && p.file.size === file.size)) continue;
     const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-    const error = !isPdf ? "Not a PDF" : file.size > maxFileMb * 1024 * 1024 ? `Larger than ${maxFileMb} MB` : null;
+    const error = !isPdf ? texts.notPdf : file.size > maxFileMb * 1024 * 1024 ? fill(texts.tooLarge, { mb: maxFileMb }) : null;
     next.push({ file, error });
   }
   return next;
@@ -24,6 +30,7 @@ export function validateFiles(files: File[], existing: Picked[], maxFileMb: numb
 
 export function Dropzone({ onFiles, disabled, hint }: { onFiles: (files: File[]) => void; disabled?: boolean; hint: string }) {
   const [active, setActive] = useState(false);
+  const { m } = useI18n();
   const inputId = useId();
 
   function onDrop(event: DragEvent<HTMLLabelElement>) {
@@ -67,10 +74,10 @@ export function Dropzone({ onFiles, disabled, hint }: { onFiles: (files: File[])
       </div>
       <div>
         <p className="text-base font-semibold">
-          <span className="hidden sm:inline">Drag your PDFs here or </span>
+          <span className="hidden sm:inline">{m.dropzone.drag}</span>
           <span className="text-brand-600 underline decoration-brand-300 underline-offset-4 dark:text-brand-400">
-            <span className="sm:hidden">Tap to choose PDFs</span>
-            <span className="hidden sm:inline">browse your files</span>
+            <span className="sm:hidden">{m.dropzone.tap}</span>
+            <span className="hidden sm:inline">{m.dropzone.browse}</span>
           </span>
         </p>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{hint}</p>
@@ -80,9 +87,10 @@ export function Dropzone({ onFiles, disabled, hint }: { onFiles: (files: File[])
 }
 
 export function PickedList({ items, onRemove }: { items: Picked[]; onRemove: (index: number) => void }) {
+  const { m } = useI18n();
   if (items.length === 0) return null;
   return (
-    <ul className="mt-4 grid gap-2 sm:grid-cols-2" aria-label="Selected files">
+    <ul className="mt-4 grid gap-2 sm:grid-cols-2" aria-label={m.dropzone.selected}>
       {items.map((item, index) => (
         <li
           key={`${item.file.name}-${item.file.size}`}
@@ -106,7 +114,7 @@ export function PickedList({ items, onRemove }: { items: Picked[]; onRemove: (in
             type="button"
             onClick={() => onRemove(index)}
             className="p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
-            aria-label={`Remove ${item.file.name}`}
+            aria-label={fill(m.dropzone.remove, { name: item.file.name })}
           >
             <X className="size-4" />
           </button>

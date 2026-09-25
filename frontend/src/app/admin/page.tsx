@@ -85,13 +85,15 @@ function UserCard({ user, plans, onSaved }: { user: AdminUser; plans: Plan[]; on
   const [plan, setPlan] = useState<PlanId>(user.assigned_plan);
   const [expires, setExpires] = useState(toDateInput(user.raw_plan_expires_at));
   const [limit, setLimit] = useState(user.daily_limit_override?.toString() ?? "");
+  const [credits, setCredits] = useState(user.page_credits.toString());
   const [saving, setSaving] = useState(false);
 
   const dirty =
     status !== user.status ||
     plan !== user.assigned_plan ||
     expires !== toDateInput(user.raw_plan_expires_at) ||
-    limit !== (user.daily_limit_override?.toString() ?? "");
+    limit !== (user.daily_limit_override?.toString() ?? "") ||
+    credits !== user.page_credits.toString();
 
   async function save(changes?: { status?: UserStatus; email_verified?: boolean }) {
     setSaving(true);
@@ -101,6 +103,7 @@ function UserCard({ user, plans, onSaved }: { user: AdminUser; plans: Plan[]; on
         plan,
         plan_expires_at: plan === "free" || !expires ? null : new Date(`${expires}T23:59:59Z`).toISOString(),
         daily_limit_override: limit === "" ? null : Number(limit),
+        page_credits: Number(credits || 0),
       };
       const { user: updated } = await api.admin.updateUser(user.id, body);
       setStatus(updated.status);
@@ -161,13 +164,15 @@ function UserCard({ user, plans, onSaved }: { user: AdminUser; plans: Plan[]; on
         )}
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
         {[
-          ["PDFs / 24 h", `${p.docs_per_24h}${user.daily_limit_override !== null ? " (custom)" : ""}`],
+          [p.window_hours <= 24 ? "Pages / 24 h" : "Pages / 30 d", `${p.pages}${user.daily_limit_override !== null ? " (custom)" : ""}`],
+          ["Pages per PDF", p.max_pages_per_pdf],
+          ["Prepaid pages", user.page_credits],
           ["MB per file", p.max_file_mb],
           ["Files / upload", p.max_files_per_upload],
           ["Save to DB", p.can_save_to_db ? "Yes" : "No"],
-          ["Used (24 h)", user.uploads_24h],
+          ["Used (24 h)", `${user.pages_24h} p · ${user.uploads_24h} PDFs`],
           ["Total uploads", user.uploads_total],
           ["Paid", `$${user.paid_total_usd}`],
           ["Plan until", user.raw_plan_expires_at ? formatDate(user.raw_plan_expires_at) : user.assigned_plan === "free" ? "—" : "No expiry"],
@@ -184,7 +189,7 @@ function UserCard({ user, plans, onSaved }: { user: AdminUser; plans: Plan[]; on
 
       <details className="group mt-4">
         <summary className="cursor-pointer text-sm font-semibold text-brand-600 dark:text-brand-400">Edit status, plan and privileges</summary>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <label className="text-sm">
             <span className="mb-1 block font-medium">Status</span>
             <select className={selectClass} value={status} onChange={(e) => setStatus(e.target.value as UserStatus)}>
@@ -200,7 +205,7 @@ function UserCard({ user, plans, onSaved }: { user: AdminUser; plans: Plan[]; on
             <select className={selectClass} value={plan} onChange={(e) => setPlan(e.target.value as PlanId)}>
               {plans.map((option) => (
                 <option key={option.id} value={option.id}>
-                  {option.name} — {option.privileges.docs_per_24h}/24 h
+                  {option.name} — {option.privileges.pages} pages / {option.privileges.window_hours <= 24 ? "24 h" : "30 d"}
                 </option>
               ))}
             </select>
@@ -217,7 +222,7 @@ function UserCard({ user, plans, onSaved }: { user: AdminUser; plans: Plan[]; on
             <span className="mt-1 block text-xs text-slate-500">Empty = no expiry</span>
           </label>
           <label className="text-sm">
-            <span className="mb-1 block font-medium">Custom PDFs / 24 h</span>
+            <span className="mb-1 block font-medium">Custom pages per period</span>
             <input
               type="number"
               min={0}
@@ -227,6 +232,11 @@ function UserCard({ user, plans, onSaved }: { user: AdminUser; plans: Plan[]; on
               onChange={(e) => setLimit(e.target.value)}
             />
             <span className="mt-1 block text-xs text-slate-500">Empty = use the plan&apos;s limit</span>
+          </label>
+          <label className="text-sm">
+            <span className="mb-1 block font-medium">Prepaid pages</span>
+            <input type="number" min={0} className={selectClass} value={credits} onChange={(e) => setCredits(e.target.value)} />
+            <span className="mt-1 block text-xs text-slate-500">The balance from page packs</span>
           </label>
         </div>
         <div className="mt-4 flex justify-end">
@@ -314,7 +324,7 @@ export default function AdminPage() {
           {[
             { icon: Users, label: "Accounts", value: Object.values(stats?.users_by_status ?? {}).reduce((a, b) => a + (b ?? 0), 0) },
             { icon: ShieldX, label: "Pending approval", value: pendingCount, highlight: pendingCount > 0 },
-            { icon: Upload, label: "PDFs last 24 h", value: stats?.uploads_24h ?? 0 },
+            { icon: Upload, label: "Pages last 24 h", value: `${stats?.pages_24h ?? 0} · ${stats?.uploads_24h ?? 0} PDFs` },
             { icon: Repeat, label: "Active subscriptions", value: stats?.active_subscriptions ?? 0 },
             { icon: CircleDollarSign, label: "Revenue (USD)", value: `$${stats?.revenue_usd ?? "0.00"}` },
           ].map(({ icon: Icon, label, value, highlight }) => (
@@ -405,8 +415,8 @@ export default function AdminPage() {
                     <tr key={p.id}>
                       <td className="px-4 py-3 whitespace-nowrap">{formatDate(p.created_at, true)}</td>
                       <td className="px-4 py-3">{p.email}</td>
-                      <td className="px-4 py-3 capitalize">{p.plan}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">{p.kind === "subscription" ? "Monthly" : "30-day pass"}</td>
+                      <td className="px-4 py-3 capitalize">{p.kind === "pages" ? `${p.pages ?? "?"} pages` : p.plan}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">{p.kind === "subscription" ? "Monthly" : p.kind === "pages" ? "Page pack" : "30-day pass"}</td>
                       <td className="px-4 py-3 font-semibold whitespace-nowrap">
                         ${p.amount} {p.currency}
                       </td>

@@ -29,7 +29,7 @@ const sizes: Record<Size, string> = {
 
 function buttonClass(variant: Variant, size: Size, className?: string) {
   return clsx(
-    "inline-flex shrink-0 cursor-pointer items-center justify-center font-semibold whitespace-nowrap transition-all duration-200 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
+    "inline-flex shrink-0 cursor-pointer items-center justify-center font-semibold whitespace-nowrap transition-all duration-300 ease-out hover:-translate-y-px active:translate-y-0 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
     variants[variant],
     sizes[size],
     className,

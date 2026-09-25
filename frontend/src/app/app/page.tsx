@@ -14,6 +14,9 @@ import { useToast } from "@/components/toast";
 import { Alert, Button, ButtonLink, Card, PageLoader, Progress } from "@/components/ui";
 import { UsageCard } from "@/components/usage-card";
 import { api, ApiError, type ExportFormat, type ExtractedDocument, type SavedDocument } from "@/lib/api";
+import { errorText, localizeError } from "@/lib/errors";
+import { fill, useI18n } from "@/lib/i18n";
+import { formatPages } from "@/lib/plans";
 import { useAuth, useRequireUser } from "@/lib/auth";
 import { formatDate, timeUntil } from "@/lib/documents";
 
@@ -36,6 +39,8 @@ export default function DashboardPage() {
   const { user, loading } = useRequireUser();
   const { refresh } = useAuth();
   const { toast } = useToast();
+  const { m, locale } = useI18n();
+  const d = m.app;
 
   const [picked, setPicked] = useState<Picked[]>([]);
   const [saveToDb, setSaveToDb] = useState(false);
@@ -48,7 +53,8 @@ export default function DashboardPage() {
   const [limitError, setLimitError] = useState<string | null>(null);
 
   const plan = user?.plan;
-  const canSave = Boolean(plan?.privileges.can_save_to_db);
+  const privileges = user?.privileges; // the plan's, widened by prepaid pages
+  const canSave = Boolean(privileges?.can_save_to_db);
   const verificationRequired = useVerificationRequired();
   const pending = user?.status === "pending";
   const unverified = Boolean(user && !user.email_verified && verificationRequired);
@@ -111,7 +117,7 @@ export default function DashboardPage() {
           current.map((entry): BatchEntry => {
             const task = entry.taskId ? byId.get(entry.taskId) : undefined;
             if (!task || !ACTIVE.has(entry.status)) return entry;
-            if (task.status === "not_found") return { ...entry, status: "expired", error: "The result expired or is no longer available." };
+            if (task.status === "not_found") return { ...entry, status: "expired", error: d.expired };
             if (task.status === "completed" && task.result) {
               newlySaved ||= task.result.saved_to_db;
               return { ...entry, status: "completed", document: task.result.document, savedToDb: task.result.saved_to_db, truncated: task.result.truncated };
@@ -128,16 +134,16 @@ export default function DashboardPage() {
     }, POLL_MS);
 
     return () => clearInterval(timer);
-  }, [hasActive, loadSaved]);
+  }, [hasActive, loadSaved, d.expired]);
 
   // ------------------------------------------------ actions
   function addFiles(files: File[]) {
-    if (!plan) return;
-    setPicked((current) => validateFiles(files, current, plan.privileges.max_file_mb));
+    if (!privileges) return;
+    setPicked((current) => validateFiles(files, current, privileges.max_file_mb, m.dropzone));
   }
 
   const valid = picked.filter((p) => !p.error);
-  const tooMany = plan ? valid.length > plan.privileges.max_files_per_upload : false;
+  const tooMany = privileges ? valid.length > privileges.max_files_per_upload : false;
 
   async function upload() {
     if (!user || valid.length === 0 || tooMany) return;
@@ -151,7 +157,7 @@ export default function DashboardPage() {
         setProgress,
       );
       setBatch((current) => [
-        ...response.tasks.map((task) => ({ key: task.task_id, taskId: task.task_id, filename: task.filename, status: "pending" as const })),
+        ...response.tasks.map((task) => ({ key: task.task_id, taskId: task.task_id, filename: task.filename, status: "pending" as const, pages: task.pages })),
         ...response.rejected.map((rejected, index) => ({
           key: `rejected-${Date.now()}-${index}`,
           filename: rejected.filename,
@@ -161,13 +167,14 @@ export default function DashboardPage() {
         ...current,
       ]);
       setPicked([]);
-      if (response.tasks.length) toast("success", `${response.tasks.length} PDF${response.tasks.length > 1 ? "s" : ""} queued`, "Results appear below as soon as they are ready.");
-      if (response.rejected.length) toast("error", `${response.rejected.length} file(s) rejected`, response.rejected[0]?.error);
+      if (response.tasks.length)
+        toast("success", fill(d.queued, { count: response.tasks.length }), fill(d.queuedPages, { pages: formatPages(response.usage.pages, locale) }));
+      if (response.rejected.length) toast("error", fill(d.rejected, { count: response.rejected.length }), localizeError(response.rejected[0]?.error, locale));
       await refresh();
     } catch (error) {
-      const message = error instanceof ApiError ? error.message : "The upload failed.";
+      const message = errorText(error, locale, d.uploadFailed);
       if (error instanceof ApiError && error.upgrade) setLimitError(message);
-      else toast("error", "Upload failed", message);
+      else toast("error", d.uploadFailed, message);
       await refresh();
     } finally {
       setUploading(false);
@@ -178,22 +185,22 @@ export default function DashboardPage() {
     try {
       await api.download(fmt, scope, payload);
     } catch (error) {
-      toast("error", "Export failed", error instanceof ApiError ? error.message : undefined);
+      toast("error", d.exportFailed, errorText(error, locale, ""));
     }
   }
 
   async function deleteSaved(doc: SavedDocument) {
-    if (!window.confirm(`Delete "${doc.filename}" from your history?`)) return;
+    if (!window.confirm(fill(d.deleteConfirm, { name: doc.filename }))) return;
     try {
       await api.deleteDocument(doc.id);
       setSaved((current) => current?.filter((d) => d.id !== doc.id) ?? null);
-      toast("success", "Document deleted");
+      toast("success", d.deleted);
     } catch (error) {
-      toast("error", "Could not delete", error instanceof ApiError ? error.message : undefined);
+      toast("error", d.deleteFailed, errorText(error, locale, ""));
     }
   }
 
-  if (loading || !user || !plan) {
+  if (loading || !user || !plan || !privileges) {
     return (
       <AppPage>
         <PageLoader />
@@ -207,28 +214,28 @@ export default function DashboardPage() {
     active: batch.filter((e) => ACTIVE.has(e.status)).length,
     problems: batch.filter((e) => ["failed", "rejected", "expired"].includes(e.status)).length,
   };
-  const outOfQuota = user.usage?.remaining === 0;
+  const outOfQuota = user.usage?.available === 0;
   const firstName = user.name?.split(" ")[0];
 
   return (
     <AppPage>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{firstName ? `Hi, ${firstName}` : "Your dashboard"}</h1>
-          <p className="mt-1 text-slate-600 dark:text-slate-400">Upload PDFs and get their data in seconds.</p>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{firstName ? fill(d.hi, { name: firstName }) : d.title}</h1>
+          <p className="mt-1 text-slate-600 dark:text-slate-400">{d.subtitle}</p>
         </div>
       </div>
 
       <div className="mt-6 space-y-4">
         <VerifyEmailBanner user={user} />
         {pending && (
-          <Alert tone="amber" title="Your account is waiting for approval">
-            The administrator reviews new accounts manually. You will be able to upload PDFs as soon as it is approved.
+          <Alert tone="amber" title={d.pendingTitle}>
+            {d.pendingText}
           </Alert>
         )}
         {limitError && (
-          <Alert tone="amber" title={limitError} action={<ButtonLink href="/pricing" size="sm">See plans</ButtonLink>}>
-            {user.usage?.next_slot_at && `Your next free slot opens in ${timeUntil(user.usage.next_slot_at)}.`}
+          <Alert tone="amber" title={limitError} action={<ButtonLink href="/pricing" size="sm">{d.seePlans}</ButtonLink>}>
+            {user.usage?.next_slot_at && fill(d.nextSlot, { time: timeUntil(user.usage.next_slot_at) })}
           </Alert>
         )}
       </div>
@@ -237,7 +244,7 @@ export default function DashboardPage() {
         {/* ------------------------------------------------ upload */}
         <Card className="p-5 sm:p-6">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
-            <UploadCloud className="size-5 text-brand-500" /> Upload documents
+            <UploadCloud className="size-5 text-brand-500" /> {d.upload}
           </h2>
           <div className="mt-4">
             <Dropzone
@@ -245,17 +252,17 @@ export default function DashboardPage() {
               disabled={blocked || uploading || outOfQuota}
               hint={
                 unverified
-                  ? "Confirm your email address to start uploading."
+                  ? d.hintVerify
                   : outOfQuota
-                  ? "Daily limit reached. Upgrade or wait for your next slot."
-                  : `Up to ${plan.privileges.max_files_per_upload} files, ${plan.privileges.max_file_mb} MB each · digital PDFs`
+                    ? d.hintEmpty
+                    : fill(d.hint, { files: privileges.max_files_per_upload, mb: privileges.max_file_mb, pages: privileges.max_pages_per_pdf })
               }
             />
             <PickedList items={picked} onRemove={(index) => setPicked((current) => current.filter((_, i) => i !== index))} />
           </div>
 
           <fieldset className="mt-5">
-            <legend className="text-sm font-semibold">What should happen with the results?</legend>
+            <legend className="text-sm font-semibold">{d.modeTitle}</legend>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               <label
                 className={clsx(
@@ -266,8 +273,8 @@ export default function DashboardPage() {
                 <input type="radio" name="mode" className="sr-only" checked={!saveToDb} onChange={() => setSaveToDb(false)} />
                 <Zap className="mt-0.5 size-5 shrink-0 text-brand-500" />
                 <span>
-                  <span className="block text-sm font-semibold">Process only</span>
-                  <span className="block text-xs text-slate-500">Nothing is stored. Results expire after 1 hour.</span>
+                  <span className="block text-sm font-semibold">{d.processOnly}</span>
+                  <span className="block text-xs text-slate-500">{d.processOnlyText}</span>
                 </span>
               </label>
               <label
@@ -288,14 +295,14 @@ export default function DashboardPage() {
                 {canSave ? <Database className="mt-0.5 size-5 shrink-0 text-teal-500" /> : <Lock className="mt-0.5 size-5 shrink-0 text-slate-400" />}
                 <span>
                   <span className="flex items-center gap-1.5 text-sm font-semibold">
-                    Save to history
+                    {d.save}
                     {!canSave && (
                       <span className="inline-flex items-center gap-0.5 bg-teal-100 px-1.5 py-0.5 text-[10px] font-bold text-teal-700 dark:bg-teal-500/20 dark:text-teal-300">
-                        <Crown className="size-2.5" /> PAID
+                        <Crown className="size-2.5" /> {d.paid}
                       </span>
                     )}
                   </span>
-                  <span className="block text-xs text-slate-500">Keep results in your account to export later.</span>
+                  <span className="block text-xs text-slate-500">{d.saveText}</span>
                 </span>
               </label>
             </div>
@@ -303,17 +310,21 @@ export default function DashboardPage() {
 
           {tooMany && (
             <p className="mt-4 text-sm text-rose-600">
-              Your {plan.name} plan allows {plan.privileges.max_files_per_upload} files per upload. Remove some or upgrade.
+              {fill(d.tooMany, { files: privileges.max_files_per_upload })}
             </p>
           )}
           {uploading && <Progress value={progress * 100} className="mt-5" />}
           <div className="mt-5 flex flex-wrap items-center gap-3">
             <Button size="lg" onClick={upload} loading={uploading} disabled={valid.length === 0 || tooMany || blocked} icon={<Sparkles className="size-5" />} className="w-full sm:w-auto">
-              {uploading ? `Uploading ${Math.round(progress * 100)}%` : valid.length > 1 ? `Process ${valid.length} PDFs` : "Process PDF"}
+              {uploading
+                ? fill(d.uploading, { percent: Math.round(progress * 100) })
+                : valid.length > 1
+                  ? fill(d.processMany, { count: valid.length })
+                  : d.processOne}
             </Button>
             {picked.length > 0 && !uploading && (
               <Button variant="ghost" onClick={() => setPicked([])}>
-                Clear
+                {d.clear}
               </Button>
             )}
           </div>
@@ -322,11 +333,13 @@ export default function DashboardPage() {
         <div className="space-y-6">
           <UsageCard user={user} />
           <Card className="p-5">
-            <h3 className="font-semibold">Tips for best results</h3>
+            <h3 className="font-semibold">{d.tipsTitle}</h3>
             <ul className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-400">
-              <li>• Use digital PDFs (exported or e-invoices). Scans are not supported yet.</li>
-              <li>• One document per PDF gives the cleanest data.</li>
-              <li>• Always review important totals before using them.</li>
+              {d.tips.map((tip) => (
+                <li key={tip} className="flex gap-2">
+                  <span className="mt-1.5 size-1.5 shrink-0 bg-accent" aria-hidden /> {tip}
+                </li>
+              ))}
             </ul>
           </Card>
         </div>
@@ -337,25 +350,23 @@ export default function DashboardPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 id="results-title" className="flex items-center gap-2 text-xl font-bold tracking-tight">
-              <FileStack className="size-5 text-brand-500" /> This batch
+              <FileStack className="size-5 text-brand-500" /> {d.batch}
             </h2>
             <p className="mt-1 text-sm text-slate-500" aria-live="polite">
-              {batch.length === 0
-                ? "No documents yet."
-                : `${counts.done} completed · ${counts.active} in progress · ${counts.problems} with problems`}
+              {batch.length === 0 ? d.noDocs : fill(d.counts, counts)}
             </p>
           </div>
           {completed.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm text-slate-500">Download all:</span>
+              <span className="text-sm text-slate-500">{d.downloadAll}</span>
               <FormatButtons
-                label="Download the whole batch"
+                label={d.downloadBatch}
                 onExport={(fmt) =>
                   exportDocs(fmt, "unified", { items: completed.slice(0, 500).map((e) => ({ filename: e.filename, document: e.document })) })
                 }
               />
               <Button variant="ghost" size="sm" onClick={() => setBatch((current) => current.filter((e) => ACTIVE.has(e.status)))}>
-                Clear finished
+                {d.clearFinished}
               </Button>
             </div>
           )}
@@ -364,8 +375,8 @@ export default function DashboardPage() {
         {batch.length === 0 ? (
           <Card className="mt-4 grid place-items-center border-dashed px-6 py-14 text-center">
             <FileStack className="size-10 text-slate-300 dark:text-slate-700" />
-            <p className="mt-3 font-semibold">Your processed documents will appear here</p>
-            <p className="mt-1 max-w-sm text-sm text-slate-500">Upload a PDF above and watch it go from queued to completed in a few seconds.</p>
+            <p className="mt-3 font-semibold">{d.emptyTitle}</p>
+            <p className="mt-1 max-w-sm text-sm text-slate-500">{d.emptyText}</p>
           </Card>
         ) : (
           <ul className="mt-4 grid gap-3 md:grid-cols-2">
@@ -382,14 +393,14 @@ export default function DashboardPage() {
 
         {completed.length > 0 && batch.some((e) => e.status === "completed" && !e.savedToDb) && (
           <p className="mt-4 text-sm text-amber-700 dark:text-amber-400">
-            Process-only results are not stored: they expire after 1 hour. Download them to keep them.
+            {d.ephemeral}
           </p>
         )}
       </section>
 
       {completed.length > 0 && (
-        <section className="mt-10" aria-label="Charts">
-          <h2 className="mb-4 text-xl font-bold tracking-tight">Charts</h2>
+        <section className="mt-10" aria-label={d.charts}>
+          <h2 className="mb-4 text-xl font-bold tracking-tight">{d.charts}</h2>
           <BatchCharts documents={completed.map((e) => e.document as ExtractedDocument)} />
         </section>
       )}
@@ -399,11 +410,11 @@ export default function DashboardPage() {
         <section className="mt-10" aria-labelledby="history-title">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 id="history-title" className="flex items-center gap-2 text-xl font-bold tracking-tight">
-              <History className="size-5 text-teal-500" /> Saved documents
+              <History className="size-5 text-teal-500" /> {d.saved}
             </h2>
             {saved && saved.length > 0 && (
               <FormatButtons
-                label="Download all saved documents"
+                label={d.downloadSaved}
                 onExport={(fmt) => exportDocs(fmt, "unified", { items: saved.slice(0, 500).map((d) => ({ filename: d.filename, document: d.document })) })}
               />
             )}
@@ -411,7 +422,7 @@ export default function DashboardPage() {
           {saved === null ? (
             <div className="skeleton mt-4 h-24 w-full" />
           ) : saved.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-500">Choose “Save to history” when uploading to keep documents here.</p>
+            <p className="mt-3 text-sm text-slate-500">{d.savedEmpty}</p>
           ) : (
             <ul className="mt-4 grid gap-3 md:grid-cols-2">
               {saved.map((doc) => (

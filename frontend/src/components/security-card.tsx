@@ -3,8 +3,10 @@
 import { KeyRound, ShieldCheck } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
-import { api, ApiError, type User } from "@/lib/api";
+import { api, type User } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { errorText } from "@/lib/errors";
+import { useI18n } from "@/lib/i18n";
 
 import { useToast } from "./toast";
 import { Alert, Button, Card, Field } from "./ui";
@@ -13,6 +15,8 @@ import { Alert, Button, Card, Field } from "./ui";
 export function SecurityCard({ user }: { user: User }) {
   const { setUser } = useAuth();
   const { toast } = useToast();
+  const { m, locale } = useI18n();
+  const s = m.securityCard;
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mismatch, setMismatch] = useState(false);
@@ -37,9 +41,9 @@ export function SecurityCard({ user }: { user: User }) {
       });
       setUser(updated);
       setOpen(false);
-      toast("success", adding ? "Password added" : "Password changed", "Other devices were signed out.");
+      toast("success", adding ? s.added : s.changed, s.othersOut);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+      setError(errorText(err, locale, m.common.somethingWrong));
     } finally {
       setLoading(false);
     }
@@ -49,52 +53,50 @@ export function SecurityCard({ user }: { user: User }) {
     <Card className="p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <ShieldCheck className="size-5 text-emerald-500" /> Security
+          <ShieldCheck className="size-5 text-emerald-500" /> {s.title}
         </h2>
         {!open && (
           <Button size="sm" variant="outline" onClick={() => setOpen(true)} icon={<KeyRound className="size-3.5" />}>
-            {adding ? "Add a password" : "Change password"}
+            {adding ? s.add : s.change}
           </Button>
         )}
       </div>
       <p className="mt-1 text-sm text-slate-500">
-        {adding
-          ? "You sign in with Google. Add a password to also sign in with your email."
-          : "Changing your password signs you out on every other device."}
+        {adding ? s.googleOnly : s.signsOut}
       </p>
 
       {open && (
         <form onSubmit={onSubmit} className="mt-5 space-y-4">
           {error && <Alert>{error}</Alert>}
           {!adding && (
-            <Field label="Current password" name="current_password" type="password" autoComplete="current-password" required />
+            <Field label={s.current} name="current_password" type="password" autoComplete="current-password" required />
           )}
           <Field
-            label="New password"
+            label={s.newPassword}
             name="new_password"
             type="password"
             autoComplete="new-password"
             required
             minLength={10}
             maxLength={128}
-            hint="10 or more characters."
+            hint={s.hint}
           />
           <Field
-            label="Repeat the new password"
+            label={s.repeat}
             name="confirm"
             type="password"
             autoComplete="new-password"
             required
             minLength={10}
             maxLength={128}
-            error={mismatch ? "The two passwords are different." : null}
+            error={mismatch ? s.mismatch : null}
           />
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
+              {m.common.cancel}
             </Button>
             <Button type="submit" loading={loading}>
-              {adding ? "Add password" : "Save new password"}
+              {adding ? s.submitAdd : s.submitChange}
             </Button>
           </div>
         </form>

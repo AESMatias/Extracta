@@ -2,6 +2,8 @@
 
 import clsx from "clsx";
 import { CircleAlert, CircleCheck, Clock, Database, Download, Eye, Hourglass, LoaderCircle, Trash2 } from "lucide-react";
+import { localizeError } from "@/lib/errors";
+import { fill, useI18n } from "@/lib/i18n";
 
 import type { ExportFormat, ExtractedDocument } from "@/lib/api";
 import { DOCUMENT_TYPES, describeDocument } from "@/lib/documents";
@@ -19,19 +21,22 @@ export interface BatchEntry {
   savedToDb?: boolean;
   truncated?: boolean;
   error?: string;
+  pages?: number;
 }
 
-const STATUS: Record<EntryStatus, { label: string; tone: "brand" | "amber" | "green" | "red" | "slate"; icon: typeof Clock }> = {
-  pending: { label: "Queued", tone: "brand", icon: Clock },
-  processing: { label: "Processing", tone: "amber", icon: LoaderCircle },
-  completed: { label: "Completed", tone: "green", icon: CircleCheck },
-  failed: { label: "Failed", tone: "red", icon: CircleAlert },
-  rejected: { label: "Rejected", tone: "red", icon: CircleAlert },
-  expired: { label: "Expired", tone: "slate", icon: Hourglass },
+const STATUS: Record<EntryStatus, { tone: "brand" | "amber" | "green" | "red" | "slate"; icon: typeof Clock }> = {
+  pending: { tone: "brand", icon: Clock },
+  processing: { tone: "amber", icon: LoaderCircle },
+  completed: { tone: "green", icon: CircleCheck },
+  failed: { tone: "red", icon: CircleAlert },
+  rejected: { tone: "red", icon: CircleAlert },
+  expired: { tone: "slate", icon: Hourglass },
 };
 
 export function StatusBadge({ status }: { status: EntryStatus }) {
-  const { label, tone, icon: Icon } = STATUS[status];
+  const { m } = useI18n();
+  const { tone, icon: Icon } = STATUS[status];
+  const label = m.results.status[status];
   // Icon + text: the status never depends on color alone.
   return (
     <Badge tone={tone}>
@@ -41,10 +46,11 @@ export function StatusBadge({ status }: { status: EntryStatus }) {
 }
 
 export function FormatButtons({ onExport, label }: { onExport: (fmt: ExportFormat) => void; label: string }) {
+  const { m } = useI18n();
   return (
     <div className="flex gap-1.5" role="group" aria-label={label}>
       {(["xlsx", "csv", "json"] as const).map((fmt) => (
-        <Button key={fmt} size="sm" variant="outline" onClick={() => onExport(fmt)} aria-label={`${label} as ${fmt.toUpperCase()}`}>
+        <Button key={fmt} size="sm" variant="outline" onClick={() => onExport(fmt)} aria-label={fill(m.results.as, { label, format: fmt.toUpperCase() })}>
           {fmt.toUpperCase()}
         </Button>
       ))}
@@ -63,7 +69,10 @@ export function ResultCard({
   onExport: (fmt: ExportFormat) => void;
   onDelete?: () => void;
 }) {
+  const { m, locale } = useI18n();
+  const r = m.results;
   const type = entry.document ? DOCUMENT_TYPES[entry.document.document_type] : null;
+  const typeLabel = entry.document ? m.documentTypes.types[entry.document.document_type]?.label : null;
   const Icon = type?.icon;
   return (
     <li className="animate-fade-up border border-slate-200 bg-white p-4 transition hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
@@ -80,32 +89,37 @@ export function ResultCard({
               {entry.filename}
             </p>
             <StatusBadge status={entry.status} />
-            {type && <Badge tone="slate">{type.label}</Badge>}
+            {typeLabel && <Badge tone="slate">{typeLabel}</Badge>}
+            {entry.pages ? <Badge tone="slate">{fill(r.pages, { pages: entry.pages })}</Badge> : null}
             {entry.savedToDb && (
               <Badge tone="violet">
-                <Database className="size-3" /> Saved
+                <Database className="size-3" /> {r.saved}
               </Badge>
             )}
           </div>
           <p className={clsx("mt-1 line-clamp-2 text-sm", entry.error ? "text-rose-600 dark:text-rose-400" : "text-slate-600 dark:text-slate-400")}>
             {entry.document
               ? describeDocument(entry.document)
-              : (entry.error ?? (entry.status === "processing" ? "Reading the document with AI…" : "Waiting in the queue…"))}
+              : entry.error
+                ? localizeError(entry.error, locale)
+                : entry.status === "processing"
+                  ? r.reading
+                  : r.waiting}
           </p>
-          {entry.truncated && <p className="mt-1 text-xs text-amber-600">Long document: only the first part was analysed.</p>}
+          {entry.truncated && <p className="mt-1 text-xs text-amber-600">{r.truncated}</p>}
           {(entry.status === "pending" || entry.status === "processing") && <div className="skeleton mt-3 h-2 w-full" />}
         </div>
       </div>
       {entry.document && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
           <Button size="sm" variant="ghost" onClick={onView} icon={<Eye className="size-4" />}>
-            View data
+            {r.view}
           </Button>
           <div className="flex items-center gap-1.5">
             <Download className="size-4 text-slate-400" aria-hidden />
-            <FormatButtons onExport={onExport} label={`Download ${entry.filename}`} />
+            <FormatButtons onExport={onExport} label={fill(r.download, { name: entry.filename })} />
             {onDelete && (
-              <Button size="sm" variant="ghost" onClick={onDelete} aria-label={`Delete ${entry.filename}`} icon={<Trash2 className="size-4 text-rose-500" />} />
+              <Button size="sm" variant="ghost" onClick={onDelete} aria-label={fill(r.delete, { name: entry.filename })} icon={<Trash2 className="size-4 text-rose-500" />} />
             )}
           </div>
         </div>

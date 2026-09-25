@@ -7,10 +7,14 @@ import { Suspense, useState, type FormEvent } from "react";
 
 import { AuthShell } from "@/components/auth-shell";
 import { Alert, Button, Field } from "@/components/ui";
-import { api, ApiError } from "@/lib/api";
+import { api } from "@/lib/api";
+import { errorText } from "@/lib/errors";
+import { useI18n } from "@/lib/i18n";
 
 function ForgotForm() {
   const params = useSearchParams();
+  const { m, locale } = useI18n();
+  const f = m.auth.forgot;
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -24,7 +28,7 @@ function ForgotForm() {
       await api.forgotPassword(email);
       setSentTo(email);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+      setError(errorText(err, locale, m.common.somethingWrong));
     } finally {
       setLoading(false);
     }
@@ -37,11 +41,12 @@ function ForgotForm() {
           <MailOpen className="size-8" />
         </span>
         <p className="text-sm text-slate-600 dark:text-slate-400">
-          If an account exists for <span className="font-semibold text-slate-900 dark:text-white">{sentTo}</span>, we sent it a
-          link to choose a new password. It is valid for 1 hour. Check your spam folder if it does not arrive in a few minutes.
+          {f.sent.split("{email}")[0]}
+          <span className="font-semibold text-slate-900 dark:text-white">{sentTo}</span>
+          {f.sent.split("{email}")[1]}
         </p>
         <Button variant="outline" className="w-full" onClick={() => setSentTo(null)}>
-          Use another email
+          {f.another}
         </Button>
       </div>
     );
@@ -56,16 +61,16 @@ function ForgotForm() {
       )}
       <form onSubmit={onSubmit} className="space-y-4">
         <Field
-          label="Email"
+          label={m.auth.email}
           name="email"
           type="email"
           autoComplete="email"
           required
-          placeholder="you@company.com"
+          placeholder={m.auth.emailPlaceholder}
           defaultValue={params.get("email") ?? ""}
         />
         <Button type="submit" size="lg" className="w-full" loading={loading} icon={<Send className="size-5" />}>
-          Send reset link
+          {f.submit}
         </Button>
       </form>
     </>
@@ -73,14 +78,15 @@ function ForgotForm() {
 }
 
 export default function ForgotPasswordPage() {
+  const { m } = useI18n();
   return (
-    <AuthShell title="Forgot your password?" subtitle="Enter your email and we will send you a link to choose a new one.">
+    <AuthShell title={m.auth.forgot.title} subtitle={m.auth.forgot.subtitle}>
       <Suspense>
         <ForgotForm />
       </Suspense>
       <p className="mt-6 text-center text-sm">
         <Link href="/login" className="inline-flex items-center gap-1.5 font-semibold text-brand-600 hover:underline dark:text-brand-400">
-          <ArrowLeft className="size-4" /> Back to sign in
+          <ArrowLeft className="size-4" /> {m.auth.forgot.back}
         </Link>
       </p>
     </AuthShell>
