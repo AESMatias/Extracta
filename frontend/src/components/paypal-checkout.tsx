@@ -3,7 +3,7 @@
 import { ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { api, ApiError, type Plan, type User } from "@/lib/api";
+import { api, ApiError, type BillingMode, type Plan, type User } from "@/lib/api";
 
 import { Alert, Spinner } from "./ui";
 
@@ -11,11 +11,16 @@ interface PayPalButtons {
   render: (container: HTMLElement) => Promise<void>;
   close?: () => Promise<void>;
 }
+interface ApproveData {
+  orderID?: string;
+  subscriptionID?: string;
+}
 interface PayPalNamespace {
   Buttons: (options: {
     style?: Record<string, string | number>;
-    createOrder: () => Promise<string>;
-    onApprove: (data: { orderID: string }) => Promise<void>;
+    createOrder?: () => Promise<string>;
+    createSubscription?: () => Promise<string>;
+    onApprove: (data: ApproveData) => Promise<void>;
     onError: (error: unknown) => void;
     onCancel?: () => void;
   }) => PayPalButtons;
@@ -23,29 +28,51 @@ interface PayPalNamespace {
 
 declare global {
   interface Window {
-    paypal?: PayPalNamespace;
+    paypalCheckout?: PayPalNamespace;
+    paypalSubscriptions?: PayPalNamespace;
   }
 }
 
-let sdkPromise: Promise<PayPalNamespace> | null = null;
+// One-time payments and subscriptions need the SDK loaded with different parameters, so each gets
+// its own copy under its own name (PayPal's data-namespace attribute).
+const SDK = {
+  once: { namespace: "paypalCheckout", params: "intent=capture" },
+  monthly: { namespace: "paypalSubscriptions", params: "vault=true&intent=subscription" },
+} as const;
+const sdkPromises: Partial<Record<BillingMode, Promise<PayPalNamespace>>> = {};
 
-function loadSdk(clientId: string, currency: string): Promise<PayPalNamespace> {
-  // PayPal's official JS SDK, loaded once. The page's Content-Security-Policy allows paypal.com.
-  sdkPromise ??= new Promise((resolve, reject) => {
+function loadSdk(clientId: string, currency: string, mode: BillingMode): Promise<PayPalNamespace> {
+  // PayPal's official JS SDK. The page's Content-Security-Policy allows paypal.com.
+  const { namespace, params } = SDK[mode];
+  sdkPromises[mode] ??= new Promise((resolve, reject) => {
     const script = document.createElement("script");
-    script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId)}&currency=${currency}&intent=capture&components=buttons`;
+    script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId)}&currency=${currency}&${params}&components=buttons`;
     script.async = true;
-    script.onload = () => (window.paypal ? resolve(window.paypal) : reject(new Error("PayPal SDK missing")));
+    script.dataset.namespace = namespace;
+    script.onload = () => {
+      const sdk = window[namespace];
+      if (sdk) resolve(sdk);
+      else reject(new Error("PayPal SDK missing"));
+    };
     script.onerror = () => {
-      sdkPromise = null;
+      delete sdkPromises[mode];
       reject(new Error("PayPal SDK failed to load"));
     };
     document.head.append(script);
   });
-  return sdkPromise;
+  return sdkPromises[mode];
 }
 
-export function PayPalCheckout({ plan, onPaid }: { plan: Plan; onPaid: (user: User) => void }) {
+/** PayPal's buttons for one plan. `onPaid` gets the updated account; `activating` means PayPal is still confirming. */
+export function PayPalCheckout({
+  plan,
+  mode,
+  onPaid,
+}: {
+  plan: Plan;
+  mode: BillingMode;
+  onPaid: (user: User, activating: boolean) => void;
+}) {
   const container = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<"loading" | "ready" | "disabled" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +80,7 @@ export function PayPalCheckout({ plan, onPaid }: { plan: Plan; onPaid: (user: Us
   useEffect(() => {
     let cancelled = false;
     let buttons: PayPalButtons | null = null;
+    const fail = (err: unknown, fallback: string) => setError(err instanceof ApiError ? err.message : fallback);
 
     (async () => {
       try {
@@ -61,21 +89,53 @@ export function PayPalCheckout({ plan, onPaid }: { plan: Plan; onPaid: (user: Us
           if (!cancelled) setState("disabled");
           return;
         }
-        const paypal = await loadSdk(config.client_id, config.currency ?? "USD");
+        const paypal = await loadSdk(config.client_id, config.currency ?? "USD", mode);
         if (cancelled || !container.current) return;
-        buttons = paypal.Buttons({
-          style: { layout: "vertical", shape: "pill", color: "gold", label: "pay", height: 44 },
-          createOrder: async () => (await api.createOrder(plan.id)).order_id,
-          onApprove: async ({ orderID }) => {
-            try {
-              const { user } = await api.captureOrder(orderID);
-              onPaid(user);
-            } catch (err) {
-              setError(err instanceof ApiError ? err.message : "The payment could not be confirmed.");
-            }
-          },
-          onError: () => setError("PayPal reported an error. No money was taken; please try again."),
-        });
+        const style = { layout: "vertical", shape: "pill", color: "gold", height: 44 };
+        buttons =
+          mode === "monthly"
+            ? paypal.Buttons({
+                style: { ...style, label: "subscribe" },
+                createSubscription: async () => {
+                  setError(null);
+                  try {
+                    return (await api.createSubscription(plan.id)).subscription_id;
+                  } catch (err) {
+                    fail(err, "The subscription could not be started.");
+                    throw err;
+                  }
+                },
+                onApprove: async ({ subscriptionID }) => {
+                  try {
+                    const { user, status } = await api.activateSubscription(subscriptionID ?? "");
+                    onPaid(user, status !== "ACTIVE");
+                  } catch (err) {
+                    fail(err, "The subscription could not be confirmed. It will activate automatically in a few minutes.");
+                  }
+                },
+                onError: () => setError((current) => current ?? "PayPal reported an error. Nothing was charged; please try again."),
+              })
+            : paypal.Buttons({
+                style: { ...style, label: "pay" },
+                createOrder: async () => {
+                  setError(null);
+                  try {
+                    return (await api.createOrder(plan.id)).order_id;
+                  } catch (err) {
+                    fail(err, "The payment could not be started.");
+                    throw err;
+                  }
+                },
+                onApprove: async ({ orderID }) => {
+                  try {
+                    const { user } = await api.captureOrder(orderID ?? "");
+                    onPaid(user, false);
+                  } catch (err) {
+                    fail(err, "The payment could not be confirmed.");
+                  }
+                },
+                onError: () => setError((current) => current ?? "PayPal reported an error. No money was taken; please try again."),
+              });
         await buttons.render(container.current);
         if (!cancelled) setState("ready");
       } catch {
@@ -87,7 +147,7 @@ export function PayPalCheckout({ plan, onPaid }: { plan: Plan; onPaid: (user: Us
       cancelled = true;
       void buttons?.close?.();
     };
-  }, [plan.id, onPaid]);
+  }, [plan.id, mode, onPaid]);
 
   if (state === "disabled") {
     return (

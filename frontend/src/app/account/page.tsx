@@ -1,18 +1,22 @@
 "use client";
 
-import { Crown, KeyRound, LogOut, Mail, Receipt } from "lucide-react";
+import { BadgeCheck, Crown, KeyRound, LogOut, Mail, Receipt } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AppPage } from "@/components/app-header";
+import { SecurityCard } from "@/components/security-card";
+import { subscriptionIsLive, SubscriptionPanel } from "@/components/subscription-panel";
 import { Badge, Button, ButtonLink, Card, PageLoader } from "@/components/ui";
 import { UsageCard } from "@/components/usage-card";
+import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { api, type Payment } from "@/lib/api";
 import { useAuth, useRequireUser } from "@/lib/auth";
 import { formatDate } from "@/lib/documents";
 import { planFeatures } from "@/lib/plans";
 
 const STATUS_TONE = { active: "green", pending: "amber", rejected: "red", suspended: "red" } as const;
+const PAYMENT_TONE: Record<string, "green" | "amber" | "red"> = { COMPLETED: "green", REFUNDED: "red", REVERSED: "red" };
 
 export default function AccountPage() {
   const { user, loading } = useRequireUser();
@@ -40,6 +44,11 @@ export default function AccountPage() {
   return (
     <AppPage>
       <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Account</h1>
+      {!user.email_verified && (
+        <div className="mt-4">
+          <VerifyEmailBanner user={user} />
+        </div>
+      )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1.2fr]">
         <div className="space-y-6">
@@ -56,6 +65,18 @@ export default function AccountPage() {
               </div>
             </div>
             <dl className="mt-6 space-y-3 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="text-slate-500">Email</dt>
+                <dd>
+                  {user.email_verified ? (
+                    <Badge tone="green">
+                      <BadgeCheck className="size-3" /> Verified
+                    </Badge>
+                  ) : (
+                    <Badge tone="amber">Not verified</Badge>
+                  )}
+                </dd>
+              </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-slate-500">Status</dt>
                 <dd>
@@ -82,6 +103,7 @@ export default function AccountPage() {
               Sign out
             </Button>
           </Card>
+          <SecurityCard user={user} />
           <UsageCard user={user} />
         </div>
 
@@ -91,13 +113,20 @@ export default function AccountPage() {
               <h2 className="flex items-center gap-2 text-lg font-semibold">
                 <Crown className="size-5 text-violet-500" /> {user.plan.name} plan
               </h2>
-              <ButtonLink href="/pricing" size="sm" variant={user.plan.id === "free" ? "primary" : "outline"}>
-                {user.plan.id === "free" ? "Upgrade" : "Extend or change"}
-              </ButtonLink>
+              {!subscriptionIsLive(user.subscription) && (
+                <ButtonLink href="/pricing" size="sm" variant={user.plan.id === "free" ? "primary" : "outline"}>
+                  {user.plan.id === "free" ? "Upgrade" : "Extend or change"}
+                </ButtonLink>
+              )}
             </div>
             <p className="mt-1 text-sm text-slate-500">
-              {user.plan_expires_at ? `Active until ${formatDate(user.plan_expires_at, true)}, then back to Free.` : user.plan.tagline}
+              {subscriptionIsLive(user.subscription)
+                ? user.plan.tagline
+                : user.plan_expires_at
+                  ? `Active until ${formatDate(user.plan_expires_at, true)}, then back to Free.`
+                  : user.plan.tagline}
             </p>
+            <SubscriptionPanel user={user} />
             <h3 className="mt-6 text-sm font-semibold">Your privileges</h3>
             <ul className="mt-3 grid gap-2 sm:grid-cols-2">
               {planFeatures(user.plan).map((feature) => (
@@ -133,14 +162,16 @@ export default function AccountPage() {
                 {payments.map((payment) => (
                   <li key={payment.created_at} className="flex items-center justify-between gap-3 py-3 text-sm">
                     <div>
-                      <p className="font-medium capitalize">{payment.plan} · 30 days</p>
+                      <p className="font-medium capitalize">
+                        {payment.plan} · {payment.kind === "subscription" ? "monthly subscription" : "30-day pass"}
+                      </p>
                       <p className="text-xs text-slate-500">{formatDate(payment.created_at, true)}</p>
                     </div>
                     <div className="text-right">
                       <p className="font-semibold">
                         ${payment.amount} {payment.currency}
                       </p>
-                      <Badge tone={payment.status === "COMPLETED" ? "green" : "amber"}>{payment.status.toLowerCase()}</Badge>
+                      <Badge tone={PAYMENT_TONE[payment.status] ?? "amber"}>{payment.status.toLowerCase()}</Badge>
                     </div>
                   </li>
                 ))}

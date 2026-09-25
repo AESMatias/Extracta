@@ -7,7 +7,17 @@ import type { ReactNode } from "react";
 import type { Plan } from "@/lib/api";
 import { planFeatures } from "@/lib/plans";
 
-export function PlanCard({ plan, action, current }: { plan: Plan; action: ReactNode; current?: boolean }) {
+export function PlanCard({
+  plan,
+  action,
+  current,
+  period = "/ 30 days",
+}: {
+  plan: Plan;
+  action: ReactNode;
+  current?: boolean;
+  period?: string;
+}) {
   const free = plan.id === "free";
   return (
     <div
@@ -34,7 +44,7 @@ export function PlanCard({ plan, action, current }: { plan: Plan; action: ReactN
       <p className={clsx("mt-1 min-h-[2.5rem] text-sm text-pretty", plan.highlight ? "text-slate-300" : "text-slate-600 dark:text-slate-400")}>{plan.tagline}</p>
       <p className="mt-5 flex items-baseline gap-1 whitespace-nowrap">
         <span className="text-4xl font-bold tracking-tight">{free ? "$0" : `$${plan.price_usd}`}</span>
-        <span className={clsx("text-sm", plan.highlight ? "text-slate-400" : "text-slate-500")}>{free ? "forever" : "/ 30 days"}</span>
+        <span className={clsx("text-sm", plan.highlight ? "text-slate-400" : "text-slate-500")}>{free ? "forever" : period}</span>
       </p>
       <div className="mt-6">{action}</div>
       <ul className="mt-6 space-y-3 text-sm">

@@ -1,7 +1,22 @@
 "use client";
 
 import clsx from "clsx";
-import { Ban, Check, CircleDollarSign, LogOut, RefreshCw, Save, Search, ShieldCheck, ShieldX, Upload, Users, X } from "lucide-react";
+import {
+  Ban,
+  BadgeCheck,
+  Check,
+  CircleDollarSign,
+  LogOut,
+  Repeat,
+  RefreshCw,
+  Save,
+  Search,
+  ShieldCheck,
+  ShieldX,
+  Upload,
+  Users,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import { Logo } from "@/components/logo";
@@ -12,6 +27,8 @@ import { formatDate } from "@/lib/documents";
 
 const STATUSES: UserStatus[] = ["pending", "active", "rejected", "suspended"];
 const STATUS_TONE = { active: "green", pending: "amber", rejected: "red", suspended: "red" } as const;
+const SUBSCRIPTION_TONE = { ACTIVE: "green", APPROVED: "amber", SUSPENDED: "red" } as const;
+const PAYMENT_TONE: Record<string, "green" | "red" | "amber"> = { COMPLETED: "green", REFUNDED: "red", REVERSED: "red" };
 const selectClass =
   "h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 outline-none";
 
@@ -76,7 +93,7 @@ function UserCard({ user, plans, onSaved }: { user: AdminUser; plans: Plan[]; on
     expires !== toDateInput(user.raw_plan_expires_at) ||
     limit !== (user.daily_limit_override?.toString() ?? "");
 
-  async function save(changes?: { status: UserStatus }) {
+  async function save(changes?: { status?: UserStatus; email_verified?: boolean }) {
     setSaving(true);
     try {
       const body = changes ?? {
@@ -108,6 +125,18 @@ function UserCard({ user, plans, onSaved }: { user: AdminUser; plans: Plan[]; on
           <div className="mt-2 flex flex-wrap gap-1.5">
             <Badge tone={STATUS_TONE[user.status]}>{user.status}</Badge>
             <Badge tone={user.plan.id === "free" ? "slate" : "violet"}>{user.plan.name}</Badge>
+            {user.email_verified ? (
+              <Badge tone="green">
+                <BadgeCheck className="size-3" /> email verified
+              </Badge>
+            ) : (
+              <Badge tone="amber">email not verified</Badge>
+            )}
+            {user.subscription && (
+              <Badge tone={SUBSCRIPTION_TONE[user.subscription.status as keyof typeof SUBSCRIPTION_TONE] ?? "slate"}>
+                <Repeat className="size-3" /> monthly {user.subscription.plan} · {user.subscription.status.toLowerCase()}
+              </Badge>
+            )}
             {user.sign_in_methods.map((m) => (
               <Badge key={m} tone="slate">
                 {m}
@@ -115,6 +144,11 @@ function UserCard({ user, plans, onSaved }: { user: AdminUser; plans: Plan[]; on
             ))}
           </div>
         </div>
+        {!user.email_verified && user.status !== "pending" && (
+          <Button size="sm" variant="outline" onClick={() => save({ email_verified: true })} loading={saving} icon={<BadgeCheck className="size-4" />}>
+            Mark email verified
+          </Button>
+        )}
         {user.status === "pending" && (
           <div className="flex gap-2">
             <Button size="sm" onClick={() => save({ status: "active" })} loading={saving} icon={<Check className="size-4" />}>
@@ -137,6 +171,9 @@ function UserCard({ user, plans, onSaved }: { user: AdminUser; plans: Plan[]; on
           ["Total uploads", user.uploads_total],
           ["Paid", `$${user.paid_total_usd}`],
           ["Plan until", user.raw_plan_expires_at ? formatDate(user.raw_plan_expires_at) : user.assigned_plan === "free" ? "—" : "No expiry"],
+          ...(user.subscription?.next_billing_at && user.subscription.status === "ACTIVE"
+            ? [["Next charge", formatDate(user.subscription.next_billing_at)]]
+            : []),
         ].map(([label, value]) => (
           <div key={label as string} className="rounded-xl bg-slate-50 px-3 py-2 dark:bg-slate-800/60">
             <p className="text-[11px] font-medium text-slate-500 uppercase">{label}</p>
@@ -273,11 +310,12 @@ export default function AdminPage() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {[
             { icon: Users, label: "Accounts", value: Object.values(stats?.users_by_status ?? {}).reduce((a, b) => a + (b ?? 0), 0) },
             { icon: ShieldX, label: "Pending approval", value: pendingCount, highlight: pendingCount > 0 },
             { icon: Upload, label: "PDFs last 24 h", value: stats?.uploads_24h ?? 0 },
+            { icon: Repeat, label: "Active subscriptions", value: stats?.active_subscriptions ?? 0 },
             { icon: CircleDollarSign, label: "Revenue (USD)", value: `$${stats?.revenue_usd ?? "0.00"}` },
           ].map(({ icon: Icon, label, value, highlight }) => (
             <Card key={label} className={clsx("p-4", highlight && "ring-2 ring-amber-400")}>
@@ -356,8 +394,10 @@ export default function AdminPage() {
                     <th className="px-4 py-3">Date</th>
                     <th className="px-4 py-3">Account</th>
                     <th className="px-4 py-3">Plan</th>
+                    <th className="px-4 py-3">Type</th>
                     <th className="px-4 py-3">Amount</th>
-                    <th className="px-4 py-3">PayPal order</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">PayPal reference</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -366,8 +406,12 @@ export default function AdminPage() {
                       <td className="px-4 py-3 whitespace-nowrap">{formatDate(p.created_at, true)}</td>
                       <td className="px-4 py-3">{p.email}</td>
                       <td className="px-4 py-3 capitalize">{p.plan}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">{p.kind === "subscription" ? "Monthly" : "30-day pass"}</td>
                       <td className="px-4 py-3 font-semibold whitespace-nowrap">
                         ${p.amount} {p.currency}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge tone={PAYMENT_TONE[p.status] ?? "amber"}>{p.status.toLowerCase()}</Badge>
                       </td>
                       <td className="px-4 py-3 font-mono text-xs">{p.provider_order_id}</td>
                     </tr>

@@ -65,7 +65,14 @@ function LoginForm() {
       )}
       <form onSubmit={onSubmit} className="space-y-4">
         <Field label="Email" name="email" type="email" autoComplete="email" required placeholder="you@company.com" />
-        <Field label="Password" name="password" type="password" autoComplete="current-password" required placeholder="••••••••••" />
+        <div>
+          <Field label="Password" name="password" type="password" autoComplete="current-password" required placeholder="••••••••••" />
+          <p className="mt-2 text-right text-sm">
+            <Link href="/forgot-password" className="font-medium text-brand-600 hover:underline dark:text-brand-400">
+              Forgot your password?
+            </Link>
+          </p>
+        </div>
         <Button type="submit" size="lg" className="w-full" loading={loading} icon={<LogIn className="size-5" />}>
           Sign in
         </Button>

@@ -52,7 +52,7 @@ const FAQ = [
   },
   {
     q: "How do payments work?",
-    a: "Paid plans are 30-day passes paid once through PayPal. Nothing renews automatically; buy again whenever you need more time.",
+    a: "Through PayPal, your choice: a monthly subscription you can cancel anytime from your account (you keep the plan until the period ends), or a single 30-day pass that never renews.",
   },
   {
     q: "How accurate is it?",
@@ -183,13 +183,14 @@ export default function HomePage() {
               center
               eyebrow="Pricing"
               title="Simple, tiny prices"
-              subtitle="Start free. Upgrade with a 30-day pass when you need more — no subscription, no surprises."
+              subtitle="Start free. Subscribe monthly and cancel anytime, or buy a single 30-day pass — no surprises."
             />
             <div className="mt-14 flex flex-wrap justify-center gap-5 *:w-full sm:*:w-[calc(50%-0.625rem)] lg:*:w-[calc(33.333%-0.834rem)] xl:*:w-[calc(20%-1rem)]">
               {PLANS.map((plan) => (
                 <PlanCard
                   key={plan.id}
                   plan={plan}
+                  period="/ month"
                   action={
                     <ButtonLink
                       href={plan.id === "free" ? "/register" : `/pricing?plan=${plan.id}`}

@@ -34,6 +34,17 @@ export interface Plan {
   privileges: Privileges;
 }
 
+export type SubscriptionStatus = "APPROVAL_PENDING" | "APPROVED" | "ACTIVE" | "SUSPENDED" | "CANCELLED" | "EXPIRED";
+export type BillingMode = "monthly" | "once";
+
+export interface Subscription {
+  id: string;
+  plan: PlanId;
+  status: SubscriptionStatus;
+  next_billing_at: string | null;
+  cancelled_at: string | null;
+}
+
 export interface Usage {
   used: number;
   limit: number;
@@ -44,6 +55,7 @@ export interface Usage {
 export interface User {
   id: string;
   email: string;
+  email_verified: boolean;
   name: string | null;
   status: UserStatus;
   plan: Plan;
@@ -53,6 +65,7 @@ export interface User {
   daily_limit: number;
   created_at: string;
   usage?: Usage;
+  subscription?: Subscription | null;
 }
 
 export interface Party {
@@ -131,6 +144,7 @@ export interface SavedDocument {
 
 export interface Payment {
   plan: PlanId;
+  kind: "pass" | "subscription";
   amount: string;
   currency: string;
   status: string;
@@ -147,6 +161,7 @@ export interface AdminUser extends User {
   paid_total_usd: string;
   last_login_at: string | null;
   sign_in_methods: ("password" | "google")[];
+  subscription: Subscription | null;
 }
 
 export interface AdminPayment extends Payment {
@@ -160,6 +175,7 @@ export interface AdminStats {
   users_by_plan: Partial<Record<PlanId, number>>;
   uploads_24h: number;
   revenue_usd: string;
+  active_subscriptions: number;
 }
 
 export class ApiError extends Error {
@@ -173,6 +189,11 @@ export class ApiError extends Error {
 
   get upgrade(): boolean {
     return this.data.upgrade === true;
+  }
+
+  /** The action needs a verified email address. */
+  get verifyEmail(): boolean {
+    return this.data.verify_email === true;
   }
 }
 
@@ -253,11 +274,18 @@ async function download(fmt: ExportFormat, scope: "individual" | "unified", payl
 
 export const api = {
   me: () => request<{ user: User | null }>("/api/auth/me"),
-  providers: () => request<{ google: boolean; manual_approval: boolean }>("/api/auth/providers"),
+  providers: () => request<{ google: boolean; manual_approval: boolean; email_verification: boolean }>("/api/auth/providers"),
   register: (body: { email: string; password: string; name: string }) =>
     request<{ user: User }>("/api/auth/register", { method: "POST", json: body }),
   login: (body: { email: string; password: string }) => request<{ user: User }>("/api/auth/login", { method: "POST", json: body }),
   logout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
+  verifyEmail: (token: string) => request<{ verified: boolean }>("/api/auth/email/verify", { method: "POST", json: { token } }),
+  resendVerification: () => request<{ sent: boolean; already_verified?: boolean }>("/api/auth/email/resend", { method: "POST" }),
+  forgotPassword: (email: string) => request<{ ok: boolean }>("/api/auth/password/forgot", { method: "POST", json: { email } }),
+  resetPassword: (token: string, password: string) =>
+    request<{ user: User }>("/api/auth/password/reset", { method: "POST", json: { token, password } }),
+  changePassword: (body: { current_password?: string; new_password: string }) =>
+    request<{ user: User }>("/api/auth/password/change", { method: "POST", json: body }),
 
   plans: () => request<{ plans: Plan[] }>("/api/plans"),
   upload: uploadWithProgress,
@@ -269,6 +297,13 @@ export const api = {
   billingConfig: () => request<{ enabled: boolean; client_id?: string; currency?: string; env?: string }>("/api/billing/config"),
   createOrder: (plan: PlanId) => request<{ order_id: string }>("/api/billing/orders", { method: "POST", json: { plan } }),
   captureOrder: (orderId: string) => request<{ user: User }>(`/api/billing/orders/${orderId}/capture`, { method: "POST" }),
+  createSubscription: (plan: PlanId) =>
+    request<{ subscription_id: string }>("/api/billing/subscriptions", { method: "POST", json: { plan } }),
+  activateSubscription: (subscriptionId: string) =>
+    request<{ user: User; status: SubscriptionStatus }>(`/api/billing/subscriptions/${encodeURIComponent(subscriptionId)}/activate`, {
+      method: "POST",
+    }),
+  cancelSubscription: () => request<{ user: User }>("/api/billing/subscription/cancel", { method: "POST" }),
   payments: () => request<{ payments: Payment[] }>("/api/billing/payments"),
 
   admin: {
@@ -279,7 +314,10 @@ export const api = {
       const query = new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][]);
       return request<{ users: AdminUser[]; plans: Plan[] }>(`/api/admin/users?${query}`);
     },
-    updateUser: (id: string, changes: Partial<Pick<AdminUser, "status" | "daily_limit_override">> & { plan?: PlanId; plan_expires_at?: string | null }) =>
+    updateUser: (
+      id: string,
+      changes: Partial<Pick<AdminUser, "status" | "daily_limit_override" | "email_verified">> & { plan?: PlanId; plan_expires_at?: string | null },
+    ) =>
       request<{ user: AdminUser }>(`/api/admin/users/${id}`, { method: "PATCH", json: changes }),
     payments: () => request<{ payments: AdminPayment[] }>("/api/admin/payments"),
     stats: () => request<AdminStats>("/api/admin/stats"),

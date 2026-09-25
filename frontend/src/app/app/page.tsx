@@ -8,6 +8,7 @@ import { AppPage } from "@/components/app-header";
 import { BatchCharts } from "@/components/charts";
 import { DocumentDialog } from "@/components/document-dialog";
 import { Dropzone, PickedList, validateFiles, type Picked } from "@/components/dropzone";
+import { useVerificationRequired, VerifyEmailBanner } from "@/components/verify-email-banner";
 import { FormatButtons, ResultCard, type BatchEntry, type EntryStatus } from "@/components/results";
 import { useToast } from "@/components/toast";
 import { Alert, Button, ButtonLink, Card, PageLoader, Progress } from "@/components/ui";
@@ -48,7 +49,10 @@ export default function DashboardPage() {
 
   const plan = user?.plan;
   const canSave = Boolean(plan?.privileges.can_save_to_db);
+  const verificationRequired = useVerificationRequired();
   const pending = user?.status === "pending";
+  const unverified = Boolean(user && !user.email_verified && verificationRequired);
+  const blocked = pending || unverified;
 
   // ------------------------------------------------ batch persistence (survives a reload)
   useEffect(() => {
@@ -216,6 +220,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="mt-6 space-y-4">
+        <VerifyEmailBanner user={user} />
         {pending && (
           <Alert tone="amber" title="Your account is waiting for approval">
             The administrator reviews new accounts manually. You will be able to upload PDFs as soon as it is approved.
@@ -237,9 +242,11 @@ export default function DashboardPage() {
           <div className="mt-4">
             <Dropzone
               onFiles={addFiles}
-              disabled={pending || uploading || outOfQuota}
+              disabled={blocked || uploading || outOfQuota}
               hint={
-                outOfQuota
+                unverified
+                  ? "Confirm your email address to start uploading."
+                  : outOfQuota
                   ? "Daily limit reached. Upgrade or wait for your next slot."
                   : `Up to ${plan.privileges.max_files_per_upload} files, ${plan.privileges.max_file_mb} MB each · digital PDFs`
               }
@@ -301,7 +308,7 @@ export default function DashboardPage() {
           )}
           {uploading && <Progress value={progress * 100} className="mt-5" />}
           <div className="mt-5 flex flex-wrap items-center gap-3">
-            <Button size="lg" onClick={upload} loading={uploading} disabled={valid.length === 0 || tooMany || pending} icon={<Sparkles className="size-5" />} className="w-full sm:w-auto">
+            <Button size="lg" onClick={upload} loading={uploading} disabled={valid.length === 0 || tooMany || blocked} icon={<Sparkles className="size-5" />} className="w-full sm:w-auto">
               {uploading ? `Uploading ${Math.round(progress * 100)}%` : valid.length > 1 ? `Process ${valid.length} PDFs` : "Process PDF"}
             </Button>
             {picked.length > 0 && !uploading && (
