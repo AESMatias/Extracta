@@ -281,3 +281,76 @@ def test_reconcile_task_uses_the_paypal_settings(env: Any, settings: Settings, m
 
     assert tasks.reconcile_subscriptions.apply().get() == 3
     assert seen == {"env": "sandbox", "currency": "USD"}
+
+
+def test_failed_documents_give_their_pages_back(
+    env: Any, settings: Settings, make_pdf: MakePdf, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    refunded: list[str] = []
+    monkeypatch.setattr(tasks.accounts, "refund_usage", lambda db, task_id: refunded.append(task_id) or 1)
+    env(FakeExtractor(VALID_DOC))
+
+    scanned = run(upload(settings, make_pdf, pages=[""]), save_to_db=False)
+    ok = run(upload(settings, make_pdf), save_to_db=False)
+
+    assert scanned.failed() and ok.successful()
+    assert refunded == [scanned.id]  # only the failed one
+
+
+def test_a_refund_problem_never_hides_the_processing_error(
+    env: Any, settings: Settings, make_pdf: MakePdf, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(db: object, task_id: str) -> int:
+        raise RuntimeError("database down")
+
+    monkeypatch.setattr(tasks.accounts, "refund_usage", broken)
+    env(FakeExtractor(VALID_DOC))
+
+    result = run(upload(settings, make_pdf, pages=[""]), save_to_db=False)
+
+    assert result.failed() and "scanned" in str(result.result)
+
+
+def test_worker_children_get_a_memory_ceiling(monkeypatch: pytest.MonkeyPatch) -> None:
+    import resource
+
+    calls: list[tuple[int, tuple[int, int]]] = []
+    monkeypatch.setattr(resource, "setrlimit", lambda kind, limits: calls.append((kind, limits)))
+
+    tasks.limit_child_memory()
+
+    assert calls == [(resource.RLIMIT_DATA, (tasks.TASK_MEMORY_LIMIT_BYTES, tasks.TASK_MEMORY_LIMIT_BYTES))]
+
+
+def test_a_refused_memory_ceiling_only_logs(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    import resource
+
+    def refuse(kind: int, limits: tuple[int, int]) -> None:
+        raise ValueError("not allowed")
+
+    monkeypatch.setattr(resource, "setrlimit", refuse)
+
+    tasks.limit_child_memory()
+
+    assert "memory limit" in caplog.text
+
+
+def test_tasks_have_time_limits(settings: Settings) -> None:
+    config = celery_module.celery_config(settings)
+
+    assert (config["task_soft_time_limit"], config["task_time_limit"]) == (300, 330)
+
+
+def test_a_bomb_that_reaches_the_worker_fails_cleanly(env: Any, settings: Settings) -> None:
+    from tests.test_storage import pdf_with_stream
+
+    extractor = FakeExtractor(VALID_DOC)
+    env(extractor)
+    path = settings.upload_dir / f"{uuid.uuid4()}.pdf"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(pdf_with_stream(b" " * (40 * 1024 * 1024)))
+
+    result = run(path, save_to_db=False)
+
+    assert result.failed() and "DecompressionBombError" in type(result.result).__name__
+    assert extractor.calls == 0 and not path.exists()

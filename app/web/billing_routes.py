@@ -1,9 +1,9 @@
 """Plans, PayPal checkout (one-time passes and monthly subscriptions) and PayPal webhooks.
 
-One-time pass: the browser renders PayPal's buttons -> POST /billing/orders creates the order
-here with the plan's price -> the buyer approves in PayPal's window -> POST
-/billing/orders/<id>/capture verifies the order (owner, plan, amount, currency), captures the
-money and extends the plan by 30 days.
+Page pack (pay as you go): the browser renders PayPal's buttons -> POST /billing/orders creates
+the order here with the pack's price -> the buyer approves in PayPal's window -> POST
+/billing/orders/<id>/capture verifies the order (owner, pack, amount, currency), captures the
+money and adds the pages to the balance.
 
 Subscription: POST /billing/subscriptions creates it here -> the buyer approves -> POST
 /billing/subscriptions/<id>/activate reads it back from PayPal and applies the plan. Renewals,
@@ -22,7 +22,7 @@ from sqlalchemy import select
 from app import accounts, billing
 from app.db import session_scope, utcnow
 from app.models import Payment, User
-from app.plans import PAID_PLAN_IDS, PLAN_DURATION_DAYS, PLANS
+from app.plans import PAGE_PACKS, PAID_PLAN_IDS, PLAN_DURATION_DAYS, PLANS, catalog
 from app.web.paypal import PayPalClient, PayPalError
 from app.web.security import ApiError, client_ip, rate_limit, require_active, require_user, require_verified, settings
 
@@ -62,7 +62,7 @@ def _can_pay(user: User) -> None:
 
 @billing_api.get("/plans")
 def plans() -> Body:
-    return {"plans": [plan.to_dict() for plan in PLANS.values()]}, 200
+    return catalog(), 200
 
 
 @billing_api.get("/billing/config")
@@ -73,20 +73,21 @@ def config() -> Body:
     return {"enabled": True, "client_id": client.client_id, "currency": client.currency, "env": client.env}, 200
 
 
-# --------------------------------------------------------------------------- one-time passes
+# --------------------------------------------------------------------------- page packs
 
 
 @billing_api.post("/billing/orders")
 def create_order() -> Body:
-    plan_id = _paid_plan(request.get_json(silent=True) or {})
+    pack_id = str((request.get_json(silent=True) or {}).get("pack", ""))
+    if pack_id not in PAGE_PACKS:
+        raise ApiError(400, "Choose a page pack.")
     client = _paypal()
     with session_scope() as db:
         user = require_user(db)
         _can_pay(user)
-        _run(lambda: billing.ensure_no_live_subscription(db, user), "")
-        custom_id = f"{user.id}:{plan_id}"
+        custom_id = f"{user.id}:pack:{pack_id}"
     order_id = _run(
-        lambda: client.create_order(plan=PLANS[plan_id], custom_id=custom_id),
+        lambda: client.create_order(pack=PAGE_PACKS[pack_id], custom_id=custom_id),
         "PayPal is not available right now. Try again in a moment.",
     )
     return {"order_id": order_id}, 201
@@ -175,6 +176,7 @@ def my_payments() -> Body:
             {
                 "plan": p.plan,
                 "kind": p.kind,
+                "pages": p.pages,
                 "amount": f"{p.amount:.2f}",
                 "currency": p.currency,
                 "status": p.status,

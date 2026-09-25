@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from app.db import session_scope, utcnow
-from app.models import Document, User
+from app.models import Document, UsageEvent, User
 from app.schemas import DocumentSchema
 from app.web.queue import TaskStatus
 from app.web.routes import MAX_EXPORT_BODY_BYTES
@@ -54,7 +54,8 @@ def test_free_user_uploads_a_pdf(harness: Harness, make_pdf: MakePdf) -> None:
     assert response.status_code == 202
     body = response.get_json()
     assert [t["filename"] for t in body["tasks"]] == ["Factura N° 2.pdf"]
-    assert body["usage"] == {"used": 1, "limit": 2}
+    assert body["usage"] == {"pages": 1, "used": 1, "limit": 10, "credits": 0}
+    assert body["tasks"][0]["pages"] == 1
     [job] = harness.queue.enqueued
     assert job["save_to_db"] is False
     assert job["path"].exists()  # the worker will find the file
@@ -70,26 +71,76 @@ def test_free_plan_allows_two_files_per_upload(harness: Harness, make_pdf: MakeP
     assert response.get_json()["upgrade"] is True
 
 
-def test_free_plan_allows_two_pdfs_per_24_hours(harness: Harness, make_pdf: MakePdf) -> None:
+def pages_pdf(make_pdf: MakePdf, name: str, pages: int) -> tuple[io.BytesIO, str]:
+    return io.BytesIO(make_pdf([f"Page {i} of a longer report." for i in range(pages)]).read_bytes()), name
+
+
+def test_every_page_counts(harness: Harness, make_pdf: MakePdf) -> None:
     client = harness.signed_up()
-    assert upload(client, [pdf(make_pdf, "a.pdf"), pdf(make_pdf, "b.pdf")]).status_code == 202
+
+    body = upload(client, [pages_pdf(make_pdf, "report.pdf", 4)]).get_json()
+
+    assert body["tasks"][0]["pages"] == 4
+    assert client.get("/api/auth/me").get_json()["user"]["usage"]["used"] == 4
+    with session_scope() as db:
+        assert db.query(UsageEvent).one().pages == 4
+
+
+def test_free_plan_allows_ten_pages_per_24_hours(harness: Harness, make_pdf: MakePdf) -> None:
+    client = harness.signed_up()
+    assert upload(client, [pages_pdf(make_pdf, "a.pdf", 6), pages_pdf(make_pdf, "b.pdf", 4)]).status_code == 202
 
     response = upload(client, [pdf(make_pdf, "c.pdf")])
 
     assert response.status_code == 429
     body = response.get_json()
-    assert "limit of 2 PDFs in 24 hours" in body["error"]
+    assert "10 pages for these 24 hours" in body["error"]
     assert body["next_slot_at"] is not None
     assert len(harness.queue.enqueued) == 2
 
 
-def test_files_beyond_the_remaining_quota_are_rejected(harness: Harness, make_pdf: MakePdf) -> None:
-    client = harness.signed_up(**paid(), daily_limit_override=1)
+def test_a_pdf_larger_than_the_pages_left_is_rejected(harness: Harness, make_pdf: MakePdf) -> None:
+    client = harness.signed_up(**paid(), daily_limit_override=3)
 
-    body = upload(client, [pdf(make_pdf, "a.pdf"), pdf(make_pdf, "b.pdf")]).get_json()
+    body = upload(client, [pdf(make_pdf, "a.pdf"), pages_pdf(make_pdf, "b.pdf", 5), pdf(make_pdf, "c.pdf")]).get_json()
 
-    assert [t["filename"] for t in body["tasks"]] == ["a.pdf"]
-    assert body["rejected"] == [{"filename": "b.pdf", "error": "Daily limit reached"}]
+    assert [t["filename"] for t in body["tasks"]] == ["a.pdf", "c.pdf"]
+    assert body["rejected"] == [{"filename": "b.pdf", "error": "5 pages: only 2 pages left."}]
+    assert len(harness.upload_dir_files()) == 2  # only the accepted ones wait for the worker
+
+
+def test_pdfs_over_the_plan_page_limit_are_rejected(harness: Harness, make_pdf: MakePdf) -> None:
+    body = upload(harness.signed_up(), [pages_pdf(make_pdf, "big.pdf", 11)]).get_json()
+
+    assert body["rejected"] == [{"filename": "big.pdf", "error": "11 pages: your plan reads up to 10 pages per PDF."}]
+
+
+def test_prepaid_pages_are_spent_after_the_plan_allowance(harness: Harness, make_pdf: MakePdf) -> None:
+    client = harness.signed_up(page_credits=20, daily_limit_override=2)
+
+    body = upload(client, [pages_pdf(make_pdf, "a.pdf", 5)]).get_json()
+
+    assert body["usage"]["credits"] == 17  # 2 pages from the plan, 3 prepaid
+    me = client.get("/api/auth/me").get_json()["user"]
+    assert me["page_credits"] == 17 and me["usage"]["used"] == 2 and me["usage"]["available"] == 17
+    with session_scope() as db:
+        assert db.query(UsageEvent).one().credits_used == 3
+
+
+def test_prepaid_pages_unlock_larger_pdfs_and_saving(harness: Harness, make_pdf: MakePdf) -> None:
+    client = harness.signed_up(page_credits=100)
+
+    response = upload(client, [pages_pdf(make_pdf, "big.pdf", 30)], save_to_db="true")
+
+    assert response.status_code == 202
+    assert client.get("/api/auth/me").get_json()["user"]["privileges"]["max_pages_per_pdf"] == 100
+
+
+def test_damaged_pdfs_are_rejected_before_charging(harness: Harness) -> None:
+    body = upload(harness.signed_up(), [(io.BytesIO(b"%PDF-1.4\nnot really a pdf"), "broken.pdf")]).get_json()
+
+    assert body["rejected"][0]["error"].startswith("This PDF could not be opened")
+    assert body["tasks"] == []
 
 
 def test_saving_to_the_database_is_a_paid_privilege(harness: Harness, make_pdf: MakePdf) -> None:
@@ -324,3 +375,14 @@ def test_unknown_api_routes_answer_json(harness: Harness) -> None:
 
     assert response.status_code == 404
     assert "error" in response.get_json()
+
+
+def test_decompression_bombs_are_rejected_before_parsing(harness: Harness) -> None:
+    from tests.test_storage import pdf_with_stream
+
+    bomb = pdf_with_stream(b" " * (40 * 1024 * 1024))
+    body = upload(harness.signed_up(), [(io.BytesIO(bomb), "bomb.pdf")]).get_json()
+
+    assert body["tasks"] == []
+    assert "decompression bomb" in body["rejected"][0]["error"]
+    assert harness.upload_dir_files() == []  # deleted at once

@@ -79,7 +79,7 @@ def test_activating_applies_the_plan_until_the_next_billing_date_plus_grace(harn
     subscription_id, next_billing = active(harness, client)
 
     user = client.get("/api/auth/me").get_json()["user"]
-    assert user["plan"]["id"] == "pro" and user["usage"]["limit"] == 100
+    assert user["plan"]["id"] == "pro" and user["usage"]["limit"] == 1000
     assert datetime.fromisoformat(user["plan_expires_at"]) == next_billing + billing.GRACE
     assert user["subscription"] == {
         "id": subscription_id,
@@ -134,15 +134,6 @@ def test_one_subscription_at_a_time(harness: Harness) -> None:
     active(harness, client)
 
     response = client.post("/api/billing/subscriptions", json={"plan": "business"})
-
-    assert response.status_code == 409 and "Cancel it first" in response.get_json()["error"]
-
-
-def test_no_one_time_pass_on_top_of_a_subscription(harness: Harness) -> None:
-    client = harness.signed_up()
-    active(harness, client)
-
-    response = client.post("/api/billing/orders", json={"plan": "ultra"})
 
     assert response.status_code == 409 and "Cancel it first" in response.get_json()["error"]
 
@@ -328,16 +319,14 @@ def test_events_without_an_id_are_refused(harness: Harness) -> None:
 
 def test_an_order_approved_but_never_captured_by_the_browser(harness: Harness) -> None:
     client = harness.signed_up()
-    order_id = client.post("/api/billing/orders", json={"plan": "pro"}).get_json()["order_id"]
+    order_id = client.post("/api/billing/orders", json={"pack": "p500"}).get_json()["order_id"]
     # The buyer approved and closed the tab: only PayPal's event arrives.
 
     webhook(harness, "CHECKOUT.ORDER.APPROVED", {"id": order_id})
 
     assert harness.paypal.captured == [order_id]
-    user = client.get("/api/auth/me").get_json()["user"]
-    assert user["plan"]["id"] == "pro"
-    expires = user["plan_expires_at"]
-    # The browser comes back late: nothing is charged or extended twice.
+    assert client.get("/api/auth/me").get_json()["user"]["page_credits"] == 500
+    # The browser comes back late: nothing is charged or added twice.
     assert client.post(f"/api/billing/orders/{order_id}/capture").status_code == 200
     assert (
         webhook(
@@ -351,7 +340,7 @@ def test_an_order_approved_but_never_captured_by_the_browser(harness: Harness) -
         ).status_code
         == 200
     )
-    assert client.get("/api/auth/me").get_json()["user"]["plan_expires_at"] == expires
+    assert client.get("/api/auth/me").get_json()["user"]["page_credits"] == 500
     assert harness.paypal.captured == [order_id]
     with session_scope() as db:
         assert db.execute(select(Payment)).scalar_one().provider_capture_id == f"CAP-{order_id}"
@@ -359,27 +348,30 @@ def test_an_order_approved_but_never_captured_by_the_browser(harness: Harness) -
 
 def test_a_capture_completed_event_records_an_order_captured_elsewhere(harness: Harness) -> None:
     client = harness.signed_up()
-    order_id = client.post("/api/billing/orders", json={"plan": "starter"}).get_json()["order_id"]
+    order_id = client.post("/api/billing/orders", json={"pack": "p250"}).get_json()["order_id"]
     harness.paypal.capture_order(order_id)  # captured, but our server never heard about it
 
     webhook(harness, "PAYMENT.CAPTURE.COMPLETED", {"supplementary_data": {"related_ids": {"order_id": order_id}}})
 
-    assert client.get("/api/auth/me").get_json()["user"]["plan"]["id"] == "starter"
+    assert client.get("/api/auth/me").get_json()["user"]["page_credits"] == 250
     assert harness.paypal.captured == [order_id]  # not captured a second time
 
 
-def test_a_refund_ends_the_plan_it_paid_for(harness: Harness) -> None:
+def test_a_refund_takes_the_pack_pages_back(harness: Harness) -> None:
     client = harness.signed_up()
-    order_id = client.post("/api/billing/orders", json={"plan": "pro"}).get_json()["order_id"]
+    order_id = client.post("/api/billing/orders", json={"pack": "p1000"}).get_json()["order_id"]
     client.post(f"/api/billing/orders/{order_id}/capture")
     refund = {
         "id": "REFUND-1",
         "links": [{"rel": "up", "href": f"https://api.paypal.com/v2/payments/captures/CAP-{order_id}"}],
     }
 
+    with session_scope() as db:
+        db.execute(select(User)).scalar_one().page_credits = 600  # 400 pages already used
+
     webhook(harness, "PAYMENT.CAPTURE.REFUNDED", refund)
 
-    assert client.get("/api/auth/me").get_json()["user"]["plan"]["id"] == "free"
+    assert client.get("/api/auth/me").get_json()["user"]["page_credits"] == 0
     with session_scope() as db:
         assert db.execute(select(Payment)).scalar_one().status == "REFUNDED"
     stats = harness.admin().get("/api/admin/stats").get_json()

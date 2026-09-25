@@ -2,6 +2,7 @@
 
 import { Braces, List, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useI18n } from "@/lib/i18n";
 
 import type { ExtractedDocument } from "@/lib/api";
 import { DOCUMENT_TYPES } from "@/lib/documents";
@@ -33,6 +34,7 @@ function rows(value: unknown, prefix = ""): Row[] {
 export function DocumentDialog({ filename, document, onClose }: { filename: string; document: ExtractedDocument; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [raw, setRaw] = useState(false);
+  const { m } = useI18n();
   const type = DOCUMENT_TYPES[document.document_type];
   const { summary, document_type, ...fields } = document;
 
@@ -52,14 +54,14 @@ export function DocumentDialog({ filename, document, onClose }: { filename: stri
           <div className="min-w-0">
             <p className="truncate text-lg font-semibold">{filename}</p>
             <div className="mt-1 flex items-center gap-2">
-              <Badge tone="brand">{type.label}</Badge>
+              <Badge tone="brand">{m.documentTypes.types[document.document_type]?.label ?? type.label}</Badge>
               {document.language && <Badge tone="slate">{document.language.toUpperCase()}</Badge>}
             </div>
           </div>
           <button
             onClick={() => dialog.current?.close()}
             className="p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
-            aria-label="Close"
+            aria-label={m.common.close}
           >
             <X className="size-5" />
           </button>
@@ -71,7 +73,7 @@ export function DocumentDialog({ filename, document, onClose }: { filename: stri
               onClick={() => setRaw((value) => !value)}
               className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-500/10"
             >
-              {raw ? <List className="size-3.5" /> : <Braces className="size-3.5" />} {raw ? "Show fields" : "Show JSON"}
+              {raw ? <List className="size-3.5" /> : <Braces className="size-3.5" />} {raw ? m.dialog.showFields : m.dialog.showJson}
             </button>
           </div>
           {raw ? (

@@ -7,13 +7,17 @@ from sqlalchemy import Engine, select
 from app.accounts import (
     AccountBlockedError,
     AccountError,
+    Charge,
     EmailTakenError,
     InvalidCredentialsError,
     authenticate,
-    daily_limit,
     google_sign_in,
+    page_limit,
+    privileges,
     record_usage,
+    refund_usage,
     register,
+    split_charge,
     usage,
 )
 from app.db import session_scope
@@ -155,26 +159,79 @@ def test_unverified_google_email_is_refused(db_engine: Engine) -> None:
 # --------------------------------------------------------------------------- quota
 
 
-def test_free_plan_allows_two_uploads_per_rolling_24_hours(db_engine: Engine) -> None:
+def charge(task_pages: int, credits_used: int = 0) -> Charge:
+    return Charge(task_id=str(uuid.uuid4()), pages=task_pages, credits_used=credits_used)
+
+
+def test_free_plan_counts_pages_in_a_rolling_24_hours(db_engine: Engine) -> None:
     user_id = new_user()
     with session_scope() as db:
-        record_usage(db, user_id, [str(uuid.uuid4())], NOW - timedelta(hours=25))  # outside the window
-        record_usage(db, user_id, [str(uuid.uuid4())], NOW - timedelta(hours=3))
-        record_usage(db, user_id, [str(uuid.uuid4())], NOW - timedelta(hours=1))
+        user = db.get(User, user_id)
+        assert user is not None
+        record_usage(db, user, [charge(9)], NOW - timedelta(hours=25))  # outside the window
+        record_usage(db, user, [charge(3)], NOW - timedelta(hours=3))
+        record_usage(db, user, [charge(4)], NOW - timedelta(hours=1))
 
     with session_scope() as db:
         user = db.get(User, user_id)
         assert user is not None
         quota = usage(db, user, NOW)
 
-    assert (quota.used, quota.limit, quota.remaining) == (2, 2, 0)
-    assert quota.next_slot_at == NOW + timedelta(hours=21)  # when the 3-hour-old upload stops counting
+    assert (quota.used, quota.limit, quota.remaining, quota.window_hours) == (7, 10, 3, 24)
+    assert quota.next_slot_at == NOW + timedelta(hours=21)  # when the 3-hour-old pages stop counting
+
+
+def test_paid_plans_count_pages_over_30_days(db_engine: Engine) -> None:
+    user_id = new_user(plan="pro", plan_expires_at=NOW + timedelta(days=40))
+    with session_scope() as db:
+        user = db.get(User, user_id)
+        assert user is not None
+        record_usage(db, user, [charge(200)], NOW - timedelta(days=20))
+        record_usage(db, user, [charge(50)], NOW - timedelta(days=31))  # outside the window
+        quota = usage(db, user, NOW)
+
+    assert (quota.used, quota.limit, quota.window_hours) == (200, 1000, 720)
+
+
+def test_prepaid_pages_are_spent_and_given_back(db_engine: Engine) -> None:
+    user_id = new_user(page_credits=50)
+    task = charge(12, credits_used=8)
+    with session_scope() as db:
+        user = db.get(User, user_id)
+        assert user is not None
+        record_usage(db, user, [task], NOW)
+        assert user.page_credits == 42
+        assert usage(db, user, NOW).used == 4  # only the plan's share counts against the plan
+
+    with session_scope() as db:
+        assert refund_usage(db, task.task_id) == 12
+        assert refund_usage(db, str(uuid.uuid4())) == 0  # unknown task: nothing to give back
+    with session_scope() as db:
+        user = db.get(User, user_id)
+        assert user is not None
+        assert user.page_credits == 50 and usage(db, user, NOW).used == 0
+
+
+def test_split_charge() -> None:
+    assert split_charge(5, plan_left=10, credits_left=0) == (5, 0)
+    assert split_charge(5, plan_left=2, credits_left=10) == (2, 3)
+    assert split_charge(5, plan_left=2, credits_left=2) is None
 
 
 def test_paid_plan_and_admin_override_change_the_limit(db_engine: Engine) -> None:
     pro = load(new_user(plan="pro", plan_expires_at=NOW + timedelta(days=10)))
-    assert daily_limit(pro, NOW) == 100
-    assert daily_limit(pro, NOW + timedelta(days=11)) == 2  # pass expired: back to Free
+    assert page_limit(pro, NOW) == 1000
+    assert page_limit(pro, NOW + timedelta(days=11)) == 10  # plan expired: back to Free
 
     pro.daily_limit_override = 7
-    assert daily_limit(pro, NOW) == 7
+    assert page_limit(pro, NOW) == 7
+
+
+def test_prepaid_pages_widen_the_privileges(db_engine: Engine) -> None:
+    free = load(new_user(page_credits=1))
+
+    widened = privileges(free, NOW)
+
+    assert (widened["max_pages_per_pdf"], widened["max_files_per_upload"], widened["can_save_to_db"]) == (100, 20, True)
+    free.page_credits = 0
+    assert privileges(free, NOW)["can_save_to_db"] is False

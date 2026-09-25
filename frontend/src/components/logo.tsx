@@ -4,6 +4,8 @@ import clsx from "clsx";
 import Link from "next/link";
 import { useId } from "react";
 
+const SQUIRCLE = "M16 0C24.4 0 28 0 30 2S32 7.6 32 16 32 28 30 30 24.4 32 16 32 4 32 2 30 0 24.4 0 16 0 4 2 2 7.6 0 16 0Z";
+
 export function LogoMark({ className }: { className?: string }) {
   // Unique per instance: two logos on one page must not share a gradient id (a hidden copy
   // would otherwise "own" it and the visible one would render without colors).
@@ -17,7 +19,8 @@ export function LogoMark({ className }: { className?: string }) {
           <stop offset="1" stopColor="#1f57d6" />
         </linearGradient>
       </defs>
-      <rect width="32" height="32" fill={`url(#${gradient})`} />
+      {/* Apple-style squircle: corners with continuous curvature, not a circular arc. */}
+      <path d={SQUIRCLE} fill={`url(#${gradient})`} />
       <path d="M8.5 8.5h9.7l4.3 4.3v11.7h-14Z" fill="#fff" fillOpacity=".95" />
       <path d="M18 8.6v3.6c0 .5.4.9.9.9h3.5" fill="none" stroke="#99f6e4" strokeWidth="1.2" />
       <path d="M11.8 15.5h7.4M11.8 18.4h5.2M11.8 21.3h6.4" stroke="#1f57d6" strokeWidth="1.6" />

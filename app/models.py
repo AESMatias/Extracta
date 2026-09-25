@@ -1,8 +1,8 @@
 """Database tables.
 
 - users: accounts (email + password and/or Google), status, plan and privileges.
-- usage_events: one row per accepted upload, for the rolling 24-hour quota.
-- payments: money received through PayPal: one-time passes and subscription renewals.
+- usage_events: one row per accepted PDF with the pages it used, for the rolling page quota.
+- payments: money received through PayPal: page packs and subscription renewals.
 - subscriptions: PayPal subscriptions that renew a plan every month.
 - paypal_plans: the PayPal billing plan created for each Extracta plan and price.
 - webhook_events: PayPal events already processed, so a redelivered event is applied once.
@@ -38,7 +38,7 @@ from app.schemas import DocumentSchema
 UserStatus = Literal["pending", "active", "rejected", "suspended"]
 USER_STATUSES = ("pending", "active", "rejected", "suspended")
 PLAN_IDS = ("free", "starter", "pro", "business", "ultra")
-PAYMENT_KINDS = ("pass", "subscription")
+PAYMENT_KINDS = ("pass", "subscription", "pages")  # "pass": legacy one-time 30-day plan
 
 
 def _in(column: str, values: tuple[str, ...]) -> str:
@@ -51,6 +51,7 @@ class User(Base):
         CheckConstraint(_in("status", USER_STATUSES), name="ck_users_status"),
         CheckConstraint(_in("plan", PLAN_IDS), name="ck_users_plan"),
         CheckConstraint("daily_limit_override IS NULL OR daily_limit_override >= 0", name="ck_users_daily_limit"),
+        CheckConstraint("page_credits >= 0", name="ck_users_page_credits"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -62,7 +63,9 @@ class User(Base):
     status: Mapped[str] = mapped_column(String(16), default="active")
     plan: Mapped[str] = mapped_column(String(16), default="free")
     plan_expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime())  # None: no expiry
-    daily_limit_override: Mapped[int | None] = mapped_column(Integer)  # set by the admin, beats the plan
+    # Set by the admin: pages per plan window, beats the plan (the column keeps its original name).
+    daily_limit_override: Mapped[int | None] = mapped_column(Integer)
+    page_credits: Mapped[int] = mapped_column(Integer, default=0)  # prepaid pages (page packs), never expire
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
     last_login_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
 
@@ -73,7 +76,9 @@ class UsageEvent(Base):
 
     id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    task_id: Mapped[uuid.UUID]
+    task_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    pages: Mapped[int] = mapped_column(Integer, default=1)  # pages of the PDF (all of them count)
+    credits_used: Mapped[int] = mapped_column(Integer, default=0)  # part paid with prepaid pages
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
 
 
@@ -92,7 +97,8 @@ class Payment(Base):
     subscription_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("subscriptions.id", ondelete="SET NULL"), index=True
     )
-    plan: Mapped[str] = mapped_column(String(16))
+    plan: Mapped[str] = mapped_column(String(16))  # the subscription plan, or the pack id for page packs
+    pages: Mapped[int | None] = mapped_column(Integer)  # pages bought (page packs only)
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     currency: Mapped[str] = mapped_column(String(3))
     status: Mapped[str] = mapped_column(String(16))  # COMPLETED, REFUNDED or REVERSED

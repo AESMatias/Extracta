@@ -1,9 +1,12 @@
 import io
 import tracemalloc
+import zlib
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from app import storage
 from app.storage import (
     CHUNK_SIZE,
     NotAPdfError,
@@ -174,3 +177,50 @@ def test_sweep_removes_only_old_uploads_created_by_this_module(tmp_path: Path) -
 
 def test_sweep_of_a_missing_directory_does_nothing(tmp_path: Path) -> None:
     assert sweep_orphans(tmp_path / "missing", max_age_seconds=1) == []
+
+
+# --------------------------------------------------------------------------- decompression bombs
+
+
+def pdf_with_stream(payload: bytes) -> bytes:
+    """A PDF whose only page content is `payload`, Flate-compressed."""
+    compressed = zlib.compress(payload, 9)
+    head = (
+        b"%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
+        b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n"
+        b"3 0 obj << /Type /Page /Parent 2 0 R /Contents 4 0 R >> endobj\n"
+    )
+    stream = b"4 0 obj << /Length " + str(len(compressed)).encode() + b" /Filter /FlateDecode >>\nstream\n"
+    return head + stream + compressed + b"\nendstream\nendobj\ntrailer << /Root 1 0 R >>\n%%EOF\n"
+
+
+def test_decompression_bomb_is_rejected(tmp_path: Path) -> None:
+    bomb = tmp_path / "bomb.pdf"
+    bomb.write_bytes(pdf_with_stream(b" " * (40 * 1024 * 1024)))  # 40 MB of spaces -> ~40 KB compressed
+
+    assert bomb.stat().st_size < 100_000
+    with pytest.raises(storage.DecompressionBombError):
+        storage.check_expansion(bomb)
+
+
+def test_normal_compressed_content_passes(tmp_path: Path, make_pdf: Any) -> None:
+    import os
+
+    normal = tmp_path / "normal.pdf"
+    normal.write_bytes(pdf_with_stream(os.urandom(2 * 1024 * 1024)))  # incompressible: ratio ~1
+    storage.check_expansion(normal)
+    storage.check_expansion(make_pdf(["An invoice with ordinary text."]))  # uncompressed streams
+
+
+def test_small_highly_compressible_streams_are_fine(tmp_path: Path) -> None:
+    small = tmp_path / "small.pdf"
+    small.write_bytes(pdf_with_stream(b" " * (4 * 1024 * 1024)))  # 4 MB: below the suspect size
+
+    storage.check_expansion(small)
+
+
+def test_streams_that_are_not_zlib_or_unterminated_are_skipped(tmp_path: Path) -> None:
+    odd = tmp_path / "odd.pdf"
+    odd.write_bytes(b"%PDF-1.4\n4 0 obj << /Length 5 >>\nstream\nhello\nendstream\n5 0 obj stream\nno end")
+
+    storage.check_expansion(odd)

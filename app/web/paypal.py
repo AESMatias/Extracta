@@ -1,4 +1,4 @@
-"""PayPal REST client (server side): Orders v2 for one-time passes, Subscriptions v1 for monthly
+"""PayPal REST client (server side): Orders v2 for page packs, Subscriptions v1 for monthly
 renewals, and webhook signature verification.
 
 The browser shows PayPal's buttons; every amount, currency and plan is decided and verified here,
@@ -14,7 +14,7 @@ from typing import Any
 
 import httpx
 
-from app.plans import PLAN_DURATION_DAYS, Plan
+from app.plans import PagePack, Plan
 
 API_BASE = {"sandbox": "https://api-m.sandbox.paypal.com", "live": "https://api-m.paypal.com"}
 
@@ -65,7 +65,8 @@ class PayPalClient:
         if response.status_code >= 400:
             raise PayPalError(f"PayPal answered {response.status_code}")
 
-    def create_order(self, *, plan: Plan, custom_id: str) -> str:
+    def create_order(self, *, pack: PagePack, custom_id: str) -> str:
+        """A one-time payment for a page pack."""
         order = self._request(
             "POST",
             "/v2/checkout/orders",
@@ -74,10 +75,10 @@ class PayPalClient:
                 "intent": "CAPTURE",
                 "purchase_units": [
                     {
-                        "reference_id": plan.id,
+                        "reference_id": pack.id,
                         "custom_id": custom_id,
-                        "description": f"Extracta {plan.name} plan - {PLAN_DURATION_DAYS} days",
-                        "amount": {"currency_code": self.currency, "value": str(plan.price_usd)},
+                        "description": f"Extracta - {pack.pages:,} pages (prepaid, never expire)",
+                        "amount": {"currency_code": self.currency, "value": str(pack.price_usd)},
                     }
                 ],
             },
@@ -118,7 +119,7 @@ class PayPalClient:
             json={
                 "product_id": product_id,
                 "name": f"Extracta {plan.name} (monthly)",
-                "description": f"{plan.docs_per_24h} documents per 24 hours, renews every month",
+                "description": f"{plan.pages:,} pages every 30 days, renews every month",
                 "status": "ACTIVE",
                 "billing_cycles": [
                     {

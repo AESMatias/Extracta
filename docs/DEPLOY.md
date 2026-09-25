@@ -206,7 +206,7 @@ The Google button appears automatically on the sign-in and registration pages.
 5. Apply: `docker compose up -d`.
 
 Users choose a **monthly subscription** (renews automatically, cancel anytime from their account;
-they keep the plan until the paid period ends) or a **one-time 30-day pass**. Plans and prices
+they keep the plan until the paid period ends) or **page packs** (pay as you go, pages never expire). Plans and prices
 are in `app/plans.py` (USD); the PayPal billing plans are created automatically the first time
 someone subscribes. The server always decides the price and verifies every order and
 subscription with PayPal; the browser only shows PayPal's buttons. Every webhook is verified

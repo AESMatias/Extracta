@@ -13,16 +13,20 @@ import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { api, type Payment } from "@/lib/api";
 import { useAuth, useRequireUser } from "@/lib/auth";
 import { formatDate } from "@/lib/documents";
-import { planFeatures } from "@/lib/plans";
+import { fill, useI18n } from "@/lib/i18n";
+import { formatPages, PACKS, planFeatures, PLANS } from "@/lib/plans";
 
 const STATUS_TONE = { active: "green", pending: "amber", rejected: "red", suspended: "red" } as const;
 const PAYMENT_TONE: Record<string, "green" | "amber" | "red"> = { COMPLETED: "green", REFUNDED: "red", REVERSED: "red" };
+type PaymentStatus = keyof typeof import("@/lib/messages/en").en.account.paymentStatus;
 
 export default function AccountPage() {
   const { user, loading } = useRequireUser();
   const { logout } = useAuth();
   const router = useRouter();
   const [payments, setPayments] = useState<Payment[] | null>(null);
+  const { m, locale } = useI18n();
+  const a = m.account;
 
   useEffect(() => {
     if (user) api.payments().then((r) => setPayments(r.payments), () => setPayments([]));
@@ -43,7 +47,7 @@ export default function AccountPage() {
 
   return (
     <AppPage>
-      <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Account</h1>
+      <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{a.title}</h1>
       {!user.email_verified && (
         <div className="mt-4">
           <VerifyEmailBanner user={user} />
@@ -58,7 +62,7 @@ export default function AccountPage() {
                 {(user.name ?? user.email).charAt(0).toUpperCase()}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-lg font-semibold">{user.name ?? "No name"}</p>
+                <p className="truncate text-lg font-semibold">{user.name ?? a.noName}</p>
                 <p className="flex items-center gap-1.5 truncate text-sm text-slate-500">
                   <Mail className="size-3.5" /> {user.email}
                 </p>
@@ -66,41 +70,41 @@ export default function AccountPage() {
             </div>
             <dl className="mt-6 space-y-3 text-sm">
               <div className="flex justify-between gap-4">
-                <dt className="text-slate-500">Email</dt>
+                <dt className="text-slate-500">{a.email}</dt>
                 <dd>
                   {user.email_verified ? (
                     <Badge tone="green">
-                      <BadgeCheck className="size-3" /> Verified
+                      <BadgeCheck className="size-3" /> {a.verified}
                     </Badge>
                   ) : (
-                    <Badge tone="amber">Not verified</Badge>
+                    <Badge tone="amber">{a.notVerified}</Badge>
                   )}
                 </dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-slate-500">Status</dt>
+                <dt className="text-slate-500">{a.status}</dt>
                 <dd>
-                  <Badge tone={STATUS_TONE[user.status]}>{user.status}</Badge>
+                  <Badge tone={STATUS_TONE[user.status]}>{a.statuses[user.status]}</Badge>
                 </dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-slate-500">Sign-in methods</dt>
+                <dt className="text-slate-500">{a.methods}</dt>
                 <dd className="flex gap-1.5">
                   {user.has_password && (
                     <Badge tone="slate">
-                      <KeyRound className="size-3" /> Password
+                      <KeyRound className="size-3" /> {m.auth.password}
                     </Badge>
                   )}
                   {user.has_google && <Badge tone="slate">Google</Badge>}
                 </dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-slate-500">Member since</dt>
+                <dt className="text-slate-500">{a.memberSince}</dt>
                 <dd>{formatDate(user.created_at)}</dd>
               </div>
             </dl>
             <Button variant="outline" className="mt-6 w-full" onClick={signOut} icon={<LogOut className="size-4" />}>
-              Sign out
+              {m.common.signOut}
             </Button>
           </Card>
           <SecurityCard user={user} />
@@ -111,11 +115,11 @@ export default function AccountPage() {
           <Card className="p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="flex items-center gap-2 text-lg font-semibold">
-                <Crown className="size-5 text-teal-500" /> {user.plan.name} plan
+                <Crown className="size-5 text-teal-500" /> {fill(a.planTitle, { plan: user.plan.name })}
               </h2>
               {!subscriptionIsLive(user.subscription) && (
                 <ButtonLink href="/pricing" size="sm" variant={user.plan.id === "free" ? "primary" : "outline"}>
-                  {user.plan.id === "free" ? "Upgrade" : "Extend or change"}
+                  {user.plan.id === "free" ? a.upgrade : a.change}
                 </ButtonLink>
               )}
             </div>
@@ -123,13 +127,13 @@ export default function AccountPage() {
               {subscriptionIsLive(user.subscription)
                 ? user.plan.tagline
                 : user.plan_expires_at
-                  ? `Active until ${formatDate(user.plan_expires_at, true)}, then back to Free.`
+                  ? fill(a.activeUntil, { date: formatDate(user.plan_expires_at, true) })
                   : user.plan.tagline}
             </p>
             <SubscriptionPanel user={user} />
-            <h3 className="mt-6 text-sm font-semibold">Your privileges</h3>
+            <h3 className="mt-6 text-sm font-semibold">{a.privileges}</h3>
             <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-              {planFeatures(user.plan).map((feature) => (
+              {planFeatures(user.privileges, m, locale).map((feature) => (
                 <li
                   key={feature.label}
                   className={` border px-3 py-2 text-sm ${
@@ -141,9 +145,9 @@ export default function AccountPage() {
                   {feature.label}
                 </li>
               ))}
-              {user.daily_limit !== user.plan.privileges.docs_per_24h && (
+              {user.page_limit !== user.plan.privileges.pages && (
                 <li className="border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-800 sm:col-span-2 dark:border-teal-500/30 dark:bg-teal-500/10 dark:text-teal-200">
-                  Custom limit set by the administrator: {user.daily_limit} PDFs every 24 hours
+                  {fill(a.customLimit, { pages: formatPages(user.page_limit, locale) })}
                 </li>
               )}
             </ul>
@@ -151,19 +155,23 @@ export default function AccountPage() {
 
           <Card className="p-6">
             <h2 className="flex items-center gap-2 text-lg font-semibold">
-              <Receipt className="size-5 text-brand-500" /> Payments
+              <Receipt className="size-5 text-brand-500" /> {a.payments}
             </h2>
             {payments === null ? (
               <div className="skeleton mt-4 h-16" />
             ) : payments.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-500">No payments yet.</p>
+              <p className="mt-3 text-sm text-slate-500">{a.noPayments}</p>
             ) : (
               <ul className="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
                 {payments.map((payment) => (
                   <li key={payment.created_at} className="flex items-center justify-between gap-3 py-3 text-sm">
                     <div>
-                      <p className="font-medium capitalize">
-                        {payment.plan} · {payment.kind === "subscription" ? "monthly subscription" : "30-day pass"}
+                      <p className="font-medium">
+                        {payment.kind === "pages"
+                          ? fill(a.packPayment, { pages: formatPages(payment.pages ?? PACKS.find((p) => p.id === payment.plan)?.pages ?? 0, locale) })
+                          : fill(payment.kind === "subscription" ? a.subscriptionPayment : a.passPayment, {
+                              plan: PLANS.find((p) => p.id === payment.plan)?.name ?? payment.plan,
+                            })}
                       </p>
                       <p className="text-xs text-slate-500">{formatDate(payment.created_at, true)}</p>
                     </div>
@@ -171,7 +179,7 @@ export default function AccountPage() {
                       <p className="font-semibold">
                         ${payment.amount} {payment.currency}
                       </p>
-                      <Badge tone={PAYMENT_TONE[payment.status] ?? "amber"}>{payment.status.toLowerCase()}</Badge>
+                      <Badge tone={PAYMENT_TONE[payment.status] ?? "amber"}>{a.paymentStatus[payment.status as PaymentStatus] ?? payment.status.toLowerCase()}</Badge>
                     </div>
                   </li>
                 ))}

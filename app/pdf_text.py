@@ -11,8 +11,9 @@ from pathlib import Path
 import pdfplumber
 from pdfplumber.utils.exceptions import PdfminerException
 
-# ~15k tokens: enough for invoices, contracts and reports, and it caps LLM cost per document.
-MAX_TEXT_CHARS = 60_000
+# ~120k tokens: the whole text of the largest PDF a plan accepts (150 pages at ~3,000 characters
+# each). Usage is charged per page, so every page paid for is read; this only guards the LLM cost.
+MAX_TEXT_CHARS = 450_000
 # Scans often carry a page number or a stamp as real text; below this there is nothing to extract.
 MIN_TEXT_CHARS = 20
 _SEPARATOR = "\n\n"

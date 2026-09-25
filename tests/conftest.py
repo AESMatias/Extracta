@@ -135,6 +135,10 @@ class Harness:
     def client(self) -> Any:
         return self.app.test_client()
 
+    def upload_dir_files(self) -> list[Path]:
+        folder = self.settings.upload_dir
+        return [p for p in folder.iterdir()] if folder.exists() else []
+
     def signed_up(self, email: str = "ana@example.com", *, verified: bool = True, **user_changes: Any) -> Any:
         """A browser signed in to a new account (email verified unless verified=False); optional
         changes to the account (plan, status...)."""

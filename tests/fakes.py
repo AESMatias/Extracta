@@ -9,7 +9,7 @@ from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
-from app.plans import Plan
+from app.plans import PagePack, Plan
 from app.web.google import GoogleAuthError, GoogleProfile
 from app.web.paypal import PayPalError
 from app.web.queue import TaskStatus
@@ -113,7 +113,7 @@ class FakePayPal:
         self.verified_bodies: list[str] = []
 
     # one-time orders
-    def create_order(self, *, plan: Plan, custom_id: str) -> str:
+    def create_order(self, *, pack: PagePack, custom_id: str) -> str:
         if self.fail:
             raise PayPalError("down")
         order_id = f"ORDER{next(self._ids)}"
@@ -121,7 +121,7 @@ class FakePayPal:
             "id": order_id,
             "status": "APPROVED",  # as if the buyer already approved it in PayPal's window
             "purchase_units": [
-                {"custom_id": custom_id, "amount": {"currency_code": "USD", "value": str(plan.price_usd)}}
+                {"custom_id": custom_id, "amount": {"currency_code": "USD", "value": str(pack.price_usd)}}
             ],
         }
         return order_id

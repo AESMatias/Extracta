@@ -72,21 +72,19 @@ def _admin_user(
     user: User,
     used_24h: int,
     total_uploads: int,
+    pages_24h: int,
     paid_total: str,
     subscription: Subscription | None,
     now: datetime,
 ) -> dict[str, Any]:
-    data = accounts.serialize_user(user, now)
-    plan = accounts.current_plan(user, now)
-    privileges = plan.privileges()
-    privileges["docs_per_24h"] = accounts.daily_limit(user, now)  # includes any admin override
+    data = accounts.serialize_user(user, now)  # includes "privileges", with any admin override
     data.update(
         {
             "assigned_plan": user.plan,  # may differ from the effective plan when the pass expired
             "raw_plan_expires_at": user.plan_expires_at.isoformat() if user.plan_expires_at else None,
             "daily_limit_override": user.daily_limit_override,
-            "privileges": privileges,
             "uploads_24h": used_24h,
+            "pages_24h": pages_24h,
             "uploads_total": total_uploads,
             "paid_total_usd": paid_total,
             "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
@@ -128,6 +126,7 @@ def list_users() -> Body:
             .tuples()
             .all()
         )
+        pages = accounts.pages_in_window(db, ids, now - accounts.QUOTA_WINDOW)
         paid = dict(
             db.execute(
                 select(Payment.user_id, func.sum(Payment.amount))
@@ -146,7 +145,13 @@ def list_users() -> Body:
             latest[sub.user_id] = sub  # ordered oldest first: the newest one wins
         items = [
             _admin_user(
-                u, recent.get(u.id, 0), totals.get(u.id, 0), f"{paid.get(u.id) or 0:.2f}", latest.get(u.id), now
+                u,
+                recent.get(u.id, 0),
+                totals.get(u.id, 0),
+                pages.get(u.id, 0),
+                f"{paid.get(u.id) or 0:.2f}",
+                latest.get(u.id),
+                now,
             )
             for u in users
         ]
@@ -159,7 +164,8 @@ class UserUpdate(BaseModel):
     status: Literal["pending", "active", "rejected", "suspended"] | None = None
     plan: Literal["free", "starter", "pro", "business", "ultra"] | None = None
     plan_expires_at: datetime | None = None  # ISO 8601 with timezone; null = no expiry
-    daily_limit_override: int | None = Field(default=None, ge=0, le=100_000)  # null = use the plan's limit
+    daily_limit_override: int | None = Field(default=None, ge=0, le=1_000_000)  # pages per window; null = plan's
+    page_credits: int | None = Field(default=None, ge=0, le=10_000_000)  # the prepaid page balance
     email_verified: bool | None = None  # true marks the address verified (e.g. confirmed by phone)
 
 
@@ -185,15 +191,18 @@ def update_user(user_id: str) -> Body:
         user = db.get(User, uid)
         if user is None:
             raise ApiError(404, "User not found.")
-        for field in update.model_fields_set - {"email_verified"}:  # only what the admin sent; null clears
+        for field in update.model_fields_set - {"email_verified", "page_credits"}:  # only what was sent; null clears
             setattr(user, field, getattr(update, field))
+        if update.page_credits is not None:
+            user.page_credits = update.page_credits
         if "email_verified" in update.model_fields_set:
             user.email_verified_at = (user.email_verified_at or now) if update.email_verified else None
         if user.plan == "free":
             user.plan_expires_at = None
         db.flush()
-        used = accounts.usage(db, user, now).used
-        return {"user": _admin_user(user, used, 0, "0.00", accounts.current_subscription(db, user), now)}, 200
+        pages = accounts.pages_in_window(db, [user.id], now - accounts.QUOTA_WINDOW).get(user.id, 0)
+        subscription = accounts.current_subscription(db, user)
+        return {"user": _admin_user(user, 0, 0, pages, "0.00", subscription, now)}, 200
 
 
 @admin.get("/payments")
@@ -233,6 +242,9 @@ def stats() -> Body:
         uploads_24h = db.scalar(
             select(func.count()).select_from(UsageEvent).where(UsageEvent.created_at > now - accounts.QUOTA_WINDOW)
         )
+        pages_24h = db.scalar(
+            select(func.sum(UsageEvent.pages)).where(UsageEvent.created_at > now - accounts.QUOTA_WINDOW)
+        )
         revenue = db.scalar(select(func.sum(Payment.amount)).where(Payment.status == "COMPLETED")) or 0
         active_subscriptions = db.scalar(
             select(func.count()).select_from(Subscription).where(Subscription.status == "ACTIVE")
@@ -242,5 +254,6 @@ def stats() -> Body:
         "users_by_status": by_status,
         "users_by_plan": by_plan,
         "uploads_24h": uploads_24h or 0,
+        "pages_24h": int(pages_24h or 0),
         "revenue_usd": f"{revenue:.2f}",
     }, 200

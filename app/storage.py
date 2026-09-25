@@ -3,12 +3,16 @@
 `save_stream()` copies an upload to disk in fixed-size chunks, so a 50 MB PDF
 never sits in RAM (2 GB server). Files get server-generated names; the user's
 filename is kept only for display, never used to build a path.
+`check_expansion()` rejects decompression bombs before any PDF parser touches the file.
+`count_pages()` reads only the page tree, so the quota is known before any processing.
 `delete_file()` is what the worker calls when a task finishes.
 """
 
+import mmap
 import re
 import time
 import uuid
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -26,6 +30,23 @@ class UploadError(ValueError):
 
 class NotAPdfError(UploadError):
     pass
+
+
+class UnreadablePdfError(UploadError):
+    pass
+
+
+class DecompressionBombError(UploadError):
+    """A compressed stream expands to an unsafe size: a "zip bomb" that would exhaust memory."""
+
+
+# A normal stream expands up to ~10 times (text) and rarely beyond 20 (images); bombs do 1000.
+MAX_EXPANSION_RATIO = 100
+SUSPECT_BYTES = 16 * 1024 * 1024  # below this, any ratio is harmless
+HARD_CAP_BYTES = 256 * 1024 * 1024  # no single stream may expand beyond this
+_STREAM_START = re.compile(rb"stream\r?\n")
+_READ = 64 * 1024
+_OUT = 1024 * 1024
 
 
 class UploadTooLargeError(UploadError):
@@ -122,3 +143,58 @@ def sweep_orphans(upload_dir: Path, *, max_age_seconds: float, now: float | None
         except (ValueError, FileNotFoundError):  # not ours, or deleted meanwhile by its task
             continue
     return removed
+
+
+def count_pages(path: Path) -> int:
+    """Number of pages, read from the PDF's page tree without parsing any page content."""
+    from pdfminer.pdfdocument import PDFDocument  # pdfplumber's parser; imported here to keep startup light
+    from pdfminer.pdfpage import PDFPage
+    from pdfminer.pdfparser import PDFParser
+
+    try:
+        with path.open("rb") as handle:
+            pages = sum(1 for _ in PDFPage.create_pages(PDFDocument(PDFParser(handle))))
+    except Exception:  # damaged, encrypted with a password, or not really a PDF inside
+        raise UnreadablePdfError("This PDF could not be opened (damaged or password-protected).") from None
+    if pages == 0:
+        raise UnreadablePdfError("This PDF has no pages.")
+    return pages
+
+
+def check_expansion(path: Path) -> None:
+    """Refuse PDFs with a compressed stream that expands to an unsafe size (decompression bombs).
+
+    Works on the raw bytes, before any PDF parser, so a bomb never reaches pdfminer. Streams are
+    inflated in 1 MB steps and counted, never kept, so memory stays flat whatever the file holds.
+    Streams that are not Flate-compressed (images, fonts) fail to inflate and are simply skipped.
+    """
+    with path.open("rb") as handle, mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ) as data:
+        for match in _STREAM_START.finditer(data):  # type: ignore[call-overload]
+            start = match.end()
+            end = data.find(b"endstream", start)
+            if end == -1:
+                break
+            limit = min(HARD_CAP_BYTES, max(SUSPECT_BYTES, MAX_EXPANSION_RATIO * (end - start)))
+            if _inflated_size(data, start, end, limit) > limit:
+                raise DecompressionBombError(
+                    "This PDF expands to an unsafe size when opened (a possible decompression bomb) and was rejected."
+                )
+
+
+def _inflated_size(data: mmap.mmap, start: int, end: int, limit: int) -> int:
+    """Bytes the stream inflates to, counting at most limit + 1; 0 if it is not zlib data."""
+    inflater = zlib.decompressobj()
+    total = 0
+    try:
+        for offset in range(start, end, _READ):
+            pending: bytes = data[offset : min(offset + _READ, end)]
+            while pending:
+                total += len(inflater.decompress(pending, _OUT))
+                if total > limit:
+                    return total
+                pending = inflater.unconsumed_tail
+            if inflater.eof:
+                break
+    except zlib.error:
+        return 0  # not Flate-compressed, or damaged: pdfminer decides later
+    return total

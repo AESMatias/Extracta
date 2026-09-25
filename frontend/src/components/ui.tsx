@@ -7,18 +7,42 @@ import type { ButtonHTMLAttributes, ComponentProps, InputHTMLAttributes, ReactNo
 
 // ---------------------------------------------------------------- buttons
 
-type Variant = "primary" | "secondary" | "ghost" | "danger" | "outline";
+type Variant = "primary" | "secondary" | "ghost" | "danger" | "outline" | "light";
 type Size = "sm" | "md" | "lg";
 
-const variants: Record<Variant, string> = {
-  primary:
-    "bg-signature animate-pan text-white shadow-lg shadow-brand-600/25 hover:shadow-xl hover:shadow-brand-600/30 hover:brightness-110",
-  secondary:
-    "bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100",
-  outline:
-    "border border-slate-300 bg-white/70 text-slate-800 hover:border-brand-400 hover:text-brand-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-100 dark:hover:border-brand-400 dark:hover:text-brand-300",
-  ghost: "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white",
-  danger: "bg-rose-600 text-white hover:bg-rose-500",
+// Every button shares the navigation's hover: a slanted block grows from the center behind the
+// label. `base` is the resting look, `sweep` the block's color, `hover` what changes on the label.
+const variants: Record<Variant, { base: string; sweep: string; hover: string }> = {
+  primary: {
+    base: "bg-signature animate-pan text-white shadow-lg shadow-brand-600/25",
+    sweep: "bg-gradient-to-r from-emerald-500 via-cyan-500 to-brand-500", // same direction, brighter tones
+    hover: "hover:shadow-xl hover:shadow-brand-600/35",
+  },
+  secondary: {
+    base: "bg-slate-900 text-white dark:bg-white dark:text-slate-900",
+    sweep: "bg-brand-600 dark:bg-accent",
+    hover: "",
+  },
+  light: {
+    base: "bg-white text-slate-900",
+    sweep: "bg-accent",
+    hover: "",
+  },
+  outline: {
+    base: "border border-slate-300 bg-white/70 text-slate-800 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-100",
+    sweep: "bg-slate-900 dark:bg-white",
+    hover: "hover:border-slate-900 hover:text-white dark:hover:border-white dark:hover:text-slate-900",
+  },
+  ghost: {
+    base: "text-slate-600 dark:text-slate-300",
+    sweep: "bg-slate-900 dark:bg-white",
+    hover: "hover:text-white dark:hover:text-slate-900",
+  },
+  danger: {
+    base: "bg-rose-600 text-white",
+    sweep: "bg-rose-800",
+    hover: "",
+  },
 };
 
 const sizes: Record<Size, string> = {
@@ -29,10 +53,24 @@ const sizes: Record<Size, string> = {
 
 function buttonClass(variant: Variant, size: Size, className?: string) {
   return clsx(
-    "inline-flex shrink-0 cursor-pointer items-center justify-center font-semibold whitespace-nowrap transition-all duration-200 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
-    variants[variant],
+    "group/btn relative isolate inline-flex shrink-0 cursor-pointer items-center justify-center overflow-hidden font-semibold whitespace-nowrap transition-all duration-300 ease-out hover:-translate-y-px active:translate-y-0 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
+    variants[variant].base,
+    variants[variant].hover,
     sizes[size],
     className,
+  );
+}
+
+/** The slanted block behind the label; it grows from the center on hover. */
+function Sweep({ variant }: { variant: Variant }) {
+  return (
+    <span
+      aria-hidden
+      className={clsx(
+        "absolute inset-y-0 -inset-x-3 -z-10 origin-center -skew-x-12 scale-x-0 transition-transform duration-500 ease-out group-hover/btn:scale-x-100",
+        variants[variant].sweep,
+      )}
+    />
   );
 }
 
@@ -46,6 +84,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 export function Button({ variant = "primary", size = "md", loading, icon, className, children, disabled, ...props }: ButtonProps) {
   return (
     <button className={buttonClass(variant, size, className)} disabled={disabled || loading} {...props}>
+      <Sweep variant={variant} />
       {loading ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : icon}
       {children}
     </button>
@@ -61,6 +100,7 @@ interface ButtonLinkProps extends ComponentProps<typeof Link> {
 export function ButtonLink({ variant = "primary", size = "md", icon, className, children, ...props }: ButtonLinkProps) {
   return (
     <Link className={buttonClass(variant, size, className)} {...props}>
+      <Sweep variant={variant} />
       {icon}
       {children}
     </Link>

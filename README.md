@@ -50,7 +50,7 @@ subscriptions or one-time passes, and an admin panel to approve accounts and ass
 | **Exports** | Excel (XLSX with typed numbers and dates), CSV (UTF-8 with BOM) and JSON, per document or for the whole batch. |
 | **Dashboard** | Drag and drop, upload progress, live status per document, detail view, charts by type and by currency, saved history. |
 | **Accounts** | Email + password or Google sign-in, email verification, forgot/reset/change password. Optional manual approval of new accounts. |
-| **Plans** | Free (2 PDFs every 24 hours) and four paid plans: monthly PayPal subscription (cancel anytime) or one-time 30-day pass. |
+| **Plans** | Charged per page. Free (10 pages every 24 hours), pay-as-you-go page packs that never expire, and four monthly subscriptions (cancel anytime). |
 | **Admin** | `/admin` with `ADMIN_PASSWORD`: approve/reject/suspend accounts, assign plans with or without expiry, custom daily limits, payments and stats. |
 
 Document types and extracted fields:
@@ -65,22 +65,24 @@ Document types and extracted fields:
 | `report` | Title, author, date, period, key findings |
 | `other` | Title and summary |
 
-## Plans
+## Plans and pages
 
-Defined in [`app/plans.py`](app/plans.py) (the frontend catalog is generated from it and a test
-fails if they drift). Each paid plan is sold as a monthly PayPal subscription that renews until
-cancelled (the plan stays until the paid period ends) or as a one-time 30-day pass.
+Usage is measured in **PDF pages**: every page of every processed document counts once, and a
+document that fails gives its pages back. Defined in [`app/plans.py`](app/plans.py) (the frontend
+catalog is generated from it and a test fails if they drift).
 
-| Plan | Price | PDFs / 24 h | MB per file | Files per upload | Save to history |
-|---|---|---|---|---|---|
-| Free | $0 | 2 | 10 | 2 | — |
-| Starter | $1.99 | 25 | 20 | 10 | ✓ |
-| Pro | $4.99 | 100 | 50 | 25 | ✓ |
-| Business | $9.99 | 250 | 50 | 50 | ✓ |
-| Ultra | $19.99 | 600 | 50 | 50 | ✓ |
+| Plan | Price | Pages | Pages per PDF | MB per file | Files per upload | Save to history |
+|---|---|---|---|---|---|---|
+| Free | $0 | 10 every 24 h | 10 | 10 | 2 | — |
+| Starter | $1.99 / month | 300 every 30 days | 30 | 20 | 10 | ✓ |
+| Pro | $4.99 / month | 1,000 every 30 days | 60 | 50 | 25 | ✓ |
+| Business | $9.99 / month | 2,500 every 30 days | 100 | 50 | 50 | ✓ |
+| Ultra | $19.99 / month | 6,000 every 30 days | 150 | 50 | 50 | ✓ |
 
-Every paid plan covers its worst-case LLM cost (≈ USD 0.0006 per document with Gemini
-Flash-Lite), which is checked by a test.
+**Pay as you go**: page packs of 100 ($0.99), 250 ($1.99), 500 ($3.49), 1,000 ($5.99), 2,500
+($12.99) and 5,000 ($22.99) pages. Prepaid pages never expire, are spent after the plan's pages,
+and unlock PDFs of up to 100 pages and saving to the history. Every plan and pack covers its
+worst-case LLM cost (≈ USD 0.0006 per page with Gemini Flash-Lite), which is checked by a test.
 
 ---
 
