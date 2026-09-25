@@ -2,7 +2,7 @@
 // HttpOnly session cookie travels automatically and no token is ever stored in JavaScript.
 
 export type PlanId = "free" | "starter" | "pro" | "business" | "ultra";
-export type UserStatus = "pending" | "active" | "rejected" | "suspended";
+export type UserStatus = "pending" | "active" | "rejected" | "suspended" | "deleted";
 export type ExportFormat = "csv" | "xlsx" | "json";
 export type DocumentType =
   | "invoice"
@@ -192,6 +192,19 @@ export interface AdminStats {
   pages_24h: number;
   revenue_usd: string;
   active_subscriptions: number;
+  pending_deletions: number;
+}
+
+/** An account deletion asked for from the public form (listed even when the email never arrived). */
+export interface AdminDeletionRequest {
+  id: string;
+  user_id: string;
+  email: string; // the address at request time
+  name: string | null;
+  status: "pending" | "completed" | "dismissed";
+  account_status: UserStatus;
+  created_at: string;
+  resolved_at: string | null;
 }
 
 export class ApiError extends Error {
@@ -300,6 +313,11 @@ export const api = {
   forgotPassword: (email: string) => request<{ ok: boolean }>("/api/auth/password/forgot", { method: "POST", json: { email } }),
   resetPassword: (token: string, password: string) =>
     request<{ user: User }>("/api/auth/password/reset", { method: "POST", json: { token, password } }),
+  deleteAccount: (body: { password?: string; email?: string }) =>
+    request<{ deleted: boolean }>("/api/auth/account/delete", { method: "POST", json: body }),
+  requestAccountDeletion: (email: string) => request<{ ok: boolean }>("/api/auth/account/delete-request", { method: "POST", json: { email } }),
+  confirmAccountDeletion: (token: string) =>
+    request<{ deleted: boolean }>("/api/auth/account/delete-confirm", { method: "POST", json: { token } }),
   changePassword: (body: { current_password?: string; new_password: string }) =>
     request<{ user: User }>("/api/auth/password/change", { method: "POST", json: body }),
 
@@ -340,5 +358,9 @@ export const api = {
       request<{ user: AdminUser }>(`/api/admin/users/${id}`, { method: "PATCH", json: changes }),
     payments: () => request<{ payments: AdminPayment[] }>("/api/admin/payments"),
     stats: () => request<AdminStats>("/api/admin/stats"),
+    deleteUser: (id: string) => request<{ deleted: boolean }>(`/api/admin/users/${id}/delete`, { method: "POST" }),
+    deletionRequests: () => request<{ requests: AdminDeletionRequest[] }>("/api/admin/deletion-requests"),
+    resolveDeletion: (id: string, action: "complete" | "dismiss") =>
+      request<{ request: AdminDeletionRequest }>(`/api/admin/deletion-requests/${id}/${action}`, { method: "POST" }),
   },
 };

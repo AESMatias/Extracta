@@ -227,10 +227,20 @@ export function Progress({ value, className, tone = "brand" }: { value: number; 
   );
 }
 
+/** A large ring: a gradient arc with a fading tail turning around, with a soft glow. */
+export function LoadingRing({ className }: { className?: string }) {
+  return (
+    <span role="status" aria-label="Loading" className={clsx("relative inline-block size-20", className)}>
+      <span className="absolute inset-0 rounded-full bg-[conic-gradient(from_0deg,transparent_0deg,transparent_120deg,rgb(16_185_129/0.25)_200deg,#06b6d4_300deg,#2f6fed_356deg,transparent_360deg)] [mask:radial-gradient(farthest-side,transparent_calc(100%-5px),#000_calc(100%-4px))] animate-spin [animation-duration:1s]" />
+      <span className="absolute inset-0 animate-spin rounded-full opacity-60 blur-md [animation-duration:1s] bg-[conic-gradient(from_0deg,transparent_0deg,transparent_250deg,#06b6d4_330deg,transparent_360deg)] [mask:radial-gradient(farthest-side,transparent_calc(100%-8px),#000_calc(100%-6px))]" />
+    </span>
+  );
+}
+
 export function PageLoader() {
   return (
     <div className="grid min-h-[60dvh] place-items-center">
-      <Spinner className="size-8" />
+      <LoadingRing />
     </div>
   );
 }

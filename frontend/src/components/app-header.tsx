@@ -32,7 +32,7 @@ export function AppHeader() {
     <>
       <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl dark:border-slate-800/70 dark:bg-slate-950/75">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-          <Logo href="/app" />
+          <Logo travel />
           <nav className="hidden items-center gap-1 sm:flex" aria-label="App">
             {LINKS.map(({ href, label, icon: Icon }) => (
               <Link

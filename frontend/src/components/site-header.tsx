@@ -35,7 +35,6 @@ export function SiteHeader() {
   const { m } = useI18n();
   const links = [
     { href: "/#features", label: m.nav.features },
-    { href: "/#how-it-works", label: m.nav.steps },
     { href: "/#security", label: m.nav.security },
     { href: "/pricing", label: m.nav.pricing },
     { href: "/#faq", label: m.nav.faq },
@@ -78,7 +77,7 @@ export function SiteHeader() {
     >
       <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6" aria-label="Main">
         <div className="flex items-center gap-4">
-          <Logo />
+          <Logo travel />
           <span className="hidden h-7 w-px bg-slate-200 lg:block dark:bg-slate-800" aria-hidden />
           <Byline className="hidden lg:inline-flex" />
         </div>
@@ -130,7 +129,7 @@ export function SiteHeader() {
 
       {open && (
         <div id="mobile-menu" className="h-[calc(100dvh-4rem)] overflow-y-auto border-t border-slate-200/70 px-4 pt-4 pb-8 md:hidden dark:border-slate-800">
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 text-center">
             {links.map((link) => (
               <Link
                 key={link.href}
@@ -166,7 +165,7 @@ export function SiteHeader() {
               </>
             )}
           </div>
-          <div className="mt-8 flex items-center justify-between gap-4 border-t border-slate-200/70 pt-6 dark:border-slate-800">
+          <div className="mt-8 flex flex-col items-center gap-4 border-t border-slate-200/70 pt-6 dark:border-slate-800">
             <Byline />
             <LanguageSwitch />
           </div>

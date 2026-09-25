@@ -207,7 +207,7 @@ def test_change_password_signs_out_other_sessions(harness: Harness) -> None:
         "/api/auth/password/change", json={"current_password": USER_PASSWORD, "new_password": NEW_PASSWORD}
     )
 
-    assert changed.status_code == 200
+    assert changed.status_code == 200, changed.get_json()
     assert me(client) is not None  # this session stays signed in
     assert me(other_session) is None
     assert login(harness, NEW_PASSWORD)[1].status_code == 200
@@ -243,3 +243,173 @@ def test_admin_can_mark_an_email_verified(harness: Harness) -> None:
     assert me(client)["email_verified"] is False
     with session_scope() as db:
         assert db.execute(select(User)).scalar_one().email_verified_at is None
+
+
+# --------------------------------------------------------------------------- account deletion
+
+
+def account_row() -> User:
+    with session_scope() as db:
+        user = db.execute(select(User)).scalar_one()
+        db.expunge(user)
+        return user
+
+
+def test_deleting_my_account_needs_the_password_and_erases_everything(harness: Harness) -> None:
+    from app.models import Document, Payment, UsageEvent
+
+    client = harness.signed_up()
+    user = account_row()
+    with session_scope() as db:
+        db.add(UsageEvent(user_id=user.id, task_id=user.id, pages=3))
+        db.add(
+            Payment(
+                user_id=user.id,
+                provider_order_id="O1",
+                plan="p100",
+                pages=100,
+                amount=0.99,
+                currency="USD",
+                status="COMPLETED",
+            )
+        )
+
+    wrong = client.post("/api/auth/account/delete", json={"password": "not my password"})
+    response = client.post("/api/auth/account/delete", json={"password": USER_PASSWORD})
+
+    assert wrong.status_code == 401
+    assert response.status_code == 200 and response.get_json() == {"deleted": True}
+    assert me(client) is None
+    assert login(harness, USER_PASSWORD)[1].status_code == 401
+    erased = account_row()
+    assert erased.status == "deleted" and erased.email.endswith("@deleted.invalid")
+    assert (erased.name, erased.password_hash, erased.google_sub) == (None, None, None)
+    with session_scope() as db:
+        assert db.query(UsageEvent).count() == 0 and db.query(Document).count() == 0
+        assert db.query(Payment).count() == 1  # kept for tax law, with no personal data left
+    assert "was deleted" in harness.mailer.last_to("ana@example.com")["Subject"]
+
+
+def test_google_only_accounts_confirm_with_their_email(harness: Harness) -> None:
+    client = harness.client()
+    client.get("/api/auth/google/login")
+    client.get(f"/api/auth/google/callback?state={harness.google.last_state}&code=c")
+
+    assert client.post("/api/auth/account/delete", json={"email": "someone@else.com"}).status_code == 400
+    assert client.post("/api/auth/account/delete", json={"email": "Gina@Example.com"}).status_code == 200
+
+
+def test_deleting_by_email_link(harness: Harness) -> None:
+    harness.signed_up()
+    anyone = harness.client()
+    harness.mailer.sent.clear()
+
+    for email in ("nobody@example.com", "not an email"):
+        assert anyone.post("/api/auth/account/delete-request", json={"email": email}).get_json() == {"ok": True}
+    assert harness.mailer.sent == []
+    anyone.post("/api/auth/account/delete-request", json={"email": "ana@example.com"})
+    assert "Confirm the deletion" in harness.mailer.last_to("ana@example.com")["Subject"]
+    token = harness.mailer.link_token("ana@example.com")
+
+    assert anyone.post("/api/auth/account/delete-confirm", json={"token": "bad"}).status_code == 400
+    assert anyone.post("/api/auth/account/delete-confirm", json={"token": token}).get_json() == {"deleted": True}
+    assert account_row().status == "deleted"
+    assert anyone.post("/api/auth/account/delete-confirm", json={"token": token}).status_code == 400  # once
+
+
+def test_deleted_accounts_cannot_use_their_old_session(harness: Harness) -> None:
+    client = harness.signed_up()
+    other_device = login(harness, USER_PASSWORD)[0]
+
+    response = client.post("/api/auth/account/delete", json={"password": USER_PASSWORD})
+
+    assert response.status_code == 200, response.get_json()
+    assert me(other_device) is None
+
+
+# --------------------------------------------------------------------------- deletion requests in /admin
+
+
+def deletion_requests(harness: Harness) -> list[dict[str, Any]]:
+    requests: list[dict[str, Any]] = harness.admin().get("/api/admin/deletion-requests").get_json()["requests"]
+    return requests
+
+
+class BrokenMailer:
+    def send(self, message: object) -> None:
+        raise ConnectionRefusedError("no SMTP server")
+
+
+def test_form_requests_reach_the_admin_even_when_the_email_fails(harness: Harness) -> None:
+    harness.signed_up()
+    harness.app.extensions["mailer"] = BrokenMailer()
+    anyone = harness.client()
+
+    for email in ("ana@example.com", "ANA@example.com", "nobody@example.com"):
+        assert anyone.post("/api/auth/account/delete-request", json={"email": email}).get_json() == {"ok": True}
+
+    [request] = deletion_requests(harness)  # the repeat updates the pending one; unknown emails add nothing
+    assert (request["email"], request["name"], request["status"], request["account_status"]) == (
+        "ana@example.com",
+        "Ana",
+        "pending",
+        "active",
+    )
+    assert harness.admin().get("/api/admin/stats").get_json()["pending_deletions"] == 1
+
+
+def test_the_admin_completes_a_deletion_request(harness: Harness) -> None:
+    harness.signed_up()
+    harness.client().post("/api/auth/account/delete-request", json={"email": "ana@example.com"})
+    [request] = deletion_requests(harness)
+    admin = harness.admin()
+
+    response = admin.post(f"/api/admin/deletion-requests/{request['id']}/complete")
+
+    assert response.status_code == 200
+    done = response.get_json()["request"]
+    assert (done["status"], done["account_status"], done["email"]) == ("completed", "deleted", "ana@example.com")
+    assert done["resolved_at"] is not None
+    assert account_row().status == "deleted"
+    assert "was deleted" in harness.mailer.last_to("ana@example.com")["Subject"]
+    assert admin.post(f"/api/admin/deletion-requests/{request['id']}/complete").status_code == 409
+    assert admin.get("/api/admin/stats").get_json()["pending_deletions"] == 0
+
+
+def test_the_admin_dismisses_a_deletion_request(harness: Harness) -> None:
+    harness.signed_up()
+    harness.client().post("/api/auth/account/delete-request", json={"email": "ana@example.com"})
+    [request] = deletion_requests(harness)
+    admin = harness.admin()
+
+    response = admin.post(f"/api/admin/deletion-requests/{request['id']}/dismiss")
+
+    assert response.get_json()["request"]["status"] == "dismissed"
+    assert account_row().status == "active"
+    assert admin.post(f"/api/admin/deletion-requests/{request['id']}/dismiss").status_code == 409
+    for bad in ("not-a-uuid", "00000000-0000-0000-0000-000000000000"):
+        assert admin.post(f"/api/admin/deletion-requests/{bad}/dismiss").status_code == 404
+
+
+def test_confirming_by_link_closes_the_request(harness: Harness) -> None:
+    harness.signed_up()
+    anyone = harness.client()
+    anyone.post("/api/auth/account/delete-request", json={"email": "ana@example.com"})
+
+    anyone.post("/api/auth/account/delete-confirm", json={"token": harness.mailer.link_token("ana@example.com")})
+
+    [request] = deletion_requests(harness)
+    assert request["status"] == "completed"
+
+
+def test_the_admin_deletes_an_account_directly(harness: Harness) -> None:
+    harness.signed_up()
+    user = account_row()
+    admin = harness.admin()
+
+    assert harness.client().post(f"/api/admin/users/{user.id}/delete").status_code == 401
+    assert admin.post(f"/api/admin/users/{user.id}/delete").get_json() == {"deleted": True}
+    assert account_row().status == "deleted"
+    assert admin.post(f"/api/admin/users/{user.id}/delete").status_code == 404  # already gone
+    assert admin.post("/api/admin/users/nope/delete").status_code == 404
+    assert harness.client().get("/api/admin/deletion-requests").status_code == 401

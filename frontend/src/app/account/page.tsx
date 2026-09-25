@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AppPage } from "@/components/app-header";
+import { DeleteAccountCard } from "@/components/delete-account-card";
 import { SecurityCard } from "@/components/security-card";
 import { subscriptionIsLive, SubscriptionPanel } from "@/components/subscription-panel";
 import { Badge, Button, ButtonLink, Card, PageLoader } from "@/components/ui";
@@ -16,7 +17,7 @@ import { formatDate } from "@/lib/documents";
 import { fill, useI18n } from "@/lib/i18n";
 import { formatPages, PACKS, planFeatures, PLANS } from "@/lib/plans";
 
-const STATUS_TONE = { active: "green", pending: "amber", rejected: "red", suspended: "red" } as const;
+const STATUS_TONE = { active: "green", pending: "amber", rejected: "red", suspended: "red", deleted: "slate" } as const;
 const PAYMENT_TONE: Record<string, "green" | "amber" | "red"> = { COMPLETED: "green", REFUNDED: "red", REVERSED: "red" };
 type PaymentStatus = keyof typeof import("@/lib/messages/en").en.account.paymentStatus;
 
@@ -58,7 +59,7 @@ export default function AccountPage() {
         <div className="space-y-6">
           <Card className="p-6">
             <div className="flex items-center gap-4">
-              <div className="grid size-14 place-items-center bg-signature text-xl font-bold text-white">
+              <div className="grid size-14 shrink-0 place-items-center rounded-full bg-signature text-xl font-bold text-white">
                 {(user.name ?? user.email).charAt(0).toUpperCase()}
               </div>
               <div className="min-w-0">
@@ -109,6 +110,7 @@ export default function AccountPage() {
           </Card>
           <SecurityCard user={user} />
           <UsageCard user={user} />
+          <DeleteAccountCard user={user} />
         </div>
 
         <div className="space-y-6">

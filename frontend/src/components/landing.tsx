@@ -93,7 +93,7 @@ function Steps() {
                 style={{ animationDelay: `${300 + index * 120}ms` }}
                 className="group flex animate-fade-up flex-col items-center gap-1.5 text-center sm:flex-row sm:justify-center sm:gap-3 sm:text-left"
               >
-                <span className="bg-signature grid size-9 shrink-0 place-items-center text-white transition duration-500 ease-out group-hover:rotate-90">
+                <span className="bg-signature grid size-9 shrink-0 place-items-center text-white transition-all duration-500 ease-out group-hover:rotate-90 group-hover:rounded-[10px]">
                   <Icon className="size-4 transition duration-500 ease-out group-hover:-rotate-90" />
                 </span>
                 <p className="text-sm leading-tight">

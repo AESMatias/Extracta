@@ -287,7 +287,12 @@ def test_failed_documents_give_their_pages_back(
     env: Any, settings: Settings, make_pdf: MakePdf, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     refunded: list[str] = []
-    monkeypatch.setattr(tasks.accounts, "refund_usage", lambda db, task_id: refunded.append(task_id) or 1)
+
+    def refund_usage(db: Any, task_id: str) -> int:
+        refunded.append(task_id)
+        return 1
+
+    monkeypatch.setattr(tasks.accounts, "refund_usage", refund_usage)
     env(FakeExtractor(VALID_DOC))
 
     scanned = run(upload(settings, make_pdf, pages=[""]), save_to_db=False)

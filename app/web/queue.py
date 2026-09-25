@@ -29,7 +29,9 @@ _USER_MESSAGES = {
     "LLMTransientError": "The AI service is busy right now. Please upload the document again in a few minutes.",
     "LLMExtractionError": "The document could not be converted into structured data.",
     "UploadExpiredError": "The file waited too long in the queue and was removed. Upload it again.",
-    "DecompressionBombError": "This PDF expands to an unsafe size when opened (a possible decompression bomb) and was rejected.",
+    "DecompressionBombError": (
+        "This PDF expands to an unsafe size when opened (a possible decompression bomb) and was rejected."
+    ),
     "MemoryError": "This PDF is too complex to process safely and was rejected.",
     "SoftTimeLimitExceeded": "This PDF took too long to read and was stopped.",
     "TimeLimitExceeded": "This PDF took too long to read and was stopped.",

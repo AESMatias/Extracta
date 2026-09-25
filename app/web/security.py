@@ -96,7 +96,7 @@ def current_user(db: Session) -> User | None:
     except ValueError:
         user = None
     stale = user is None or session.get(PASSWORD_KEY) != password_fingerprint(user)
-    if stale or user is None or user.status in ("rejected", "suspended"):
+    if stale or user is None or user.status in ("rejected", "suspended", "deleted"):
         # Deleted, blocked, or the password changed since the cookie was issued.
         session.pop(USER_KEY, None)
         session.pop(PASSWORD_KEY, None)

@@ -32,6 +32,7 @@ export function SiteFooter() {
       links: [
         { href: "/terms", label: m.footer.terms },
         { href: "/privacy", label: m.footer.privacy },
+        { href: "/delete-account", label: m.footer.deleteAccount },
         { href: "/#faq", label: m.nav.faq },
       ],
     },
@@ -39,8 +40,9 @@ export function SiteFooter() {
 
   return (
     <footer className="border-t border-slate-200/70 dark:border-slate-800/70">
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.4fr_repeat(3,1fr)]">
-        <div>
+      {/* Centered on phones and tablets, four columns on desktop. */}
+      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 text-center sm:px-6 md:grid-cols-[1.4fr_repeat(3,1fr)] md:text-left">
+        <div className="flex flex-col items-center md:items-start">
           <Logo />
           <p className="mt-4 max-w-xs text-sm text-slate-600 dark:text-slate-400">{m.footer.tagline}</p>
           <Byline className="mt-5" />

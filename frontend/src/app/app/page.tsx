@@ -314,7 +314,7 @@ export default function DashboardPage() {
             </p>
           )}
           {uploading && <Progress value={progress * 100} className="mt-5" />}
-          <div className="mt-5 flex flex-wrap items-center gap-3">
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
             <Button size="lg" onClick={upload} loading={uploading} disabled={valid.length === 0 || tooMany || blocked} icon={<Sparkles className="size-5" />} className="w-full sm:w-auto">
               {uploading
                 ? fill(d.uploading, { percent: Math.round(progress * 100) })

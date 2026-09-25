@@ -445,3 +445,17 @@ def test_parse_time() -> None:
     assert billing.parse_time("2026-10-25T10:00:00Z") == datetime.fromisoformat("2026-10-25T10:00:00+00:00")
     assert billing.parse_time("not a date") is None
     assert billing.parse_time(None) is None
+
+
+def test_deleting_the_account_cancels_the_subscription(harness: Harness) -> None:
+    from tests.conftest import USER_PASSWORD
+
+    client = harness.signed_up()
+    subscription_id, _ = active(harness, client)
+    harness.paypal.fail = True
+    assert client.post("/api/auth/account/delete", json={"password": USER_PASSWORD}).status_code == 502
+    assert account().status == "active"  # nothing deleted while PayPal could not cancel
+
+    harness.paypal.fail = False
+    assert client.post("/api/auth/account/delete", json={"password": USER_PASSWORD}).status_code == 200
+    assert harness.paypal.cancelled == [subscription_id]

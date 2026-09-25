@@ -13,7 +13,10 @@ import {
   Search,
   ShieldCheck,
   ShieldX,
+  Trash2,
+  TriangleAlert,
   Upload,
+  UserX,
   Users,
   X,
 } from "lucide-react";
@@ -22,13 +25,24 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Logo } from "@/components/logo";
 import { useToast } from "@/components/toast";
 import { Alert, Badge, Button, Card, Field, PageLoader } from "@/components/ui";
-import { api, ApiError, type AdminPayment, type AdminStats, type AdminUser, type Plan, type PlanId, type UserStatus } from "@/lib/api";
+import {
+  api,
+  ApiError,
+  type AdminDeletionRequest,
+  type AdminPayment,
+  type AdminStats,
+  type AdminUser,
+  type Plan,
+  type PlanId,
+  type UserStatus,
+} from "@/lib/api";
 import { formatDate } from "@/lib/documents";
 
 const STATUSES: UserStatus[] = ["pending", "active", "rejected", "suspended"];
-const STATUS_TONE = { active: "green", pending: "amber", rejected: "red", suspended: "red" } as const;
+const STATUS_TONE = { active: "green", pending: "amber", rejected: "red", suspended: "red", deleted: "slate" } as const;
 const SUBSCRIPTION_TONE = { ACTIVE: "green", APPROVED: "amber", SUSPENDED: "red" } as const;
 const PAYMENT_TONE: Record<string, "green" | "red" | "amber"> = { COMPLETED: "green", REFUNDED: "red", REVERSED: "red" };
+const REQUEST_TONE = { pending: "amber", completed: "green", dismissed: "slate" } as const;
 const selectClass =
   "h-10 w-full border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-900 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15 outline-none";
 
@@ -79,7 +93,54 @@ function toDateInput(iso: string | null): string {
   return iso ? iso.slice(0, 10) : "";
 }
 
-function UserCard({ user, plans, onSaved }: { user: AdminUser; plans: Plan[]; onSaved: (user: AdminUser) => void }) {
+/** A destructive button that asks once more before acting ("Delete account" → "Yes, delete it"). */
+function ConfirmButton({ label, confirmLabel, onConfirm }: { label: string; confirmLabel: string; onConfirm: () => Promise<void> }) {
+  const [armed, setArmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (!armed) {
+    return (
+      <Button size="sm" variant="outline" onClick={() => setArmed(true)} icon={<Trash2 className="size-4" />}>
+        {label}
+      </Button>
+    );
+  }
+  return (
+    <div className="flex gap-2">
+      <Button size="sm" variant="ghost" onClick={() => setArmed(false)} disabled={busy}>
+        Cancel
+      </Button>
+      <Button
+        size="sm"
+        variant="danger"
+        loading={busy}
+        icon={<Trash2 className="size-4" />}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            await onConfirm();
+          } finally {
+            setBusy(false);
+            setArmed(false);
+          }
+        }}
+      >
+        {confirmLabel}
+      </Button>
+    </div>
+  );
+}
+
+function UserCard({
+  user,
+  plans,
+  onSaved,
+  onDeleted,
+}: {
+  user: AdminUser;
+  plans: Plan[];
+  onSaved: (user: AdminUser) => void;
+  onDeleted: () => void;
+}) {
   const { toast } = useToast();
   const [status, setStatus] = useState<UserStatus>(user.status);
   const [plan, setPlan] = useState<PlanId>(user.assigned_plan);
@@ -113,6 +174,16 @@ function UserCard({ user, plans, onSaved }: { user: AdminUser; plans: Plan[]; on
       toast("error", "Could not update", err instanceof ApiError ? `${err.message} ${String(err.data.details ?? "")}` : undefined);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function erase() {
+    try {
+      await api.admin.deleteUser(user.id);
+      toast("success", "Account deleted", `${user.email} was erased and told by email.`);
+      onDeleted();
+    } catch (err) {
+      toast("error", "Could not delete", err instanceof ApiError ? err.message : undefined);
     }
   }
 
@@ -244,8 +315,88 @@ function UserCard({ user, plans, onSaved }: { user: AdminUser; plans: Plan[]; on
             Save changes
           </Button>
         </div>
+        {user.status !== "deleted" && (
+          <div className="mt-6 flex flex-col gap-3 border-t border-rose-200 pt-4 sm:flex-row sm:items-center sm:justify-between dark:border-rose-500/30">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              <span className="font-semibold text-rose-700 dark:text-rose-300">Delete account.</span> Cancels any subscription,
+              erases documents and personal data, keeps payment records, and emails the owner. It cannot be undone.
+            </p>
+            <ConfirmButton label="Delete account" confirmLabel="Yes, delete it" onConfirm={erase} />
+          </div>
+        )}
       </details>
     </Card>
+  );
+}
+
+// ---------------------------------------------------------------- deletion requests
+
+function DeletionRequests({
+  requests,
+  onResolved,
+}: {
+  requests: AdminDeletionRequest[] | null;
+  onResolved: (request: AdminDeletionRequest) => void;
+}) {
+  const { toast } = useToast();
+
+  async function resolve(request: AdminDeletionRequest, action: "complete" | "dismiss") {
+    try {
+      const { request: updated } = await api.admin.resolveDeletion(request.id, action);
+      onResolved(updated);
+      toast("success", action === "complete" ? "Account deleted" : "Request dismissed", request.email);
+    } catch (err) {
+      toast("error", "Could not update the request", err instanceof ApiError ? err.message : undefined);
+    }
+  }
+
+  return (
+    <div className="mt-6 space-y-4">
+      <Alert tone="amber" title="Anyone can fill in the public form with any address">
+        Each request emails a confirmation link to the account; when the owner opens it, the request closes by itself. A request
+        still pending here means the link was not used (or the email never arrived). Before deleting by hand, confirm with the
+        owner from the account&apos;s address, then press Delete account within 48 hours.
+      </Alert>
+      {requests === null ? (
+        <PageLoader />
+      ) : requests.length === 0 ? (
+        <p className="py-10 text-center text-sm text-slate-500">No deletion requests yet.</p>
+      ) : (
+        requests.map((request) => (
+          <Card key={request.id} className={clsx("p-5", request.status === "pending" && "ring-2 ring-amber-400")}>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="truncate font-semibold">
+                  <a href={`mailto:${request.email}`} className="hover:underline">
+                    {request.email}
+                  </a>
+                </p>
+                <p className="text-sm text-slate-500">
+                  {request.name ?? "No name"} · requested {formatDate(request.created_at, true)}
+                  {request.resolved_at && ` · closed ${formatDate(request.resolved_at, true)}`}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <Badge tone={REQUEST_TONE[request.status]}>{request.status}</Badge>
+                  <Badge tone={STATUS_TONE[request.account_status]}>account {request.account_status}</Badge>
+                </div>
+              </div>
+              {request.status === "pending" && (
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => resolve(request, "dismiss")} icon={<X className="size-4" />}>
+                    Dismiss
+                  </Button>
+                  <ConfirmButton label="Delete account" confirmLabel="Yes, delete it" onConfirm={() => resolve(request, "complete")} />
+                </div>
+              )}
+            </div>
+          </Card>
+        ))
+      )}
+      <p className="flex items-center justify-center gap-2 text-xs text-slate-500">
+        <TriangleAlert className="size-3.5" /> Requests sent to the contact address by email are not listed: find the account in Users
+        and delete it from its edit panel.
+      </p>
+    </div>
   );
 }
 
@@ -253,13 +404,14 @@ function UserCard({ user, plans, onSaved }: { user: AdminUser; plans: Plan[]; on
 
 export default function AdminPage() {
   const [session, setSession] = useState<{ enabled: boolean; authenticated: boolean } | null>(null);
-  const [tab, setTab] = useState<"users" | "payments">("users");
+  const [tab, setTab] = useState<"users" | "payments" | "deletions">("users");
   const [status, setStatus] = useState<string>("");
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [payments, setPayments] = useState<AdminPayment[] | null>(null);
   const [stats, setStats] = useState<AdminStats | null>(null);
+  const [deletions, setDeletions] = useState<AdminDeletionRequest[] | null>(null);
 
   const checkSession = useCallback(() => {
     api.admin.session().then(setSession, () => setSession({ enabled: false, authenticated: false }));
@@ -288,6 +440,14 @@ export default function AdminPage() {
     if (session?.authenticated && tab === "payments") api.admin.payments().then((r) => setPayments(r.payments), () => setPayments([]));
   }, [session, tab]);
 
+  const loadDeletions = useCallback(() => {
+    api.admin.deletionRequests().then((r) => setDeletions(r.requests), () => setDeletions([]));
+  }, []);
+
+  useEffect(() => {
+    if (session?.authenticated && tab === "deletions") loadDeletions();
+  }, [session, tab, loadDeletions]);
+
   if (!session) return <PageLoader />;
   if (!session.enabled) {
     return (
@@ -301,6 +461,11 @@ export default function AdminPage() {
   if (!session.authenticated) return <AdminLogin onDone={checkSession} />;
 
   const pendingCount = stats?.users_by_status.pending ?? 0;
+  const deletionCount = stats?.pending_deletions ?? 0;
+  const refresh = () => {
+    void load();
+    if (tab === "deletions") loadDeletions();
+  };
 
   return (
     <div className="min-h-dvh bg-slate-50/70 dark:bg-slate-950">
@@ -311,7 +476,7 @@ export default function AdminPage() {
             <Badge tone="red">Admin</Badge>
           </div>
           <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={load} icon={<RefreshCw className="size-4" />} aria-label="Refresh" />
+            <Button variant="ghost" size="sm" onClick={refresh} icon={<RefreshCw className="size-4" />} aria-label="Refresh" />
             <Button variant="ghost" size="sm" onClick={() => api.admin.logout().then(checkSession)} icon={<LogOut className="size-4" />}>
               <span className="hidden sm:inline">Sign out</span>
             </Button>
@@ -320,10 +485,11 @@ export default function AdminPage() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {[
             { icon: Users, label: "Accounts", value: Object.values(stats?.users_by_status ?? {}).reduce((a, b) => a + (b ?? 0), 0) },
             { icon: ShieldX, label: "Pending approval", value: pendingCount, highlight: pendingCount > 0 },
+            { icon: UserX, label: "Deletion requests", value: deletionCount, highlight: deletionCount > 0 },
             { icon: Upload, label: "Pages last 24 h", value: `${stats?.pages_24h ?? 0} · ${stats?.uploads_24h ?? 0} PDFs` },
             { icon: Repeat, label: "Active subscriptions", value: stats?.active_subscriptions ?? 0 },
             { icon: CircleDollarSign, label: "Revenue (USD)", value: `$${stats?.revenue_usd ?? "0.00"}` },
@@ -336,17 +502,26 @@ export default function AdminPage() {
           ))}
         </div>
 
-        <div className="mt-8 flex gap-2 border-b border-slate-200 dark:border-slate-800">
-          {(["users", "payments"] as const).map((name) => (
+        <div className="mt-8 flex gap-2 overflow-x-auto border-b border-slate-200 dark:border-slate-800">
+          {(
+            [
+              ["users", "Users"],
+              ["payments", "Payments"],
+              ["deletions", "Deletion requests"],
+            ] as const
+          ).map(([name, label]) => (
             <button
               key={name}
               onClick={() => setTab(name)}
               className={clsx(
-                "-mb-px border-b-2 px-4 py-2 text-sm font-semibold capitalize transition",
+                "-mb-px flex items-center gap-1.5 border-b-2 px-4 py-2 text-sm font-semibold whitespace-nowrap transition",
                 tab === name ? "border-brand-500 text-brand-600 dark:text-brand-400" : "border-transparent text-slate-500 hover:text-slate-800",
               )}
             >
-              {name}
+              {label}
+              {name === "deletions" && deletionCount > 0 && (
+                <span className="grid min-w-5 place-items-center bg-rose-500 px-1 text-[11px] leading-5 text-white">{deletionCount}</span>
+              )}
             </button>
           ))}
         </div>
@@ -386,11 +561,25 @@ export default function AdminPage() {
                 <p className="py-10 text-center text-sm text-slate-500">No accounts match.</p>
               ) : (
                 users.map((user) => (
-                  <UserCard key={user.id} user={user} plans={plans} onSaved={(updated) => setUsers((current) => current?.map((u) => (u.id === updated.id ? { ...u, ...updated } : u)) ?? null)} />
+                  <UserCard
+                    key={user.id}
+                    user={user}
+                    plans={plans}
+                    onSaved={(updated) => setUsers((current) => current?.map((u) => (u.id === updated.id ? { ...u, ...updated } : u)) ?? null)}
+                    onDeleted={() => void load()}
+                  />
                 ))
               )}
             </div>
           </>
+        ) : tab === "deletions" ? (
+          <DeletionRequests
+            requests={deletions}
+            onResolved={(updated) => {
+              setDeletions((current) => current?.map((r) => (r.id === updated.id ? updated : r)) ?? null);
+              void load();
+            }}
+          />
         ) : (
           <Card className="mt-6 overflow-x-auto">
             {payments === null ? (

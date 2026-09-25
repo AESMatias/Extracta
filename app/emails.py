@@ -110,3 +110,41 @@ def password_changed(*, sender: str, to: str, name: str | None, reset_link: str)
         "You receive this email for your security; there is nothing to do if it was you.",
     )
     return _message(sender=sender, to=to, subject=subject, text=text, html=html)
+
+
+def confirm_deletion(*, sender: str, to: str, name: str | None, link: str) -> EmailMessage:
+    subject = f"Confirm the deletion of your {BRAND} account"
+    text = (
+        f"{_greeting(name)}\n\n"
+        "We received a request to delete your account and all its documents. To confirm it, open:\n\n"
+        f"{link}\n\n"
+        "The link is valid for 48 hours. If you did not ask for this, ignore this email: nothing will be deleted.\n"
+    )
+    html = _layout(
+        "Confirm the deletion of your account",
+        [escape(_greeting(name)), "We received a request to delete your account and all its documents."],
+        ("Delete my account", link),
+        "The link is valid for 48 hours. If you did not ask for this, ignore this email: nothing will be deleted.",
+    )
+    return _message(sender=sender, to=to, subject=subject, text=text, html=html)
+
+
+def account_deleted(*, sender: str, to: str, name: str | None) -> EmailMessage:
+    subject = f"Your {BRAND} account was deleted"
+    text = (
+        f"{_greeting(name)}\n\n"
+        "Your account, your saved documents and your usage history were deleted. Any subscription was cancelled.\n"
+        "Payment records are kept only as long as tax law requires.\n\n"
+        "Thank you for using Extracta.\n"
+    )
+    html = _layout(
+        "Your account was deleted",
+        [
+            escape(_greeting(name)),
+            "Your account, your saved documents and your usage history were deleted. Any subscription was cancelled.",
+            "Payment records are kept only as long as tax law requires.",
+        ],
+        None,
+        "Thank you for using Extracta.",
+    )
+    return _message(sender=sender, to=to, subject=subject, text=text, html=html)

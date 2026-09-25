@@ -12,13 +12,16 @@ from typing import Any
 from flask import Blueprint, current_app, redirect, request, session
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+from werkzeug.security import check_password_hash
 from werkzeug.wrappers import Response
 
-from app import accounts, emails, tokens
+from app import accounts, billing, emails, tokens
 from app.db import session_scope, utcnow
 from app.mail import Mailer
-from app.models import User
+from app.models import DeletionRequest, Subscription, User
 from app.web.google import GoogleAuthError, GoogleOAuth, new_code_verifier, new_state
+from app.web.paypal import PayPalClient, PayPalError
 from app.web.security import ApiError, client_ip, current_user, rate_limit, require_user, settings, sign_in
 
 auth = Blueprint("auth", __name__, url_prefix="/api/auth")
@@ -279,3 +282,102 @@ def google_callback() -> Response:
     except (GoogleAuthError, accounts.AccountError):
         return _back_to_site("/login?error=google_failed")
     return _back_to_site("/app")
+
+
+# --------------------------------------------------------------------------- account deletion
+
+
+def erase_account(db: Session, user: User) -> None:
+    """Cancel any live subscription at PayPal, erase the account, close its deletion requests and
+    say goodbye by email. Used by the account page, the emailed link and the admin panel."""
+    now = utcnow()
+    client: PayPalClient | None = current_app.extensions.get("paypal")
+    live = db.scalar(
+        select(Subscription.id).where(
+            Subscription.user_id == user.id, Subscription.status.in_(billing.BLOCKING_STATUSES)
+        )
+    )
+    if live is not None:
+        if client is None:
+            raise ApiError(503, "Your subscription could not be cancelled right now. Try again later.")
+        try:
+            billing.cancel_subscription(db, client, user, now)
+        except (billing.BillingError, PayPalError):
+            raise ApiError(502, "Your subscription could not be cancelled right now. Try again later.") from None
+    config = settings()
+    goodbye = emails.account_deleted(sender=config.mail_from, to=user.email, name=user.name)
+    for request_row in db.scalars(
+        select(DeletionRequest).where(DeletionRequest.user_id == user.id, DeletionRequest.status == "pending")
+    ):
+        request_row.status = "completed"
+        request_row.resolved_at = now
+    accounts.delete_account(db, user, now)
+    _send(goodbye)
+
+
+@auth.post("/account/delete")
+def delete_my_account() -> Body:
+    """Signed in: confirm with the password, or with the email for accounts that only use Google."""
+    data = _json()
+    with session_scope() as db:
+        user = require_user(db)
+        rate_limit(f"account-delete:{user.id}", limit=5, window_seconds=900)
+        if user.password_hash is not None:
+            if not check_password_hash(user.password_hash, str(data.get("password") or "")):
+                raise ApiError(401, "Your current password is not correct.")
+        elif str(data.get("email") or "").strip().lower() != user.email:
+            raise ApiError(400, "Type the email of your account to confirm.")
+        erase_account(db, user)
+    session.clear()
+    return {"deleted": True}, 200
+
+
+@auth.post("/account/delete-request")
+def request_account_deletion() -> Body:
+    """Signed out: email a confirmation link. Always the same answer (no account enumeration)."""
+    rate_limit(f"delete-request-ip:{client_ip()}", limit=10, window_seconds=3600)
+    try:
+        email = accounts.normalize_email(str(_json().get("email", "")))
+    except accounts.AccountError:
+        return {"ok": True}, 200
+    rate_limit(f"delete-request-email:{email}", limit=3, window_seconds=3600)
+    message: EmailMessage | None = None
+    with session_scope() as db:
+        user = db.scalar(select(User).where(User.email == email))
+        if user is not None and user.status != "deleted":
+            # Recorded (and committed) before the email goes out: the request shows up in /admin
+            # even when the email never arrives, so the owner can finish it by hand.
+            pending = db.scalar(
+                select(DeletionRequest).where(DeletionRequest.user_id == user.id, DeletionRequest.status == "pending")
+            )
+            if pending is None:
+                db.add(DeletionRequest(user_id=user.id, email=user.email))
+            else:
+                pending.created_at = utcnow()
+            config = settings()
+            token = tokens.account_deletion_token(_secret(), user)
+            link = f"{config.public_base_url}/delete-account#token={token}"
+            message = emails.confirm_deletion(sender=config.mail_from, to=user.email, name=user.name, link=link)
+    if message is not None:
+        try:
+            _send(message)
+        except Exception:  # noqa: BLE001 - same answer either way; the admin panel lists the request
+            current_app.logger.exception("Could not send the account deletion email")
+    return {"ok": True}, 200
+
+
+@auth.post("/account/delete-confirm")
+def confirm_account_deletion() -> Body:
+    rate_limit(f"delete-confirm:{client_ip()}", limit=20, window_seconds=3600)
+    try:
+        user_id, email = tokens.read_account_deletion_token(_secret(), str(_json().get("token", "")))
+    except tokens.InvalidTokenError as exc:
+        raise ApiError(400, str(exc)) from None
+    with session_scope() as db:
+        user = db.get(User, user_id)
+        if user is None or user.email != email or user.status == "deleted":
+            raise ApiError(400, "This link is invalid or has expired.")
+        erase_account(db, user)
+    if session.get("user_id") == str(user_id):
+        session.clear()
+    return {"deleted": True}, 200
