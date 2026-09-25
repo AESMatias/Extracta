@@ -4,7 +4,7 @@
 # Stage 1 (builder): install dependencies with Poetry into /app/.venv.
 # Poetry itself stays in this stage and never reaches the final image.
 # ---------------------------------------------------------------------------
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 ENV POETRY_VERSION=2.5.1 \
     POETRY_VIRTUALENVS_IN_PROJECT=true \
@@ -41,7 +41,7 @@ ENV PATH="/app/.venv/bin:${PATH}" \
 # ---------------------------------------------------------------------------
 # Stage 2 (runtime): slim image with the virtualenv and the app code only.
 # ---------------------------------------------------------------------------
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
