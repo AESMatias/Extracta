@@ -52,7 +52,7 @@ export function DocumentDialog({ filename, document, onClose }: { filename: stri
       <div className="flex max-h-[90dvh] flex-col">
         <div className="relative border-b border-slate-200 px-12 py-5 text-center dark:border-slate-800">
           <div className="min-w-0">
-            <p className="truncate text-lg font-semibold">{filename}</p>
+            <p className="line-clamp-2 [overflow-wrap:anywhere] text-lg font-semibold">{filename}</p>
             <div className="mt-1 flex items-center justify-center gap-2">
               <Badge tone="brand">{m.documentTypes.types[document.document_type]?.label ?? type.label}</Badge>
               {document.language && <Badge tone="slate">{document.language.toUpperCase()}</Badge>}
