@@ -192,6 +192,19 @@ export interface AdminStats {
   pages_24h: number;
   revenue_usd: string;
   active_subscriptions: number;
+  pending_deletions: number;
+}
+
+/** An account deletion asked for from the public form (listed even when the email never arrived). */
+export interface AdminDeletionRequest {
+  id: string;
+  user_id: string;
+  email: string; // the address at request time
+  name: string | null;
+  status: "pending" | "completed" | "dismissed";
+  account_status: UserStatus;
+  created_at: string;
+  resolved_at: string | null;
 }
 
 export class ApiError extends Error {
@@ -345,5 +358,9 @@ export const api = {
       request<{ user: AdminUser }>(`/api/admin/users/${id}`, { method: "PATCH", json: changes }),
     payments: () => request<{ payments: AdminPayment[] }>("/api/admin/payments"),
     stats: () => request<AdminStats>("/api/admin/stats"),
+    deleteUser: (id: string) => request<{ deleted: boolean }>(`/api/admin/users/${id}/delete`, { method: "POST" }),
+    deletionRequests: () => request<{ requests: AdminDeletionRequest[] }>("/api/admin/deletion-requests"),
+    resolveDeletion: (id: string, action: "complete" | "dismiss") =>
+      request<{ request: AdminDeletionRequest }>(`/api/admin/deletion-requests/${id}/${action}`, { method: "POST" }),
   },
 };

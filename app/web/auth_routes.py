@@ -19,7 +19,7 @@ from werkzeug.wrappers import Response
 from app import accounts, billing, emails, tokens
 from app.db import session_scope, utcnow
 from app.mail import Mailer
-from app.models import Subscription, User
+from app.models import DeletionRequest, Subscription, User
 from app.web.google import GoogleAuthError, GoogleOAuth, new_code_verifier, new_state
 from app.web.paypal import PayPalClient, PayPalError
 from app.web.security import ApiError, client_ip, current_user, rate_limit, require_user, settings, sign_in
@@ -287,8 +287,10 @@ def google_callback() -> Response:
 # --------------------------------------------------------------------------- account deletion
 
 
-def _erase(db: Session, user: User) -> None:
-    """Cancel any live subscription at PayPal, erase the account and say goodbye by email."""
+def erase_account(db: Session, user: User) -> None:
+    """Cancel any live subscription at PayPal, erase the account, close its deletion requests and
+    say goodbye by email. Used by the account page, the emailed link and the admin panel."""
+    now = utcnow()
     client: PayPalClient | None = current_app.extensions.get("paypal")
     live = db.scalar(
         select(Subscription.id).where(
@@ -299,12 +301,17 @@ def _erase(db: Session, user: User) -> None:
         if client is None:
             raise ApiError(503, "Your subscription could not be cancelled right now. Try again later.")
         try:
-            billing.cancel_subscription(db, client, user, utcnow())
+            billing.cancel_subscription(db, client, user, now)
         except (billing.BillingError, PayPalError):
             raise ApiError(502, "Your subscription could not be cancelled right now. Try again later.") from None
     config = settings()
     goodbye = emails.account_deleted(sender=config.mail_from, to=user.email, name=user.name)
-    accounts.delete_account(db, user, utcnow())
+    for request_row in db.scalars(
+        select(DeletionRequest).where(DeletionRequest.user_id == user.id, DeletionRequest.status == "pending")
+    ):
+        request_row.status = "completed"
+        request_row.resolved_at = now
+    accounts.delete_account(db, user, now)
     _send(goodbye)
 
 
@@ -320,7 +327,7 @@ def delete_my_account() -> Body:
                 raise ApiError(401, "Your current password is not correct.")
         elif str(data.get("email") or "").strip().lower() != user.email:
             raise ApiError(400, "Type the email of your account to confirm.")
-        _erase(db, user)
+        erase_account(db, user)
     session.clear()
     return {"deleted": True}, 200
 
@@ -334,13 +341,28 @@ def request_account_deletion() -> Body:
     except accounts.AccountError:
         return {"ok": True}, 200
     rate_limit(f"delete-request-email:{email}", limit=3, window_seconds=3600)
+    message: EmailMessage | None = None
     with session_scope() as db:
         user = db.scalar(select(User).where(User.email == email))
         if user is not None and user.status != "deleted":
+            # Recorded (and committed) before the email goes out: the request shows up in /admin
+            # even when the email never arrives, so the owner can finish it by hand.
+            pending = db.scalar(
+                select(DeletionRequest).where(DeletionRequest.user_id == user.id, DeletionRequest.status == "pending")
+            )
+            if pending is None:
+                db.add(DeletionRequest(user_id=user.id, email=user.email))
+            else:
+                pending.created_at = utcnow()
             config = settings()
             token = tokens.account_deletion_token(_secret(), user)
             link = f"{config.public_base_url}/delete-account#token={token}"
-            _send(emails.confirm_deletion(sender=config.mail_from, to=user.email, name=user.name, link=link))
+            message = emails.confirm_deletion(sender=config.mail_from, to=user.email, name=user.name, link=link)
+    if message is not None:
+        try:
+            _send(message)
+        except Exception:  # noqa: BLE001 - same answer either way; the admin panel lists the request
+            current_app.logger.exception("Could not send the account deletion email")
     return {"ok": True}, 200
 
 
@@ -355,7 +377,7 @@ def confirm_account_deletion() -> Body:
         user = db.get(User, user_id)
         if user is None or user.email != email or user.status == "deleted":
             raise ApiError(400, "This link is invalid or has expired.")
-        _erase(db, user)
+        erase_account(db, user)
     if session.get("user_id") == str(user_id):
         session.clear()
     return {"deleted": True}, 200

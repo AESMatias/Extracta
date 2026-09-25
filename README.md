@@ -188,6 +188,11 @@ usage, sign-in methods and payments, and you can:
 - **Approve / reject / suspend**: rejected and suspended accounts are signed out at once.
 - **Assign a plan** (e.g. premium for free) with an expiry date or none.
 - **Set a custom daily limit** that overrides the plan's.
+- **Handle deletion requests**: every request from the public `/delete-account` form is listed in
+  the *Deletion requests* tab, even when the confirmation email never arrived (for example with
+  SMTP unset). Confirm with the owner from the account's address, then press *Delete account*
+  (or *Dismiss*); a request closes by itself when the owner uses the emailed link. Requests sent
+  to the contact address by email are handled from the account's edit panel (*Delete account*).
 
 With `REQUIRE_MANUAL_APPROVAL=true`, new accounts wait as *pending* (they can sign in but not
 upload) until you approve them.

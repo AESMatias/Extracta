@@ -6,6 +6,8 @@
 - subscriptions: PayPal subscriptions that renew a plan every month.
 - paypal_plans: the PayPal billing plan created for each Extracta plan and price.
 - webhook_events: PayPal events already processed, so a redelivered event is applied once.
+- deletion_requests: account deletions asked for from the public form, listed in /admin so the
+  owner can finish them by hand if the confirmation email never arrives.
 - documents: results of persistent-mode tasks only. Task status lives in Celery's Redis result
   backend for both modes, so this table only ever holds completed extractions.
 
@@ -134,6 +136,21 @@ class PayPalPlan(Base):
     paypal_product_id: Mapped[str] = mapped_column(String(64))
     paypal_plan_id: Mapped[str] = mapped_column(String(64), unique=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+DELETION_STATUSES = ("pending", "completed", "dismissed")
+
+
+class DeletionRequest(Base):
+    __tablename__ = "deletion_requests"
+    __table_args__ = (CheckConstraint(_in("status", DELETION_STATUSES), name="ck_deletion_requests_status"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    email: Mapped[str] = mapped_column(String(320))  # the address at request time (the row is anonymized later)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+    resolved_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
 
 
 class WebhookEvent(Base):

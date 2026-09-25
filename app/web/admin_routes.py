@@ -1,5 +1,7 @@
 """Administration: sign in with ADMIN_PASSWORD, review accounts, approve or reject them, and set
 plans, expiry dates and custom daily limits. Every privilege a user has is listed explicitly.
+Deletion requests from the public form are listed here too, so an account can be erased by hand
+when the confirmation email never arrives.
 """
 
 import hmac
@@ -12,12 +14,14 @@ from typing import Any, Literal
 from flask import Blueprint, request, session
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session
 
 from app import accounts
 from app.db import session_scope, utcnow
-from app.models import Payment, Subscription, UsageEvent, User
+from app.models import DeletionRequest, Payment, Subscription, UsageEvent, User
 from app.plans import PLANS
 from app.schemas import summarize_validation_error
+from app.web.auth_routes import erase_account
 from app.web.security import ApiError, client_ip, rate_limit, settings
 
 admin = Blueprint("admin", __name__, url_prefix="/api/admin")
@@ -169,13 +173,17 @@ class UserUpdate(BaseModel):
     email_verified: bool | None = None  # true marks the address verified (e.g. confirmed by phone)
 
 
+def _parse_id(value: str, missing: str) -> uuid.UUID:
+    try:
+        return uuid.UUID(value)
+    except ValueError:
+        raise ApiError(404, missing) from None
+
+
 @admin.patch("/users/<user_id>")
 @admin_required
 def update_user(user_id: str) -> Body:
-    try:
-        uid = uuid.UUID(user_id)
-    except ValueError:
-        raise ApiError(404, "User not found.") from None
+    uid = _parse_id(user_id, "User not found.")
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
         raise ApiError(400, "Send a JSON body.")
@@ -249,11 +257,95 @@ def stats() -> Body:
         active_subscriptions = db.scalar(
             select(func.count()).select_from(Subscription).where(Subscription.status == "ACTIVE")
         )
+        pending_deletions = db.scalar(
+            select(func.count()).select_from(DeletionRequest).where(DeletionRequest.status == "pending")
+        )
     return {
         "active_subscriptions": active_subscriptions or 0,
+        "pending_deletions": pending_deletions or 0,
         "users_by_status": by_status,
         "users_by_plan": by_plan,
         "uploads_24h": uploads_24h or 0,
         "pages_24h": int(pages_24h or 0),
         "revenue_usd": f"{revenue:.2f}",
     }, 200
+
+
+# --------------------------------------------------------------------------- account deletion
+
+
+@admin.post("/users/<user_id>/delete")
+@admin_required
+def delete_user(user_id: str) -> Body:
+    """Erase an account by hand (e.g. its owner asked by email): same steps as self-service."""
+    uid = _parse_id(user_id, "User not found.")
+    with session_scope() as db:
+        user = db.get(User, uid)
+        if user is None or user.status == "deleted":
+            raise ApiError(404, "User not found.")
+        erase_account(db, user)
+    return {"deleted": True}, 200
+
+
+def _deletion_request(row: DeletionRequest, user: User) -> dict[str, Any]:
+    return {
+        "id": str(row.id),
+        "user_id": str(row.user_id),
+        "email": row.email,
+        "name": user.name,
+        "status": row.status,
+        "account_status": user.status,
+        "created_at": row.created_at.isoformat(),
+        "resolved_at": row.resolved_at.isoformat() if row.resolved_at else None,
+    }
+
+
+@admin.get("/deletion-requests")
+@admin_required
+def list_deletion_requests() -> Body:
+    with session_scope() as db:
+        rows = db.execute(
+            select(DeletionRequest, User)
+            .join(User, User.id == DeletionRequest.user_id)
+            .order_by((DeletionRequest.status == "pending").desc(), DeletionRequest.created_at.desc())
+            .limit(500)
+        ).tuples()
+        return {"requests": [_deletion_request(row, user) for row, user in rows]}, 200
+
+
+def _pending_request(db: Session, request_id: str) -> DeletionRequest:
+    row = db.get(DeletionRequest, _parse_id(request_id, "Request not found."))
+    if row is None:
+        raise ApiError(404, "Request not found.")
+    if row.status != "pending":
+        raise ApiError(409, "This request was already handled.")
+    return row
+
+
+@admin.post("/deletion-requests/<request_id>/complete")
+@admin_required
+def complete_deletion_request(request_id: str) -> Body:
+    """Erase the account behind a pending request (erase_account closes the request)."""
+    with session_scope() as db:
+        row = _pending_request(db, request_id)
+        user = db.get(User, row.user_id)
+        assert user is not None  # the foreign key cascades
+        if user.status == "deleted":  # erased some other way meanwhile
+            row.status, row.resolved_at = "completed", utcnow()
+        else:
+            erase_account(db, user)
+        db.flush()
+        return {"request": _deletion_request(row, user)}, 200
+
+
+@admin.post("/deletion-requests/<request_id>/dismiss")
+@admin_required
+def dismiss_deletion_request(request_id: str) -> Body:
+    """Close a request without erasing anything (e.g. the owner says they never sent it)."""
+    with session_scope() as db:
+        row = _pending_request(db, request_id)
+        row.status, row.resolved_at = "dismissed", utcnow()
+        user = db.get(User, row.user_id)
+        assert user is not None
+        db.flush()
+        return {"request": _deletion_request(row, user)}, 200

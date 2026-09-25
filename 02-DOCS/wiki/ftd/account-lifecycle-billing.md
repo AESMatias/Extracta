@@ -80,6 +80,7 @@ whose billing date has passed, so a lost webhook never leaves a paying user on F
 | 10 | Frontend: verify, forgot, reset pages; account security and subscription; pricing toggle; admin | tsc and eslint clean, static build of 11 routes; public pages checked in a browser at desktop and 375 px | ✅ |
 | 11 | End to end on the running stack | HTTP script through Nginx with the real Supabase (below) | ✅ |
 | 12 | Docs: `.env.sample`, DEPLOY (SMTP, webhooks), README | — | ✅ |
+| 14 | Deletion requests listed in /admin (migration 0006): recorded and committed before the email is sent, deduplicated while pending, closed by the emailed link, the account page or the admin; admin can also delete any account by hand | `tests/test_account_lifecycle.py` (broken mailer still lists the request; complete, dismiss, 409 twice, 404); HTTP through Nginx with the real Supabase: request → listed pending → completed, account deleted | ✅ |
 | 13 | Real PayPal sandbox subscription and webhook | Needs the owner's sandbox credentials and a public HTTPS URL | ⏳ |
 
 ## Evidence
