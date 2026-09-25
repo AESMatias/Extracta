@@ -1,0 +1,75 @@
+# Quality gates on every push and pull request, plus a weekly security scan of both images.
+name: CI
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays: catch newly published CVEs even without code changes
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (ruff, mypy, pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install Poetry and dependencies
+        run: |
+          pip install "poetry==2.5.1"
+          poetry install --no-root --with dev --all-extras
+      - run: poetry run ruff format --check app tests
+      - run: poetry run ruff check app tests
+      - run: poetry run mypy app tests
+      - name: Tests (integration tests are skipped without real credentials)
+        run: poetry run pytest
+
+  frontend:
+    name: Frontend (tsc, eslint, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx tsc --noEmit
+      - run: npx eslint .
+      - run: npm run build
+
+  images:
+    name: Build and scan images (Trivy)
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build images
+        run: |
+          docker build -f docker/Dockerfile -t pdf-process-pipeline:ci .
+          docker build -t extracta-frontend:ci frontend
+      - name: Scan the API/worker image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: pdf-process-pipeline:ci
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true # fail only on vulnerabilities that already have a fix
+          exit-code: "1"
+      - name: Scan the frontend image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: extracta-frontend:ci
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
