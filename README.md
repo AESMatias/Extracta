@@ -30,6 +30,7 @@ subscriptions or one-time passes, and an admin panel to approve accounts and ass
 - [Plans](#plans)
 - [Architecture](#architecture)
 - [Run it locally](#run-it-locally)
+- [Deploy to production](#deploy-to-production)
 - [Configuration (`.env`)](#configuration-env)
 - [Administration](#administration)
 - [HTTP API](#http-api)
@@ -151,6 +152,139 @@ docker compose down                    # stop (volumes are kept)
 
 **Frontend with hot reload** (optional, needs Node.js 22): run the stack, publish the API port
 temporarily or run Flask locally, then `cd frontend && npm install && API_ORIGIN=http://localhost:8000 npm run dev`.
+
+---
+
+## Deploy to production
+
+The full reference is [docs/DEPLOY.md](docs/DEPLOY.md). This is the short path for a server that
+already hosts other sites (for example apps under pm2) with its own Nginx in front. Run every
+command on the server, in the project folder, unless it says otherwise.
+
+### 1. Prepare the server (once)
+
+```bash
+curl -fsSL https://get.docker.com | sh                       # Docker with Compose
+swapon --show                                                # must list 2 GB of swap; if empty:
+fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab
+apt install -y nginx certbot python3-certbot-nginx           # the server's Nginx and certbot
+ufw allow OpenSSH && ufw allow 80/tcp && ufw allow 443/tcp   # only SSH, HTTP and HTTPS
+```
+
+Check who owns ports 80 and 443 with `ss -tlnp | grep -E ':(80|443)\s'`. Any app listening there
+directly must move behind Nginx first (for example `--host 127.0.0.1 --port 8001`, then
+`pm2 save`), because Nginx has to own both ports.
+
+### 2. Point the domain
+
+Create an **A record** for the subdomain (e.g. `pdf`) with the server's public IPv4
+(`curl -4 ifconfig.me`). On Cloudflare, set it to **DNS only (grey cloud)**: its proxy caps
+uploads at 100 MB and waits at most 100 s, and a Cloudflare Tunnel (CNAME to `cfargotunnel.com`)
+bypasses the server. Check it with `dig +short pdf.example.com @1.1.1.1`: it must print only
+the server's IP.
+
+### 3. Get the code and configure it
+
+```bash
+git clone https://github.com/AESMatias/Extracta.git && cd Extracta
+cp .env.sample .env && chmod 600 .env && nano .env
+```
+
+Values that matter in this setup (every variable is explained inside `.env`):
+
+| Variable | Value |
+|---|---|
+| `GEMINI_API_KEY`, `DATABASE_URL`, `ADMIN_PASSWORD` | your key, the Supabase Session pooler URL, a long password (quote it with `'...'` if it has a `$`) |
+| `SECRET_KEY` | `python3 -c "import secrets; print(secrets.token_urlsafe(48))"` |
+| `PUBLIC_BASE_URL` | `https://pdf.example.com` (no trailing slash) |
+| `SESSION_COOKIE_SECURE` | `true` |
+| `SITE_DOMAIN`, `COMPOSE_PROFILES` | empty (the server's certbot handles HTTPS) |
+| `HTTP_PORT` / `HTTPS_PORT` | `127.0.0.1:8080` / `127.0.0.1:8443` (only the server's Nginx can reach them) |
+| `REAL_IP_FROM` | `172.16.0.0/12` (trust the visitor address the server's Nginx sends) |
+| `SMTP_*`, `MAIL_FROM` | your email provider, e.g. Resend: `smtp.resend.com`, 587, `starttls`, user `resend`, password = API key |
+| `PAYPAL_*` | see [Payments](docs/DEPLOY.md#9-optional-payments-with-paypal) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | optional: Sign in with Google |
+
+### 4. Start it
+
+```bash
+docker compose build          # 5-10 minutes on a small server
+docker compose up -d
+docker compose ps             # web and redis healthy, frontend and worker up
+curl -I http://127.0.0.1:8080 # 200
+```
+
+### 5. Put it behind the server's Nginx, with HTTPS
+
+```bash
+cat > /etc/nginx/sites-available/extracta <<'EOF'
+server {
+    listen 80;
+    server_name pdf.example.com;
+    client_max_body_size 2600m;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_request_buffering off;
+        proxy_read_timeout 130s;
+        proxy_send_timeout 130s;
+    }
+}
+EOF
+ln -sf /etc/nginx/sites-available/extracta /etc/nginx/sites-enabled/
+nginx -t && systemctl reload nginx
+certbot --nginx -d pdf.example.com   # must say: deployed certificate ... to .../sites-enabled/extracta
+curl -I https://pdf.example.com      # 200, text/html
+```
+
+`server_name` must be the real domain: if no site matches it, certbot installs the certificate in
+the default site instead. Renewal is automatic.
+
+### 6. Update: one command
+
+```bash
+./deploy/deploy.sh          # pull main, build, restart, wait until healthy, roll back if not
+./deploy/deploy.sh --force  # rebuild even without new commits (fresh security patches)
+```
+
+A failed build restarts nothing; a version that is not healthy within 4 minutes is replaced by the
+previous images and commit automatically.
+
+### 7. Automatic deploys: push to main → production
+
+The `deploy` job in `.github/workflows/ci.yml` runs `deploy/deploy.sh` over SSH after every push
+to `main` whose backend and frontend checks pass (skipped until `DEPLOY_HOST` exists). Set it up
+once:
+
+```bash
+# On the server, in the project folder: a key that can only run the deploy script
+ssh-keygen -t ed25519 -N "" -C github-actions-deploy -f ~/.ssh/extracta_deploy
+echo "command=\"$PWD/deploy/deploy.sh\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $(cat ~/.ssh/extracta_deploy.pub)" >> ~/.ssh/authorized_keys
+cat ~/.ssh/extracta_deploy                                                   # -> secret DEPLOY_SSH_KEY
+echo "$(curl -4 -s ifconfig.me) $(cut -d' ' -f1,2 /etc/ssh/ssh_host_ed25519_key.pub)"  # -> secret DEPLOY_KNOWN_HOSTS
+```
+
+In GitHub → **Settings → Secrets and variables → Actions**: secrets `DEPLOY_SSH_KEY` and
+`DEPLOY_KNOWN_HOSTS` (the two outputs above), variables `DEPLOY_HOST` (the server's IP) and
+`DEPLOY_USER` (`root`). Then delete the private key from the server with
+`rm ~/.ssh/extracta_deploy`. From then on: push or merge to `main`, and **Actions** shows the
+tests and **Deploy to production**; **Deployments → production** keeps the history.
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `failed to bind host port 0.0.0.0:80: address already in use` | Another program owns port 80: use `HTTP_PORT=127.0.0.1:8080` and the server's Nginx (steps 3 and 5). |
+| certbot: `Invalid response ... 404` from a `2606:4700:...` address | The domain goes through Cloudflare's proxy or a Tunnel: A record, grey cloud (step 2). |
+| certbot: `no valid A records found` | The record is a Tunnel CNAME, not an A record (step 2). |
+| The HTTPS site shows another app | The certificate went to the wrong Nginx site: fix `server_name` in `sites-available/extracta`, remove the domain from other sites, `nginx -t && systemctl reload nginx`, then `certbot --nginx -d DOMAIN --reinstall`. |
+| Every visitor has a `172.x` address in `docker compose logs frontend` | `REAL_IP_FROM` is missing from `.env`. |
+| Pay button: "PayPal is not available right now" | Run the check in [docs/DEPLOY.md](docs/DEPLOY.md#9-optional-payments-with-paypal); `PAYEE_ACCOUNT_RESTRICTED` means PayPal has not finished verifying your business account. |
+| The build stops with `Killed` | Not enough memory: turn on swap (step 1). |
 
 ---
 
@@ -310,6 +444,7 @@ rest by hand or with `ruff check --fix`).
 ├── docker/certbot/             Image that gets and renews the HTTPS certificate (production)
 ├── docker-compose.yml           frontend + web + worker + redis with memory limits
 ├── docs/DEPLOY.md               Production deployment guide
+├── deploy/deploy.sh             Pull, build, restart, health-check and roll back (run by CI on main)
 ├── scripts/docker-cleanup.sh    Free disk space after builds
 └── 02-DOCS/wiki/                Constitution, decisions and roadmaps
 ```
