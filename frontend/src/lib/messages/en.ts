@@ -59,7 +59,7 @@ export const en = {
     note: "No credit card required · Pay only for the pages you read",
     extracted: "Extracted with AI",
     completed: "Completed",
-    fields: { type: "Type", issuer: "Issuer", taxId: "Tax ID", date: "Issue date", total: "Total", vat: "VAT" },
+    fields: { type: "Type", issuer: "Issuer", taxId: "Tax ID", date: "Issue date", total: "Total", vat: "Sales tax" },
     invoiceValue: "Invoice",
   },
   steps: {

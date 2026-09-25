@@ -4,31 +4,35 @@ import clsx from "clsx";
 import { useEffect, useRef } from "react";
 
 const COLORS = ["16 185 129", "6 182 212", "47 111 237", "250 204 21"]; // green, cyan, blue, a touch of yellow
-const COLOR_WEIGHTS = [0.34, 0.28, 0.3, 0.08];
+const COLOR_WEIGHTS = [0.3, 0.26, 0.26, 0.18];
+const FALLBACK = "6 182 212";
 
-interface Particle {
+interface Firefly {
   x: number;
   y: number;
-  vx: number;
-  vy: number;
+  angle: number; // heading; it wanders a little every frame
+  speed: number; // px per frame: slow, like a firefly
   size: number;
-  alpha: number;
   color: string;
-  drag: number; // heavier particles lag behind the wind
+  age: number; // frames lived
+  life: number; // frames until it fades out and reappears elsewhere
+  blink: number; // phase of its gentle glow pulse
+  blinkSpeed: number;
 }
 
 function pickColor(): string {
   let r = Math.random();
   for (let i = 0; i < COLORS.length; i++) {
     r -= COLOR_WEIGHTS[i] ?? 0;
-    if (r <= 0) return COLORS[i] ?? "47 111 237";
+    if (r <= 0) return COLORS[i] ?? FALLBACK;
   }
-  return "47 111 237";
+  return FALLBACK;
 }
 
 /**
- * Small squares with short trails, carried by a soft wind that gusts and swirls. Decorative only:
- * pauses off screen and in background tabs, and stays still for people who prefer reduced motion.
+ * Fireflies: small glowing squares that drift slowly, light up, pulse and fade away, then appear
+ * somewhere else. Decorative only: pauses off screen and in background tabs, and stays still for
+ * people who prefer reduced motion.
  */
 export function WindParticles({ className }: { className?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -41,23 +45,28 @@ export function WindParticles({ className }: { className?: string }) {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let width = 0;
     let height = 0;
-    let particles: Particle[] = [];
+    let flies: Firefly[] = [];
     let frame = 0;
     let running = false;
     let visible = true;
     let time = 0;
     const pointer = { x: -9999, y: -9999 };
 
-    const spawn = (anywhere: boolean): Particle => ({
-      x: anywhere ? Math.random() * width : -10,
-      y: Math.random() * height,
-      vx: 0.4 + Math.random() * 0.6,
-      vy: 0,
-      size: 1.5 + Math.random() * 2.2,
-      alpha: 0.25 + Math.random() * 0.45,
-      color: pickColor(),
-      drag: 0.9 + Math.random() * 0.08,
-    });
+    const spawn = (anyAge: boolean): Firefly => {
+      const life = 360 + Math.random() * 540; // 6 to 15 seconds at 60 fps
+      return {
+        x: Math.random() * width,
+        y: Math.random() * height,
+        angle: Math.random() * Math.PI * 2,
+        speed: 0.12 + Math.random() * 0.22,
+        size: 1.6 + Math.random() * 1.8,
+        color: pickColor(),
+        age: anyAge ? Math.random() * life : 0,
+        life,
+        blink: Math.random() * Math.PI * 2,
+        blinkSpeed: 0.02 + Math.random() * 0.03,
+      };
+    };
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
@@ -67,57 +76,58 @@ export function WindParticles({ className }: { className?: string }) {
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const count = Math.min(140, Math.round((width * height) / 9000));
-      particles = Array.from({ length: count }, () => spawn(true));
+      const count = Math.min(70, Math.round((width * height) / 16000));
+      flies = Array.from({ length: count }, () => spawn(true));
+    };
+
+    /** 0 -> 1 -> 0 over its life: fades in, glows, fades out. */
+    const presence = (f: Firefly) => {
+      const t = f.age / f.life;
+      return t < 0.2 ? t / 0.2 : t > 0.75 ? Math.max(0, (1 - t) / 0.25) : 1;
     };
 
     const draw = () => {
       const dark = document.documentElement.classList.contains("dark");
       ctx.clearRect(0, 0, width, height);
-      for (const p of particles) {
-        const speed = Math.hypot(p.vx, p.vy);
-        const trail = Math.min(18, speed * 7);
-        const a = p.alpha * (dark ? 1 : 0.8);
-        // The trail: a short line behind the particle, fading out.
-        ctx.strokeStyle = `rgb(${p.color} / ${a * 0.35})`;
-        ctx.lineWidth = Math.max(0.6, p.size * 0.45);
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p.x - (p.vx / (speed || 1)) * trail, p.y - (p.vy / (speed || 1)) * trail);
-        ctx.stroke();
-        // The particle: a tiny square, rotated with its direction.
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate(Math.atan2(p.vy, p.vx));
-        ctx.fillStyle = `rgb(${p.color} / ${a})`;
-        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
-        ctx.restore();
+      for (const f of flies) {
+        const pulse = 0.55 + 0.45 * Math.sin(f.blink);
+        const alpha = presence(f) * pulse * (dark ? 0.95 : 0.75);
+        if (alpha < 0.01) continue;
+        // The glow: a soft halo around the firefly.
+        const radius = f.size * (dark ? 7 : 5.5);
+        const glow = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, radius);
+        glow.addColorStop(0, `rgb(${f.color} / ${alpha * 0.45})`);
+        glow.addColorStop(1, `rgb(${f.color} / 0)`);
+        ctx.fillStyle = glow;
+        ctx.fillRect(f.x - radius, f.y - radius, radius * 2, radius * 2);
+        // The light itself: a tiny square, true to the site's square design.
+        ctx.fillStyle = `rgb(${f.color} / ${alpha})`;
+        ctx.fillRect(f.x - f.size / 2, f.y - f.size / 2, f.size, f.size);
       }
     };
 
     const step = () => {
-      time += 0.004;
-      const gust = 0.55 + 0.45 * Math.sin(time * 0.9) * Math.sin(time * 0.37 + 1.3); // the wind rises and falls
-      for (const p of particles) {
-        // A smooth flow field: the wind swirls depending on where the particle is.
-        const angle =
-          Math.sin(p.x * 0.004 + time * 1.7) * 0.6 + Math.cos(p.y * 0.006 - time * 1.1) * 0.5 - 0.15;
-        const force = 0.06 + gust * 0.09;
-        p.vx = p.vx * p.drag + Math.cos(angle) * force * 1.6 + 0.02;
-        p.vy = p.vy * p.drag + Math.sin(angle) * force;
-        // The pointer pushes particles away, like a hand in the breeze.
-        const dx = p.x - pointer.x;
-        const dy = p.y - pointer.y;
+      time += 1;
+      for (const f of flies) {
+        f.age += 1;
+        f.blink += f.blinkSpeed;
+        // Wander: the heading drifts a little, with a faint shared breeze.
+        f.angle += (Math.random() - 0.5) * 0.12 + Math.sin(time * 0.002 + f.y * 0.01) * 0.004;
+        let vx = Math.cos(f.angle) * f.speed + 0.03;
+        let vy = Math.sin(f.angle) * f.speed - 0.015;
+        // The pointer gently shoos them away.
+        const dx = f.x - pointer.x;
+        const dy = f.y - pointer.y;
         const distance = Math.hypot(dx, dy);
-        if (distance < 110 && distance > 0.1) {
-          const push = (1 - distance / 110) * 0.9;
-          p.vx += (dx / distance) * push;
-          p.vy += (dy / distance) * push;
+        if (distance < 90 && distance > 0.1) {
+          const push = (1 - distance / 90) * 0.8;
+          vx += (dx / distance) * push;
+          vy += (dy / distance) * push;
         }
-        p.x += p.vx;
-        p.y += p.vy;
-        if (p.x > width + 20 || p.y < -20 || p.y > height + 20) Object.assign(p, spawn(false));
-        if (p.x < -20) p.x = width + 10;
+        f.x += vx;
+        f.y += vy;
+        const outside = f.x < -20 || f.x > width + 20 || f.y < -20 || f.y > height + 20;
+        if (f.age >= f.life || outside) Object.assign(f, spawn(false));
       }
       draw();
       frame = requestAnimationFrame(step);
