@@ -6,6 +6,20 @@ set -eu
 
 conf=/etc/nginx/conf.d/extracta.conf
 
+# Behind another proxy on this host (e.g. the server's own Nginx, publishing this container on
+# 127.0.0.1): take the visitor's address from the X-Forwarded-For header that proxy sets, but only
+# when the request comes from one of the REAL_IP_FROM networks. Otherwise every visitor would share
+# the proxy's address, and so its rate limits.
+realip=/etc/nginx/conf.d/00-real-ip.conf
+: > "$realip"
+if [ -n "${REAL_IP_FROM:-}" ]; then
+    for network in $(echo "$REAL_IP_FROM" | tr ',' ' '); do
+        echo "set_real_ip_from $network;" >> "$realip"
+    done
+    echo "real_ip_header X-Forwarded-For;" >> "$realip"
+    echo "extracta: visitor addresses from X-Forwarded-For sent by $REAL_IP_FROM"
+fi
+
 if [ -z "${SITE_DOMAIN:-}" ]; then
     cp /etc/nginx/extracta/http.conf "$conf"
     echo "extracta: serving plain HTTP (SITE_DOMAIN is empty)"

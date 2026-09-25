@@ -34,7 +34,7 @@ export function BatchCharts({ documents }: { documents: ExtractedDocument[] }) {
   ).map(([currency, total]) => ({ currency, total }));
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Card className="p-5">
         <h3 className="font-semibold">{m.charts.byType}</h3>
         <div className="mt-2 flex flex-col items-center gap-4 sm:flex-row">

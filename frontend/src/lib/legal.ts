@@ -273,7 +273,10 @@ const privacy: Record<Locale, LegalDocument> = {
           "your current batch of results, saved in your browser so a reload does not lose it;",
           "cookies PayPal sets in its payment window to prevent fraud.",
         ],
-        after: ["Because these are strictly necessary, we do not ask for cookie consent."],
+        after: [
+          "Because these are strictly necessary, we do not ask for cookie consent.",
+          "To know how many people visit the site, we count unique visitors without cookies: your IP address and browser are turned into an irreversible code that only adds one to a daily total. Only the totals are kept (for up to 400 days); we never store your address or that code, and we cannot tell who visited.",
+        ],
       },
       {
         title: "5. Why we use your data",
@@ -384,7 +387,10 @@ const privacy: Record<Locale, LegalDocument> = {
           "tu lote actual de resultados, guardado en tu navegador para que no se pierda al recargar;",
           "cookies que PayPal crea en su ventana de pago para prevenir fraudes.",
         ],
-        after: ["Como son estrictamente necesarias, no pedimos consentimiento de cookies."],
+        after: [
+          "Como son estrictamente necesarias, no pedimos consentimiento de cookies.",
+          "Para saber cuántas personas visitan el sitio, contamos visitantes únicos sin cookies: tu dirección IP y tu navegador se convierten en un código irreversible que solo suma uno a un total diario. Solo se guardan los totales (hasta 400 días); nunca guardamos tu dirección ni ese código, y no podemos saber quién visitó.",
+        ],
       },
       {
         title: "5. Para qué usamos tus datos",

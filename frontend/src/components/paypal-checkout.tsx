@@ -42,13 +42,16 @@ const SDK = {
   monthly: { namespace: "paypalSubscriptions", params: "vault=true&intent=subscription" },
 } as const;
 const sdkPromises: Partial<Record<BillingMode, Promise<PayPalNamespace>>> = {};
+// Only the PayPal button: no card form, Pay Later or Venmo on our page. Buyers who want to pay by
+// card can still do it inside PayPal's own window.
+const DISABLE_FUNDING = "card,credit,paylater,venmo";
 
 function loadSdk(clientId: string, currency: string, mode: BillingMode): Promise<PayPalNamespace> {
   // PayPal's official JS SDK. The page's Content-Security-Policy allows paypal.com.
   const { namespace, params } = SDK[mode];
   sdkPromises[mode] ??= new Promise((resolve, reject) => {
     const script = document.createElement("script");
-    script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId)}&currency=${currency}&${params}&components=buttons`;
+    script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId)}&currency=${currency}&${params}&components=buttons&disable-funding=${DISABLE_FUNDING}`;
     script.async = true;
     script.dataset.namespace = namespace;
     script.onload = () => {

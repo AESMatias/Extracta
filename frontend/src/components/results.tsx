@@ -85,7 +85,7 @@ export function ResultCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="truncate font-semibold" title={entry.filename}>
+            <p className="line-clamp-2 [overflow-wrap:anywhere] max-w-full font-semibold" title={entry.filename}>
               {entry.filename}
             </p>
             <StatusBadge status={entry.status} />
@@ -97,7 +97,7 @@ export function ResultCard({
               </Badge>
             )}
           </div>
-          <p className={clsx("mt-1 line-clamp-2 text-sm", entry.error ? "text-rose-600 dark:text-rose-400" : "text-slate-600 dark:text-slate-400")}>
+          <p className={clsx("mt-1 line-clamp-2 text-sm [overflow-wrap:anywhere]", entry.error ? "text-rose-600 dark:text-rose-400" : "text-slate-600 dark:text-slate-400")}>
             {entry.document
               ? describeDocument(entry.document)
               : entry.error

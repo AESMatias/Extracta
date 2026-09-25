@@ -24,6 +24,7 @@ services:
     image: extracta-frontend:latest
     environment:
       SITE_DOMAIN: ${SITE_DOMAIN:-}  # empty = plain HTTP (local); a domain name = HTTPS
+      REAL_IP_FROM: ${REAL_IP_FROM:-}  # behind the host's own Nginx: trust its X-Forwarded-For
     ports:
       - "${HTTP_PORT:-8080}:80"
       - "${HTTPS_PORT:-8443}:443"

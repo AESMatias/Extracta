@@ -124,20 +124,21 @@ function Steps() {
 function Features() {
   const { m } = useI18n();
   return (
-    <section id="features" className="relative scroll-mt-20 overflow-hidden py-20 sm:py-28">
+    <section id="features" className="relative scroll-mt-20 overflow-hidden py-14 sm:py-28">
       <div className="bg-dots absolute inset-0 -z-10 opacity-60 [mask-image:linear-gradient(to_bottom,transparent,black_30%,black_70%,transparent)]" />
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <Reveal>
           <SectionTitle center title={m.features.title} subtitle={m.features.subtitle} />
         </Reveal>
-        <div className="mt-14 grid gap-px bg-slate-200/80 sm:grid-cols-2 lg:grid-cols-3 dark:bg-slate-800">
+        {/* Phones: compact rows, icon on the left. From sm up: centered cards. */}
+        <div className="mt-8 grid grid-cols-1 gap-px bg-slate-200/80 sm:mt-14 sm:grid-cols-2 lg:grid-cols-3 dark:bg-slate-800">
           {m.features.items.map(({ title, text }, index) => {
             const Icon = FEATURE_ICONS[index] ?? Layers;
             return (
               <Reveal
                 key={title}
                 delay={(index % 3) * 110}
-                className="group relative isolate overflow-hidden bg-white px-6 py-9 text-center [perspective:700px] sm:px-8 sm:py-11 dark:bg-slate-950"
+                className="group relative isolate flex items-start gap-4 overflow-hidden bg-white px-4 py-5 text-left [perspective:700px] sm:block sm:px-8 sm:py-11 sm:text-center dark:bg-slate-950"
               >
                 {/* A wash of color rises from the bottom on hover. */}
                 <span
@@ -145,18 +146,20 @@ function Features() {
                   className="absolute inset-0 -z-10 origin-bottom scale-y-0 bg-gradient-to-t from-brand-50 via-emerald-50/40 to-transparent transition-transform duration-700 ease-out group-hover:scale-y-100 dark:from-brand-500/10 dark:via-emerald-500/5"
                 />
                 {/* The icon lifts toward the viewer like a card picked up from the table. */}
-                <div className="relative mx-auto size-12 transition-transform duration-700 ease-out [transform-style:preserve-3d] group-hover:[transform:translateY(-10px)_rotateX(22deg)_scale(1.12)]">
+                <div className="relative size-10 shrink-0 transition-transform duration-700 sm:mx-auto sm:size-12 ease-out [transform-style:preserve-3d] group-hover:[transform:translateY(-10px)_rotateX(22deg)_scale(1.12)]">
                   <span
                     aria-hidden
                     className="absolute inset-0 translate-x-1.5 translate-y-1.5 border border-brand-200 transition-all duration-700 ease-out group-hover:translate-x-3.5 group-hover:translate-y-4 group-hover:border-accent group-hover:bg-accent/15 group-hover:shadow-[0_14px_24px_-8px_rgb(250_204_21/0.6)] dark:border-brand-500/40"
                   />
-                  <span className="bg-signature animate-pan relative grid size-12 place-items-center text-white transition-shadow duration-700 ease-out group-hover:shadow-[0_20px_32px_-10px_rgb(31_87_214/0.65)]">
+                  <span className="bg-signature animate-pan relative grid size-10 place-items-center text-white sm:size-12 transition-shadow duration-700 ease-out group-hover:shadow-[0_20px_32px_-10px_rgb(31_87_214/0.65)]">
                     <Icon className="size-5" />
                   </span>
                 </div>
-                <h3 className="mt-7 text-lg font-semibold">{title}</h3>
-                <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-slate-600 dark:text-slate-400">{text}</p>
-                <span aria-hidden className="bg-signature mx-auto mt-5 block h-0.5 w-20 scale-x-0 transition-transform duration-700 ease-out group-hover:scale-x-100" />
+                <div className="min-w-0">
+                  <h3 className="font-semibold sm:mt-7 sm:text-lg">{title}</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-600 sm:mx-auto sm:mt-2 sm:max-w-xs dark:text-slate-400">{text}</p>
+                </div>
+                <span aria-hidden className="bg-signature mx-auto mt-5 hidden h-0.5 w-20 scale-x-0 sm:block transition-transform duration-700 ease-out group-hover:scale-x-100" />
               </Reveal>
             );
           })}
@@ -207,7 +210,7 @@ const SHIELD =
 function ShieldBadge() {
   const pulse = "absolute inset-0 size-full animate-ping text-emerald-400/50 [animation-duration:2.6s]";
   return (
-    <div className="relative mx-auto grid size-28 place-items-center">
+    <div className="relative mx-auto grid size-20 place-items-center sm:size-28">
       {/* Two outlines of the same shield grow and fade out, one after the other. */}
       <svg viewBox="0 0 24 24" className={pulse} aria-hidden>
         <path d={SHIELD} fill="none" stroke="currentColor" strokeWidth="0.6" strokeLinejoin="round" />
@@ -215,7 +218,7 @@ function ShieldBadge() {
       <svg viewBox="0 0 24 24" className={`${pulse} text-brand-400/50 [animation-delay:1.3s]`} aria-hidden>
         <path d={SHIELD} fill="none" stroke="currentColor" strokeWidth="0.6" strokeLinejoin="round" />
       </svg>
-      <svg viewBox="0 0 24 24" className="relative size-24 drop-shadow-[0_0_24px_rgb(16_185_129/0.55)]" aria-hidden>
+      <svg viewBox="0 0 24 24" className="relative size-16 drop-shadow sm:size-24-[0_0_24px_rgb(16_185_129/0.55)]" aria-hidden>
         <defs>
           <linearGradient id="shield-fill" x1="4" y1="2" x2="20" y2="22" gradientUnits="userSpaceOnUse">
             <stop stopColor="#10b981" />
@@ -235,39 +238,45 @@ function Security() {
   const { m } = useI18n();
   const s = m.security;
   return (
-    <section id="security" className="relative scroll-mt-20 overflow-hidden bg-slate-950 py-20 text-white sm:py-28">
+    <section id="security" className="relative scroll-mt-20 overflow-hidden bg-slate-950 py-14 text-white sm:py-28">
       <div className="bg-grid-light absolute inset-0 opacity-50 [mask-image:radial-gradient(ellipse_at_top,black,transparent_70%)]" />
       <div className="bg-signature animate-grow-x absolute inset-x-0 top-0 h-1 origin-left" />
       <div className="relative mx-auto max-w-6xl px-4 sm:px-6">
         <Reveal className="mx-auto max-w-3xl text-center">
           <ShieldBadge />
-          <p className="mt-6 text-sm font-semibold tracking-wide text-emerald-300 uppercase">{s.eyebrow}</p>
-          <h2 className="mt-2 text-3xl font-bold tracking-tight text-balance sm:text-5xl">{s.title}</h2>
-          <p className="mt-4 text-lg text-slate-400">{s.subtitle}</p>
+          <p className="mt-4 text-xs font-semibold tracking-wide text-emerald-300 uppercase sm:mt-6 sm:text-sm">{s.eyebrow}</p>
+          <h2 className="mt-2 text-2xl font-bold tracking-tight text-balance sm:text-5xl">{s.title}</h2>
+          <p className="mt-3 text-sm text-slate-400 sm:mt-4 sm:text-lg">{s.subtitle}</p>
         </Reveal>
 
-        <div className="mt-14 grid gap-px bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-8 grid grid-cols-1 gap-px bg-white/10 sm:mt-14 sm:grid-cols-2 lg:grid-cols-4">
           {s.items.map(({ title, text }, index) => {
             const Icon = SECURITY_ICONS[index] ?? ShieldCheck;
             return (
-              <Reveal key={title} delay={(index % 4) * 90} className="group relative overflow-hidden bg-slate-950 p-6 text-center">
+              <Reveal
+                key={title}
+                delay={(index % 4) * 90}
+                className="group relative flex items-start gap-4 overflow-hidden bg-slate-950 px-4 py-4 text-left sm:block sm:p-6 sm:text-center"
+              >
                 <span
                   aria-hidden
                   className="absolute inset-0 origin-left scale-x-0 bg-gradient-to-r from-emerald-500/10 via-cyan-500/5 to-transparent transition-transform duration-700 ease-out group-hover:scale-x-100"
                 />
-                <Icon className="relative mx-auto size-6 text-emerald-300 transition duration-500 ease-out group-hover:-translate-y-0.5 group-hover:text-accent" />
-                <h3 className="relative mt-4 font-semibold">{title}</h3>
-                <p className="relative mt-1.5 text-sm leading-relaxed text-slate-400">{text}</p>
+                <Icon className="relative mt-0.5 size-5 shrink-0 text-emerald-300 sm:mx-auto sm:mt-0 sm:size-6 transition duration-500 ease-out group-hover:-translate-y-0.5 group-hover:text-accent" />
+                <div className="relative min-w-0">
+                  <h3 className="font-semibold sm:mt-4">{title}</h3>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-400 sm:mt-1.5">{text}</p>
+                </div>
               </Reveal>
             );
           })}
         </div>
 
-        <Reveal className="mt-12">
+        <Reveal className="mt-10 sm:mt-12">
           <p className="text-center text-xs font-bold tracking-[0.2em] text-slate-500 uppercase">{s.standardsTitle}</p>
-          <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="mt-5 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
             {s.standards.map(({ name, text }) => (
-              <div key={name} className="group border border-white/10 p-4 text-center transition-colors duration-500 ease-out hover:border-emerald-400/50 hover:bg-white/[0.03]">
+              <div key={name} className="group border border-white/10 p-3 text-center sm:p-4 transition-colors duration-500 ease-out hover:border-emerald-400/50 hover:bg-white/[0.03]">
                 <span className="mx-auto grid size-9 place-items-center" aria-hidden>
                   <BadgeCheck className="size-6 text-accent transition-transform duration-500 ease-out will-change-transform group-hover:scale-125" />
                 </span>

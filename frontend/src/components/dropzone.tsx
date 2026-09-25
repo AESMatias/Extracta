@@ -90,7 +90,7 @@ export function PickedList({ items, onRemove }: { items: Picked[]; onRemove: (in
   const { m } = useI18n();
   if (items.length === 0) return null;
   return (
-    <ul className="mt-4 grid gap-2 sm:grid-cols-2" aria-label={m.dropzone.selected}>
+    <ul className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2" aria-label={m.dropzone.selected}>
       {items.map((item, index) => (
         <li
           key={`${item.file.name}-${item.file.size}`}
@@ -103,7 +103,7 @@ export function PickedList({ items, onRemove }: { items: Picked[]; onRemove: (in
         >
           <FileText className={clsx("size-5 shrink-0", item.error ? "text-rose-500" : "text-brand-500")} />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium" title={item.file.name}>
+            <p className="line-clamp-2 [overflow-wrap:anywhere] text-sm font-medium" title={item.file.name}>
               {item.file.name}
             </p>
             <p className={clsx("text-xs", item.error ? "text-rose-600 dark:text-rose-400" : "text-slate-500")}>

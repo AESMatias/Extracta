@@ -240,7 +240,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1.55fr_1fr]">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
         {/* ------------------------------------------------ upload */}
         <Card className="p-5 sm:p-6">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
@@ -263,7 +263,7 @@ export default function DashboardPage() {
 
           <fieldset className="mt-5">
             <legend className="text-sm font-semibold">{d.modeTitle}</legend>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
               <label
                 className={clsx(
                   "flex cursor-pointer items-start gap-3 border p-3.5 transition",
@@ -379,7 +379,7 @@ export default function DashboardPage() {
             <p className="mt-1 max-w-sm text-sm text-slate-500">{d.emptyText}</p>
           </Card>
         ) : (
-          <ul className="mt-4 grid gap-3 md:grid-cols-2">
+          <ul className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
             {batch.map((entry) => (
               <ResultCard
                 key={entry.key}
@@ -424,7 +424,7 @@ export default function DashboardPage() {
           ) : saved.length === 0 ? (
             <p className="mt-3 text-sm text-slate-500">{d.savedEmpty}</p>
           ) : (
-            <ul className="mt-4 grid gap-3 md:grid-cols-2">
+            <ul className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
               {saved.map((doc) => (
                 <ResultCard
                   key={doc.id}

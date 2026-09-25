@@ -137,6 +137,43 @@ By starting the certbot service you accept the Let's Encrypt Subscriber Agreemen
 Follow it with `docker compose logs -f certbot frontend`: you should see
 `Successfully received certificate` and then `new certificate installed, Nginx reloaded`.
 
+### Behind an existing Nginx
+
+When the server already runs other sites, ports 80 and 443 belong to the server's own Nginx
+(`apt install nginx certbot python3-certbot-nginx`), which forwards Extracta's domain to the
+container. In `.env`:
+
+| Variable | Value |
+|---|---|
+| `SITE_DOMAIN`, `COMPOSE_PROFILES` | empty (the server's certbot handles HTTPS) |
+| `HTTP_PORT` / `HTTPS_PORT` | `127.0.0.1:8080` / `127.0.0.1:8443` (only the server can reach them; Docker bypasses `ufw`) |
+| `REAL_IP_FROM` | `172.16.0.0/12` (Docker's networks: trust the visitor address the server's Nginx sends) |
+
+`/etc/nginx/sites-available/extracta`, linked into `sites-enabled`:
+
+```nginx
+server {
+    listen 80;
+    server_name extracta.example.com;
+    client_max_body_size 2600m;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;  # overwrite: never pass on a client's own
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_request_buffering off;
+        proxy_read_timeout 130s;
+        proxy_send_timeout 130s;
+    }
+}
+```
+
+Then `nginx -t && systemctl reload nginx` and `certbot --nginx -d extracta.example.com`. If the
+domain is on Cloudflare, use an A record with the proxy off (grey cloud): Cloudflare's proxy caps
+uploads at 100 MB and waits at most 100 seconds.
+
 ## 6. Check that everything works
 
 ```bash

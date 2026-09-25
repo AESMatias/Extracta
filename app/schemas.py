@@ -127,7 +127,7 @@ class ContractData(BaseModel):
     governing_law: str | None = Field(default=None, description="Jurisdiction or governing law, e.g. 'Chile'.")
     key_obligations: list[str] = Field(
         default_factory=list,
-        description="Up to 5 main obligations, one short English sentence each.",
+        description="Up to 5 main obligations, one short sentence each, in the document's language.",
     )
 
 
@@ -166,7 +166,7 @@ class ReportData(BaseModel):
     period_covered: str | None = Field(default=None, description="Period analyzed, as written, e.g. 'Q3 2026'.")
     key_findings: list[str] = Field(
         default_factory=list,
-        description="Up to 5 main findings or conclusions, one short English sentence each.",
+        description="Up to 5 main findings or conclusions, one short sentence each, in the document's language.",
     )
 
 
@@ -202,7 +202,10 @@ class DocumentSchema(BaseModel):
         default=None, description="Main language of the document, ISO 639-1 code (es, en, pt...)."
     )
     title: str | None = Field(default=None, description="The document's own title or heading, as written.")
-    summary: str = Field(description="Two or three sentences in English describing what the document is about.")
+    summary: str = Field(
+        description="Two or three sentences describing what the document is about, written in the document's "
+        "main language (the one in `language`): a Spanish document gets a Spanish summary."
+    )
     commercial: CommercialDocumentData | None = Field(
         default=None, description="Fill ONLY for invoice, receipt, purchase_order or quote."
     )

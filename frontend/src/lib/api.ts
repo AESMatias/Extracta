@@ -193,6 +193,17 @@ export interface AdminStats {
   revenue_usd: string;
   active_subscriptions: number;
   pending_deletions: number;
+  visitors: VisitorSummary;
+}
+
+/** Unique visitors (counted without cookies) and page views; days oldest first, in UTC. */
+export interface VisitorSummary {
+  today: number;
+  last_7_days: number;
+  last_30_days: number;
+  views_today: number;
+  views_30_days: number;
+  days: { day: string; visitors: number; views: number }[];
 }
 
 /** An account deletion asked for from the public form (listed even when the email never arrived). */
