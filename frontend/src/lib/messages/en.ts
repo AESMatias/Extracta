@@ -163,7 +163,7 @@ export const en = {
       packName: "{pages} pages",
       renews: "Renews every month · cancel anytime",
       neverExpire: "Prepaid · never expire",
-      packNote: "Pay once with PayPal or a card. The pages are added to your balance right away and are used after your plan's pages.",
+      packNote: "Pay once with PayPal. The pages are added to your balance right away and are used after your plan's pages.",
       samePlan: "You already paid for {plan} until {date}. The first charge happens on that date, so you lose no days.",
       replaces: "Your current {current} plan is replaced by {plan} today.",
       monthlyNote: "PayPal charges ${price} today and then every month. Cancel anytime from your account and keep the plan until the period ends.",

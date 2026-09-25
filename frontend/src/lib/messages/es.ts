@@ -163,7 +163,7 @@ export const es: Messages = {
       packName: "{pages} páginas",
       renews: "Se renueva cada mes · cancela cuando quieras",
       neverExpire: "Prepagadas · no vencen",
-      packNote: "Paga una vez con PayPal o tarjeta. Las páginas se suman a tu saldo al instante y se usan después de las de tu plan.",
+      packNote: "Paga una vez con PayPal. Las páginas se suman a tu saldo al instante y se usan después de las de tu plan.",
       samePlan: "Ya pagaste {plan} hasta el {date}. El primer cobro ocurre en esa fecha, así que no pierdes días.",
       replaces: "Tu plan {current} actual se reemplaza por {plan} hoy.",
       monthlyNote: "PayPal cobra ${price} hoy y luego cada mes. Cancela cuando quieras desde tu cuenta y mantén el plan hasta que termine el periodo.",
