@@ -15,7 +15,7 @@ type Size = "sm" | "md" | "lg";
 const variants: Record<Variant, { base: string; sweep: string; hover: string }> = {
   primary: {
     base: "bg-signature animate-pan text-white shadow-lg shadow-brand-600/25",
-    sweep: "bg-gradient-to-r from-brand-700 via-cyan-600 to-emerald-500", // the gradient, reversed and deeper
+    sweep: "bg-gradient-to-r from-emerald-500 via-cyan-500 to-brand-500", // same direction, brighter tones
     hover: "hover:shadow-xl hover:shadow-brand-600/35",
   },
   secondary: {
