@@ -188,13 +188,16 @@ def _inflated_size(data: mmap.mmap, start: int, end: int, limit: int) -> int:
     try:
         for offset in range(start, end, _READ):
             pending: bytes = data[offset : min(offset + _READ, end)]
-            while pending:
-                total += len(inflater.decompress(pending, _OUT))
+            while pending and not inflater.eof:
+                produced = len(inflater.decompress(pending, _OUT))
+                total += produced
                 if total > limit:
                     return total
+                if not produced and inflater.unconsumed_tail == pending:
+                    break  # no progress: nothing more comes out of this input
                 pending = inflater.unconsumed_tail
             if inflater.eof:
-                break
+                break  # the stream ended; what follows (a line break before "endstream") is not data
     except zlib.error:
         return 0  # not Flate-compressed, or damaged: pdfminer decides later
     return total
