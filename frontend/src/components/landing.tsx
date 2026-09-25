@@ -82,7 +82,7 @@ function Steps() {
     <section id="how-it-works" className="scroll-mt-20 border-y border-slate-200/70 bg-slate-50/80 dark:border-slate-800/70 dark:bg-slate-900/40">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <p className="flex items-center justify-center gap-2 pt-3 text-[11px] font-bold tracking-[0.2em] text-slate-500 uppercase sm:pt-5 dark:text-slate-400">
-          <span className="size-1.5 bg-accent" aria-hidden /> {m.steps.title}
+          {m.steps.title}
         </p>
         <ol className="grid grid-cols-3 py-3 sm:py-4">
           {m.steps.items.map(({ title, text }, index) => {
@@ -198,6 +198,39 @@ function DocumentTypes() {
   );
 }
 
+// A shield with rounded corners and a slightly pointed base (the outline of lucide's shield icon,
+// drawn in a 24 x 24 box). Filled with the brand gradient it becomes the badge itself.
+const SHIELD =
+  "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z";
+
+/** The security badge: a gradient shield with a check mark, and shield outlines pulsing out of it. */
+function ShieldBadge() {
+  const pulse = "absolute inset-0 size-full animate-ping text-emerald-400/50 [animation-duration:2.6s]";
+  return (
+    <div className="relative mx-auto grid size-28 place-items-center">
+      {/* Two outlines of the same shield grow and fade out, one after the other. */}
+      <svg viewBox="0 0 24 24" className={pulse} aria-hidden>
+        <path d={SHIELD} fill="none" stroke="currentColor" strokeWidth="0.6" strokeLinejoin="round" />
+      </svg>
+      <svg viewBox="0 0 24 24" className={`${pulse} text-brand-400/50 [animation-delay:1.3s]`} aria-hidden>
+        <path d={SHIELD} fill="none" stroke="currentColor" strokeWidth="0.6" strokeLinejoin="round" />
+      </svg>
+      <svg viewBox="0 0 24 24" className="relative size-24 drop-shadow-[0_0_24px_rgb(16_185_129/0.55)]" aria-hidden>
+        <defs>
+          <linearGradient id="shield-fill" x1="4" y1="2" x2="20" y2="22" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#10b981" />
+            <stop offset="0.5" stopColor="#0891b2" />
+            <stop offset="1" stopColor="#1f57d6" />
+          </linearGradient>
+        </defs>
+        {/* The stroke in the same gradient, with round joins, softens the corners a little more. */}
+        <path d={SHIELD} fill="url(#shield-fill)" stroke="url(#shield-fill)" strokeWidth="1.2" strokeLinejoin="round" />
+        <path d="m9 12 2 2 4-4" fill="none" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </div>
+  );
+}
+
 function Security() {
   const { m } = useI18n();
   const s = m.security;
@@ -207,17 +240,8 @@ function Security() {
       <div className="bg-signature animate-grow-x absolute inset-x-0 top-0 h-1 origin-left" />
       <div className="relative mx-auto max-w-6xl px-4 sm:px-6">
         <Reveal className="mx-auto max-w-3xl text-center">
-          {/* A shield with rings pulsing out of it. */}
-          <div className="relative mx-auto grid size-24 place-items-center">
-            <span className="absolute inset-0 animate-ping border border-emerald-400/40 [animation-duration:2.6s]" aria-hidden />
-            <span className="absolute inset-3 animate-ping border border-brand-400/40 [animation-delay:0.8s] [animation-duration:2.6s]" aria-hidden />
-            <span className="bg-signature animate-pan relative grid size-16 place-items-center shadow-[0_0_40px_-6px_rgb(16_185_129/0.7)]">
-              <ShieldCheck className="size-8" />
-            </span>
-          </div>
-          <p className="mt-6 flex items-center justify-center gap-2 text-sm font-semibold tracking-wide text-emerald-300 uppercase">
-            <span className="size-2 bg-accent" /> {s.eyebrow}
-          </p>
+          <ShieldBadge />
+          <p className="mt-6 text-sm font-semibold tracking-wide text-emerald-300 uppercase">{s.eyebrow}</p>
           <h2 className="mt-2 text-3xl font-bold tracking-tight text-balance sm:text-5xl">{s.title}</h2>
           <p className="mt-4 text-lg text-slate-400">{s.subtitle}</p>
         </Reveal>
@@ -226,12 +250,12 @@ function Security() {
           {s.items.map(({ title, text }, index) => {
             const Icon = SECURITY_ICONS[index] ?? ShieldCheck;
             return (
-              <Reveal key={title} delay={(index % 4) * 90} className="group relative overflow-hidden bg-slate-950 p-6">
+              <Reveal key={title} delay={(index % 4) * 90} className="group relative overflow-hidden bg-slate-950 p-6 text-center">
                 <span
                   aria-hidden
                   className="absolute inset-0 origin-left scale-x-0 bg-gradient-to-r from-emerald-500/10 via-cyan-500/5 to-transparent transition-transform duration-700 ease-out group-hover:scale-x-100"
                 />
-                <Icon className="relative size-6 text-emerald-300 transition duration-500 ease-out group-hover:-translate-y-0.5 group-hover:text-accent" />
+                <Icon className="relative mx-auto size-6 text-emerald-300 transition duration-500 ease-out group-hover:-translate-y-0.5 group-hover:text-accent" />
                 <h3 className="relative mt-4 font-semibold">{title}</h3>
                 <p className="relative mt-1.5 text-sm leading-relaxed text-slate-400">{text}</p>
               </Reveal>
@@ -267,8 +291,8 @@ function Pricing() {
   const packAction = (selected: PagePack) => (
     <ButtonLink
       href={signUpThen(`/pricing?pack=${selected.id}`)}
-      variant="secondary"
-      className="w-full bg-white! text-slate-900! hover:bg-accent!"
+      variant="light"
+      className="w-full"
       icon={<ArrowRight className="size-4" />}
     >
       {fill(m.pricing.buy, { pages: formatPages(selected.pages, locale) })}
@@ -336,7 +360,7 @@ function FinalCta() {
         <h2 className="relative text-3xl font-bold tracking-tight text-balance sm:text-4xl">{m.cta.title}</h2>
         <p className="relative mx-auto mt-4 max-w-xl text-lg text-white/85">{m.cta.subtitle}</p>
         <div className="relative mt-8 flex justify-center">
-          <ButtonLink href="/register" size="lg" variant="secondary" className="bg-white! text-slate-900! hover:bg-accent!">
+          <ButtonLink href="/register" size="lg" variant="light">
             {m.cta.button} <ArrowRight className="size-5" />
           </ButtonLink>
         </div>

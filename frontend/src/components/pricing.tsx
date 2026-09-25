@@ -142,14 +142,15 @@ export function PackPicker({ selected, onSelect, action }: { selected: string; o
               className={clsx(
                 "group relative cursor-pointer border px-3 py-4 text-center transition duration-300 ease-out hover:-translate-y-0.5",
                 option.id === pack.id
-                  ? "border-brand-500 bg-brand-50 ring-2 ring-brand-500/20 dark:bg-brand-500/15"
+                  ? "border-amber-400 bg-gradient-to-br from-amber-100 via-yellow-300 to-amber-400 text-slate-900 shadow-lg shadow-amber-500/30"
                   : "border-slate-200 hover:border-brand-300 hover:shadow-md dark:border-slate-700 dark:hover:border-brand-500/50",
               )}
             >
               <span className="block text-xl font-bold tabular-nums sm:text-2xl">{formatPages(option.pages, locale)}</span>
-              <span className="block text-xs text-slate-500">{m.pricing.pagesLabel}</span>
-              <span className="mt-1 block text-xs font-semibold text-brand-600 dark:text-brand-300">${option.price_usd}</span>
-              {option.id === pack.id && <span aria-hidden className="absolute top-0 right-0 size-2 bg-accent" />}
+              <span className={clsx("block text-xs", option.id === pack.id ? "text-amber-900/70" : "text-slate-500")}>{m.pricing.pagesLabel}</span>
+              <span className={clsx("mt-1 block text-xs font-semibold", option.id === pack.id ? "text-amber-950" : "text-brand-600 dark:text-brand-300")}>
+                ${option.price_usd}
+              </span>
             </button>
           ))}
         </div>

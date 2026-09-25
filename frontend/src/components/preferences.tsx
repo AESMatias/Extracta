@@ -82,7 +82,7 @@ export function Byline({ className }: { className?: string }) {
       rel="noopener noreferrer"
       className={clsx("group inline-flex items-center gap-2 text-slate-500 transition duration-300 ease-out hover:text-slate-900 dark:text-slate-400 dark:hover:text-white", className)}
     >
-      <span className="grid size-7 place-items-center bg-slate-900 text-white transition duration-300 ease-out group-hover:rotate-[-8deg] dark:bg-white dark:text-slate-900">
+      <span className="grid size-7 place-items-center rounded-full bg-slate-900 text-white transition duration-300 ease-out group-hover:rotate-[-8deg] dark:bg-white dark:text-slate-900">
         <GitHubMark className="size-4" />
       </span>
       <span className="text-left text-[11px] leading-tight">

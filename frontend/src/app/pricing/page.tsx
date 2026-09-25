@@ -128,11 +128,11 @@ function PricingContent() {
 
   const packAction = (pack: PagePack) =>
     user ? (
-      <Button variant="secondary" className="w-full bg-white! text-slate-900! hover:bg-accent!" onClick={() => go({ pack: pack.id })} icon={<ArrowRight className="size-4" />}>
+      <Button variant="light" className="w-full" onClick={() => go({ pack: pack.id })} icon={<ArrowRight className="size-4" />}>
         {fill(m.pricing.buy, { pages: formatPages(pack.pages, locale) })}
       </Button>
     ) : (
-      <ButtonLink href={signUpThen(`/pricing?pack=${pack.id}`)} variant="secondary" className="w-full bg-white! text-slate-900! hover:bg-accent!" icon={<ArrowRight className="size-4" />}>
+      <ButtonLink href={signUpThen(`/pricing?pack=${pack.id}`)} variant="light" className="w-full" icon={<ArrowRight className="size-4" />}>
         {fill(m.pricing.buy, { pages: formatPages(pack.pages, locale) })}
       </ButtonLink>
     );
