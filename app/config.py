@@ -62,6 +62,20 @@ class Settings(BaseSettings):
     paypal_client_id: str | None = None
     paypal_client_secret: SecretStr | None = None
     paypal_env: Literal["sandbox", "live"] = "sandbox"  # prices are in USD (app/plans.py)
+    # ID of the webhook registered in the PayPal app (renewals, cancellations, refunds). Without
+    # it the webhook endpoint refuses every event, because it cannot verify their signatures.
+    paypal_webhook_id: str | None = None
+
+    # Outgoing email: verification links, password resets, security notices. Any SMTP provider
+    # works. While SMTP_HOST is empty, emails are written to the web logs instead (local testing).
+    smtp_host: str | None = None
+    smtp_port: int = Field(default=587, gt=0, le=65535)
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_security: Literal["starttls", "ssl", "none"] = "starttls"
+    mail_from: str = "Extracta <no-reply@localhost>"
+    # true: uploading and paying need a verified email address (Google accounts are verified).
+    require_email_verification: bool = True
 
     @field_validator("database_url", mode="before")
     @classmethod
@@ -98,6 +112,10 @@ class Settings(BaseSettings):
     @property
     def paypal_enabled(self) -> bool:
         return bool(self.paypal_client_id and self.paypal_client_secret)
+
+    @property
+    def mail_enabled(self) -> bool:
+        return bool(self.smtp_host)
 
     @property
     def admin_enabled(self) -> bool:

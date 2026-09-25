@@ -15,7 +15,7 @@ from sqlalchemy import func, or_, select
 
 from app import accounts
 from app.db import session_scope, utcnow
-from app.models import Payment, UsageEvent, User
+from app.models import Payment, Subscription, UsageEvent, User
 from app.plans import PLANS
 from app.schemas import summarize_validation_error
 from app.web.security import ApiError, client_ip, rate_limit, settings
@@ -68,7 +68,14 @@ def admin_logout() -> Body:
     return {"authenticated": False}, 200
 
 
-def _admin_user(user: User, used_24h: int, total_uploads: int, paid_total: str, now: datetime) -> dict[str, Any]:
+def _admin_user(
+    user: User,
+    used_24h: int,
+    total_uploads: int,
+    paid_total: str,
+    subscription: Subscription | None,
+    now: datetime,
+) -> dict[str, Any]:
     data = accounts.serialize_user(user, now)
     plan = accounts.current_plan(user, now)
     privileges = plan.privileges()
@@ -84,6 +91,7 @@ def _admin_user(user: User, used_24h: int, total_uploads: int, paid_total: str, 
             "paid_total_usd": paid_total,
             "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
             "sign_in_methods": [m for m, on in (("password", user.password_hash), ("google", user.google_sub)) if on],
+            "subscription": accounts.serialize_subscription(subscription),
         }
     )
     return data
@@ -129,8 +137,18 @@ def list_users() -> Body:
             .tuples()
             .all()
         )
+        latest: dict[Any, Subscription] = {}
+        for sub in db.scalars(
+            select(Subscription)
+            .where(Subscription.user_id.in_(ids), Subscription.status != "APPROVAL_PENDING")
+            .order_by(Subscription.created_at)
+        ):
+            latest[sub.user_id] = sub  # ordered oldest first: the newest one wins
         items = [
-            _admin_user(u, recent.get(u.id, 0), totals.get(u.id, 0), f"{paid.get(u.id) or 0:.2f}", now) for u in users
+            _admin_user(
+                u, recent.get(u.id, 0), totals.get(u.id, 0), f"{paid.get(u.id) or 0:.2f}", latest.get(u.id), now
+            )
+            for u in users
         ]
     return {"users": items, "plans": [plan.to_dict() for plan in PLANS.values()]}, 200
 
@@ -142,6 +160,7 @@ class UserUpdate(BaseModel):
     plan: Literal["free", "starter", "pro", "business", "ultra"] | None = None
     plan_expires_at: datetime | None = None  # ISO 8601 with timezone; null = no expiry
     daily_limit_override: int | None = Field(default=None, ge=0, le=100_000)  # null = use the plan's limit
+    email_verified: bool | None = None  # true marks the address verified (e.g. confirmed by phone)
 
 
 @admin.patch("/users/<user_id>")
@@ -166,13 +185,15 @@ def update_user(user_id: str) -> Body:
         user = db.get(User, uid)
         if user is None:
             raise ApiError(404, "User not found.")
-        for field in update.model_fields_set:  # only what the admin actually sent; null clears
+        for field in update.model_fields_set - {"email_verified"}:  # only what the admin sent; null clears
             setattr(user, field, getattr(update, field))
+        if "email_verified" in update.model_fields_set:
+            user.email_verified_at = (user.email_verified_at or now) if update.email_verified else None
         if user.plan == "free":
             user.plan_expires_at = None
         db.flush()
         used = accounts.usage(db, user, now).used
-        return {"user": _admin_user(user, used, 0, "0.00", now)}, 200
+        return {"user": _admin_user(user, used, 0, "0.00", accounts.current_subscription(db, user), now)}, 200
 
 
 @admin.get("/payments")
@@ -190,6 +211,7 @@ def list_payments() -> Body:
                 "id": str(p.id),
                 "email": email,
                 "plan": p.plan,
+                "kind": p.kind,
                 "amount": f"{p.amount:.2f}",
                 "currency": p.currency,
                 "status": p.status,
@@ -212,7 +234,11 @@ def stats() -> Body:
             select(func.count()).select_from(UsageEvent).where(UsageEvent.created_at > now - accounts.QUOTA_WINDOW)
         )
         revenue = db.scalar(select(func.sum(Payment.amount)).where(Payment.status == "COMPLETED")) or 0
+        active_subscriptions = db.scalar(
+            select(func.count()).select_from(Subscription).where(Subscription.status == "ACTIVE")
+        )
     return {
+        "active_subscriptions": active_subscriptions or 0,
         "users_by_status": by_status,
         "users_by_plan": by_plan,
         "uploads_24h": uploads_24h or 0,

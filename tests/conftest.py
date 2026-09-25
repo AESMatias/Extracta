@@ -79,6 +79,13 @@ def db_engine() -> Iterator[Engine]:
     @event.listens_for(engine, "connect")
     def enable_foreign_keys(dbapi_connection: Any, _: Any) -> None:
         dbapi_connection.execute("PRAGMA foreign_keys=ON")  # SQLite ignores FKs unless asked
+        # Python's sqlite3 driver starts transactions on its own and breaks SAVEPOINTs; let
+        # SQLAlchemy emit BEGIN itself (the recipe from SQLAlchemy's SQLite documentation).
+        dbapi_connection.isolation_level = None
+
+    @event.listens_for(engine, "begin")
+    def emit_begin(connection: Any) -> None:
+        connection.exec_driver_sql("BEGIN")
 
     Base.metadata.create_all(engine)
     use_engine(engine)
@@ -99,7 +106,7 @@ class Harness:
 
         from app import create_app
         from app.config import Settings
-        from tests.fakes import FakeGoogle, FakePayPal, FakeQueue, FakeRedis
+        from tests.fakes import FakeGoogle, FakeMailer, FakePayPal, FakeQueue, FakeRedis
 
         values: dict[str, Any] = {
             "gemini_api_key": SecretStr("test"),
@@ -115,27 +122,32 @@ class Harness:
         self.redis = FakeRedis()
         self.paypal = FakePayPal()
         self.google = FakeGoogle()
+        self.mailer = FakeMailer()
         self.app = create_app(
             self.settings,
             task_queue=self.queue,
             redis_client=self.redis,
             google=self.google,  # type: ignore[arg-type]
             paypal=self.paypal,  # type: ignore[arg-type]
+            mailer=self.mailer,
         )
 
     def client(self) -> Any:
         return self.app.test_client()
 
-    def signed_up(self, email: str = "ana@example.com", **user_changes: Any) -> Any:
-        """A browser signed in to a new account; optional changes to the account (plan, status...)."""
+    def signed_up(self, email: str = "ana@example.com", *, verified: bool = True, **user_changes: Any) -> Any:
+        """A browser signed in to a new account (email verified unless verified=False); optional
+        changes to the account (plan, status...)."""
         from sqlalchemy import select
 
-        from app.db import session_scope
+        from app.db import session_scope, utcnow
         from app.models import User
 
         client = self.client()
         response = client.post("/api/auth/register", json={"email": email, "password": USER_PASSWORD, "name": "Ana"})
         assert response.status_code == 201, response.get_json()
+        if verified:
+            user_changes.setdefault("email_verified_at", utcnow())
         if user_changes:
             with session_scope() as db:
                 user = db.execute(select(User).where(User.email == email)).scalar_one()

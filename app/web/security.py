@@ -5,7 +5,8 @@
 - UploadLock: one upload at a time per user, so two parallel uploads cannot exceed the quota.
 - same_origin(): state-changing requests must come from our own site (CSRF defense in depth,
   on top of SameSite=Lax cookies).
-- current_user() / require_user(): the signed-in account behind the session cookie.
+- current_user() / require_user(): the signed-in account behind the session cookie. The cookie
+  also carries a fingerprint of the password: changing the password signs out every other session.
 """
 
 import uuid
@@ -17,8 +18,10 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.models import User
+from app.tokens import password_fingerprint
 
 USER_KEY = "user_id"
+PASSWORD_KEY = "pw"
 
 
 class ApiError(Exception):
@@ -92,8 +95,11 @@ def current_user(db: Session) -> User | None:
         user = db.get(User, uuid.UUID(raw))
     except ValueError:
         user = None
-    if user is None or user.status in ("rejected", "suspended"):
-        session.pop(USER_KEY, None)  # deleted or blocked since the cookie was issued
+    stale = user is None or session.get(PASSWORD_KEY) != password_fingerprint(user)
+    if stale or user is None or user.status in ("rejected", "suspended"):
+        # Deleted, blocked, or the password changed since the cookie was issued.
+        session.pop(USER_KEY, None)
+        session.pop(PASSWORD_KEY, None)
         return None
     return user
 
@@ -110,7 +116,13 @@ def require_active(user: User) -> None:
         raise ApiError(403, "Your account is waiting for approval by the administrator.")
 
 
+def require_verified(user: User) -> None:
+    if settings().require_email_verification and user.email_verified_at is None:
+        raise ApiError(403, "Confirm your email address first: open the link we sent you.", verify_email=True)
+
+
 def sign_in(user: User) -> None:
     session.clear()  # drop anything from a previous account
     session[USER_KEY] = str(user.id)
+    session[PASSWORD_KEY] = password_fingerprint(user)
     session.permanent = True

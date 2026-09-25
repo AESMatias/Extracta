@@ -58,27 +58,31 @@ def supabase() -> Engine:
 @pytest.mark.integration
 @integration
 def test_migrations_create_every_table_with_row_level_security(supabase: Engine) -> None:
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    from app.db import Base
     from app.migrate import upgrade
 
     upgrade()
     upgrade()  # idempotent: a second run changes nothing
 
+    tables = (*Base.metadata.tables, "alembic_version")  # every table the models declare
     with session_scope() as db:
         rls = dict(
             db.execute(
-                text(
-                    "select relname, relrowsecurity from pg_class "
-                    "where relname in ('documents', 'users', 'usage_events', 'payments', 'alembic_version') "
-                    "and relkind = 'r'"
-                )
+                text("select relname, relrowsecurity from pg_class where relname = any(:names) and relkind = 'r'"),
+                {"names": list(tables)},
             )
             .tuples()
             .all()
         )
         version = db.execute(text("select version_num from alembic_version")).scalar_one()
 
-    assert rls == dict.fromkeys(("documents", "users", "usage_events", "payments", "alembic_version"), True)
-    assert version == "0002"
+    assert rls == dict.fromkeys(tables, True)
+    config = Config()
+    config.set_main_option("script_location", "app/migrations")
+    assert version == ScriptDirectory.from_config(config).get_current_head()
 
 
 @pytest.mark.integration

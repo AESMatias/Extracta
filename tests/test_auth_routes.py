@@ -90,7 +90,8 @@ def test_manual_approval_mode(db_engine: object, tmp_path: object) -> None:
     response = harness.client().post("/api/auth/register", json={"email": "ana@example.com", "password": USER_PASSWORD})
 
     assert response.get_json()["user"]["status"] == "pending"
-    assert harness.client().get("/api/auth/providers").get_json() == {"google": False, "manual_approval": True}
+    providers = harness.client().get("/api/auth/providers").get_json()
+    assert providers == {"google": False, "manual_approval": True, "email_verification": True}
 
 
 # --------------------------------------------------------------------------- Google

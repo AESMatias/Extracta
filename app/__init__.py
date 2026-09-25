@@ -14,9 +14,10 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.config import Settings, get_settings
+from app.mail import Mailer, build_mailer
 from app.web.admin_routes import admin
 from app.web.auth_routes import auth
-from app.web.billing_routes import billing
+from app.web.billing_routes import billing_api
 from app.web.google import GoogleOAuth
 from app.web.ownership import RedisTaskOwnership, TaskOwnership
 from app.web.paypal import PayPalClient
@@ -35,6 +36,7 @@ def create_app(
     redis_client: Any = None,
     google: GoogleOAuth | None = None,
     paypal: PayPalClient | None = None,
+    mailer: Mailer | None = None,
 ) -> Flask:
     app = Flask(__name__)
 
@@ -76,8 +78,9 @@ def create_app(
             currency="USD",  # plan prices are in USD
         )
     app.extensions["paypal"] = paypal
+    app.extensions["mailer"] = mailer or build_mailer(settings)
 
-    for blueprint in (api, auth, admin, billing):
+    for blueprint in (api, auth, admin, billing_api):
         app.register_blueprint(blueprint)
 
     @app.before_request

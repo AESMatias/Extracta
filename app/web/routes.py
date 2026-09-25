@@ -32,7 +32,7 @@ from app.schemas import summarize_validation_error
 from app.storage import UploadError, delete_file, display_name, save_stream
 from app.web.ownership import TaskOwnership
 from app.web.queue import TaskQueue
-from app.web.security import ApiError, UploadLock, require_active, require_user, settings
+from app.web.security import ApiError, UploadLock, require_active, require_user, require_verified, settings
 
 api = Blueprint("api", __name__, url_prefix="/api")
 
@@ -78,6 +78,7 @@ def upload() -> Body:
     with session_scope() as db:
         user = require_user(db)
         require_active(user)
+        require_verified(user)
         plan = accounts.current_plan(user, now)
         quota = accounts.usage(db, user, now)
         user_id = user.id

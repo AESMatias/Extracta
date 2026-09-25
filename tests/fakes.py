@@ -1,8 +1,11 @@
-"""In-memory stand-ins for Redis, the Celery queue, PayPal and Google, used by the API tests."""
+"""In-memory stand-ins for Redis, the Celery queue, PayPal, Google and email, used by the API tests."""
 
 import itertools
+import re
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from datetime import datetime
+from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
@@ -102,7 +105,14 @@ class FakePayPal:
         self.capture_status = "COMPLETED"
         self.fail = False
         self._ids = itertools.count(1)
+        self.products: list[str] = []
+        self.billing_plans: dict[str, Plan] = {}
+        self.subscriptions: dict[str, dict[str, Any]] = {}
+        self.cancelled: list[str] = []
+        self.webhook_valid = True
+        self.verified_bodies: list[str] = []
 
+    # one-time orders
     def create_order(self, *, plan: Plan, custom_id: str) -> str:
         if self.fail:
             raise PayPalError("down")
@@ -122,12 +132,65 @@ class FakePayPal:
         return self.orders[order_id]
 
     def capture_order(self, order_id: str) -> dict[str, Any]:
+        if self.fail:
+            raise PayPalError("down")
         self.captured.append(order_id)
-        return {
-            "id": order_id,
-            "status": self.capture_status,
-            "purchase_units": [{"payments": {"captures": [{"status": self.capture_status}]}}],
+        order = self.orders[order_id]
+        order["status"] = self.capture_status
+        order["purchase_units"][0]["payments"] = {
+            "captures": [{"id": f"CAP-{order_id}", "status": self.capture_status}]
         }
+        return order
+
+    # subscriptions
+    def create_product(self) -> str:
+        self.products.append(f"PROD-{len(self.products) + 1}")
+        return self.products[-1]
+
+    def create_billing_plan(self, *, product_id: str, plan: Plan) -> str:
+        plan_id = f"P-{plan.id.upper()}-{next(self._ids)}"
+        self.billing_plans[plan_id] = plan
+        return plan_id
+
+    def create_subscription(self, *, paypal_plan_id: str, custom_id: str, start_time: datetime | None) -> str:
+        if self.fail:
+            raise PayPalError("down")
+        subscription_id = f"I-SUB{next(self._ids)}"
+        self.subscriptions[subscription_id] = {
+            "id": subscription_id,
+            "plan_id": paypal_plan_id,
+            "custom_id": custom_id,
+            "status": "APPROVAL_PENDING",
+            "start_time": start_time,
+            "billing_info": {},
+        }
+        return subscription_id
+
+    def set_subscription(self, subscription_id: str, status: str, next_billing: datetime | None = None) -> None:
+        """What PayPal would report after the buyer approves, a renewal, a suspension..."""
+        data = self.subscriptions[subscription_id]
+        data["status"] = status
+        data["billing_info"] = (
+            {"next_billing_time": next_billing.strftime("%Y-%m-%dT%H:%M:%SZ")} if next_billing else {}
+        )
+
+    def get_subscription(self, subscription_id: str) -> dict[str, Any]:
+        if self.fail:
+            raise PayPalError("down")
+        if subscription_id not in self.subscriptions:
+            raise PayPalError("404")
+        return self.subscriptions[subscription_id]
+
+    def cancel_subscription(self, subscription_id: str, *, reason: str) -> None:
+        if self.fail:
+            raise PayPalError("down")
+        self.cancelled.append(subscription_id)
+        self.set_subscription(subscription_id, "CANCELLED")
+
+    # webhooks
+    def verify_webhook(self, *, headers: Mapping[str, str], raw_body: str, webhook_id: str) -> bool:
+        self.verified_bodies.append(raw_body)
+        return self.webhook_valid
 
 
 class FakeGoogle:
@@ -144,3 +207,22 @@ class FakeGoogle:
         if self.fail:
             raise GoogleAuthError("bad code")
         return self.profile
+
+
+class FakeMailer:
+    def __init__(self) -> None:
+        self.sent: list[EmailMessage] = []
+
+    def send(self, message: EmailMessage) -> None:
+        self.sent.append(message)
+
+    def last_to(self, address: str) -> EmailMessage:
+        return [m for m in self.sent if m["To"] == address][-1]
+
+    def link_token(self, address: str) -> str:
+        """The token of the last link sent to this address (links look like .../page#token=...)."""
+        body = self.last_to(address).get_body(("plain",))
+        assert body is not None
+        match = re.search(r"#token=(\S+)", body.get_content())
+        assert match, "no link in the email"
+        return match.group(1)

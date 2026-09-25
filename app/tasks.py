@@ -16,9 +16,10 @@ from typing import Any
 from celery import Task
 from sqlalchemy.exc import OperationalError
 
-from app.celery_app import PROCESS_DOCUMENT_TASK, SWEEP_ORPHANS_TASK, celery_app
+from app import billing
+from app.celery_app import PROCESS_DOCUMENT_TASK, RECONCILE_SUBSCRIPTIONS_TASK, SWEEP_ORPHANS_TASK, celery_app
 from app.config import get_settings
-from app.db import session_scope
+from app.db import session_scope, utcnow
 from app.llm import DocumentExtractor, LLMTransientError, build_extractor
 from app.models import Document
 from app.pdf_text import extract_text
@@ -118,3 +119,21 @@ def sweep_orphan_uploads() -> int:
     settings = get_settings()
     removed = sweep_orphans(settings.upload_dir, max_age_seconds=settings.orphan_max_age_hours * 3600)
     return len(removed)
+
+
+@celery_app.task(name=RECONCILE_SUBSCRIPTIONS_TASK)
+def reconcile_subscriptions() -> int:
+    """Periodic check (see beat_schedule): subscriptions whose renewal a lost webhook never applied."""
+    settings = get_settings()
+    if not (settings.paypal_client_id and settings.paypal_client_secret):
+        return 0  # payments are not configured
+    from app.web.paypal import PayPalClient  # only needed here: keeps the worker's imports lean
+
+    client = PayPalClient(
+        client_id=settings.paypal_client_id,
+        client_secret=settings.paypal_client_secret.get_secret_value(),
+        env=settings.paypal_env,
+        currency="USD",
+    )
+    with session_scope() as db:
+        return billing.reconcile_subscriptions(db, client, utcnow())

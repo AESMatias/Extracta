@@ -1,4 +1,5 @@
-"""Account rules: registration, password and Google sign-in, plans and the rolling 24-hour quota.
+"""Account rules: registration, password and Google sign-in, email verification, passwords,
+plans and the rolling 24-hour quota.
 
 Framework-free: routes call these functions with an open SQLAlchemy session.
 """
@@ -13,7 +14,7 @@ from sqlalchemy.orm import Session
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from app.db import utcnow
-from app.models import UsageEvent, User
+from app.models import Subscription, UsageEvent, User
 from app.plans import Plan, effective_plan
 
 PASSWORD_MIN_LENGTH = 10
@@ -113,6 +114,27 @@ def authenticate(db: Session, *, email: str, password: str) -> User:
     return user
 
 
+def set_password(user: User, password: str) -> None:
+    validate_password(password, user.email)
+    user.password_hash = generate_password_hash(password, method=HASH_METHOD)
+
+
+def change_password(user: User, *, current_password: str | None, new_password: str) -> None:
+    """Accounts with a password must confirm it; Google-only accounts can add one."""
+    if user.password_hash is not None and not check_password_hash(user.password_hash, current_password or ""):
+        raise InvalidCredentialsError("Your current password is not correct.")
+    set_password(user, new_password)
+
+
+def is_verified(user: User) -> bool:
+    return user.email_verified_at is not None
+
+
+def mark_email_verified(user: User, now: datetime) -> None:
+    if user.email_verified_at is None:
+        user.email_verified_at = now
+
+
 def google_sign_in(
     db: Session, *, sub: str, email: str, email_verified: bool, name: str | None, require_approval: bool
 ) -> User:
@@ -123,7 +145,12 @@ def google_sign_in(
         email = normalize_email(email)
         user = db.scalar(select(User).where(User.email == email))
         if user is not None:
-            user.google_sub = sub  # Google verified this email: link it to the existing account
+            # Google verified this email: link it to the existing account. If that account never
+            # verified the address, whoever set its password may not own the inbox (someone can
+            # register a victim's email first and wait): that password is removed.
+            if user.email_verified_at is None:
+                user.password_hash = None
+            user.google_sub = sub
         else:
             user = User(
                 email=email,
@@ -133,6 +160,7 @@ def google_sign_in(
             )
             db.add(user)
     ensure_can_sign_in(user)
+    mark_email_verified(user, utcnow())
     if not user.name:
         user.name = _clean_name(name)
     user.last_login_at = utcnow()
@@ -167,11 +195,41 @@ def record_usage(db: Session, user_id: uuid.UUID, task_ids: list[str], now: date
     db.add_all(UsageEvent(user_id=user_id, task_id=uuid.UUID(task_id), created_at=now) for task_id in task_ids)
 
 
+def current_subscription(db: Session, user: User) -> Subscription | None:
+    """The latest subscription the buyer approved (abandoned checkouts are ignored)."""
+    return db.scalar(
+        select(Subscription)
+        .where(Subscription.user_id == user.id, Subscription.status != "APPROVAL_PENDING")
+        .order_by(Subscription.created_at.desc())
+        .limit(1)
+    )
+
+
+def serialize_subscription(subscription: Subscription | None) -> dict[str, object] | None:
+    if subscription is None:
+        return None
+    return {
+        "id": subscription.provider_subscription_id,
+        "plan": subscription.plan,
+        "status": subscription.status,
+        "next_billing_at": subscription.next_billing_at.isoformat() if subscription.next_billing_at else None,
+        "cancelled_at": subscription.cancelled_at.isoformat() if subscription.cancelled_at else None,
+    }
+
+
+def describe(db: Session, user: User, now: datetime) -> dict[str, object]:
+    """Everything the frontend shows about the signed-in account."""
+    data = serialize_user(user, now, usage(db, user, now))
+    data["subscription"] = serialize_subscription(current_subscription(db, user))
+    return data
+
+
 def serialize_user(user: User, now: datetime, quota: Usage | None = None) -> dict[str, object]:
     plan = current_plan(user, now)
     data: dict[str, object] = {
         "id": str(user.id),
         "email": user.email,
+        "email_verified": is_verified(user),
         "name": user.name,
         "status": user.status,
         "plan": plan.to_dict(),

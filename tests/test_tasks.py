@@ -253,3 +253,31 @@ def test_beat_runs_the_sweep_every_30_minutes(settings: Settings) -> None:
     schedule = celery_module.celery_config(settings)["beat_schedule"]
 
     assert schedule["sweep-orphan-uploads"] == {"task": "sweep_orphan_uploads", "schedule": 1800}
+
+
+def test_beat_reconciles_subscriptions_every_6_hours(settings: Settings) -> None:
+    schedule = celery_module.celery_config(settings)["beat_schedule"]
+
+    assert schedule["reconcile-subscriptions"] == {"task": "reconcile_subscriptions", "schedule": 6 * 3600}
+
+
+def test_reconcile_task_without_payments_configured(env: Any) -> None:
+    env(FakeExtractor(VALID_DOC))
+
+    assert tasks.reconcile_subscriptions.apply().get() == 0
+
+
+def test_reconcile_task_uses_the_paypal_settings(env: Any, settings: Settings, monkeypatch: pytest.MonkeyPatch) -> None:
+    env(FakeExtractor(VALID_DOC))
+    settings.paypal_client_id = "id"
+    settings.paypal_client_secret = SecretStr("secret")
+    seen: dict[str, Any] = {}
+
+    def fake_reconcile(db: object, client: Any, now: object) -> int:
+        seen.update(env=client.env, currency=client.currency)
+        return 3
+
+    monkeypatch.setattr(tasks.billing, "reconcile_subscriptions", fake_reconcile)
+
+    assert tasks.reconcile_subscriptions.apply().get() == 3
+    assert seen == {"env": "sandbox", "currency": "USD"}
