@@ -129,7 +129,7 @@ export function SiteHeader() {
 
       {open && (
         <div id="mobile-menu" className="h-[calc(100dvh-4rem)] overflow-y-auto border-t border-slate-200/70 px-4 pt-4 pb-8 md:hidden dark:border-slate-800">
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 text-center">
             {links.map((link) => (
               <Link
                 key={link.href}
@@ -165,7 +165,7 @@ export function SiteHeader() {
               </>
             )}
           </div>
-          <div className="mt-8 flex items-center justify-between gap-4 border-t border-slate-200/70 pt-6 dark:border-slate-800">
+          <div className="mt-8 flex flex-col items-center gap-4 border-t border-slate-200/70 pt-6 dark:border-slate-800">
             <Byline />
             <LanguageSwitch />
           </div>
