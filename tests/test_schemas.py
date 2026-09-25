@@ -1,3 +1,4 @@
+import json
 from typing import Any
 
 import pytest
@@ -156,3 +157,13 @@ def test_json_schema_carries_descriptions_for_the_llm() -> None:
     assert "document_type" in schema["required"]
     assert schema["properties"]["summary"]["description"]
     assert schema["$defs"]["CommercialDocumentData"]["properties"]["total_amount"]["description"]
+
+
+def test_composed_sentences_follow_the_document_language() -> None:
+    """A Spanish document must get a Spanish summary: nothing asks the model for English."""
+    from app.llm.base import SYSTEM_PROMPT
+
+    schema = json.dumps(DocumentSchema.model_json_schema())
+    assert "English" not in schema
+    assert "document's main language" in DocumentSchema.model_fields["summary"].description  # type: ignore[operator]
+    assert "document's main language" in SYSTEM_PROMPT
