@@ -278,6 +278,23 @@ In GitHub → **Settings → Secrets and variables → Actions**: secrets `DEPLO
 `rm ~/.ssh/extracta_deploy`. From then on: push or merge to `main`, and **Actions** shows the
 tests and **Deploy to production**; **Deployments → production** keeps the history.
 
+### Everyday commands on the server
+
+Run them in the project folder (`cd ~/Extracta`).
+
+| Task | Command |
+|---|---|
+| Status of every container | `docker compose ps` |
+| Apply a change to `.env` (no rebuild) | `docker compose up -d --force-recreate web worker` |
+| Restart everything | `docker compose restart` |
+| Start everything again (after `down`, or if something is stopped) | `docker compose up -d` |
+| Stop everything (volumes and data are kept) | `docker compose down` |
+| Deploy the latest `main` by hand | `./deploy/deploy.sh` (`--force` to rebuild anyway) |
+| Follow the logs | `docker compose logs -f web worker frontend` |
+| Emails sent or failed | `docker compose logs web \| grep -i -E "email\|smtp"` |
+| Memory and disk | `docker stats --no-stream` and `df -h /` |
+| After a server reboot | nothing: containers restart on their own (`restart: unless-stopped`) and the server's Nginx is enabled |
+
 ### Troubleshooting
 
 | Symptom | Fix |
