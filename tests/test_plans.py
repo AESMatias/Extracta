@@ -56,3 +56,15 @@ def test_plan_serialization_lists_explicit_privileges() -> None:
         "can_save_to_db": True,
         "export_formats": ["csv", "xlsx", "json"],
     }
+
+
+def test_frontend_plan_catalog_matches_the_backend() -> None:
+    # The landing page is prerendered with frontend/src/lib/plans.json; checkout always uses the
+    # server's prices, but the page must not advertise different ones. Regenerate the file with
+    # `python -m app.plans > frontend/src/lib/plans.json`.
+    import json
+    from pathlib import Path
+
+    catalog = json.loads((Path(__file__).parents[1] / "frontend/src/lib/plans.json").read_text())
+
+    assert catalog == [plan.to_dict() for plan in PLANS.values()]

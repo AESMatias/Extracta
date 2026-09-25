@@ -69,3 +69,10 @@ def effective_plan(plan_id: str, expires_at: datetime | None, now: datetime) -> 
     if plan_id != "free" and expires_at is not None and expires_at <= now:
         return PLANS["free"]
     return get_plan(plan_id)
+
+
+if __name__ == "__main__":  # pragma: no cover
+    # Regenerate the frontend catalog:  python -m app.plans > frontend/src/lib/plans.json
+    import json
+
+    print(json.dumps([plan.to_dict() for plan in PLANS.values()], indent=2))
