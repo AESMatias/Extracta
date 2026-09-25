@@ -43,7 +43,7 @@ export function PlanCard({
       className={clsx(
         "group relative flex flex-col p-5 transition duration-300 hover:-translate-y-1",
         plan.highlight
-          ? "bg-slate-900 text-white shadow-2xl shadow-brand-900/30 dark:bg-slate-900"
+          ? "bg-slate-900 text-white shadow-2xl shadow-brand-900/30 ring-1 ring-brand-500/50 dark:bg-slate-900"
           : "border border-slate-200 bg-white hover:border-brand-300 hover:shadow-lg hover:shadow-brand-900/5 dark:border-slate-800 dark:bg-slate-900/60 dark:hover:border-brand-500/50",
       )}
     >

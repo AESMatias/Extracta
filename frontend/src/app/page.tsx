@@ -153,7 +153,7 @@ export default function HomePage() {
                 <Reveal
                   key={title}
                   delay={(index % 3) * 110}
-                  className="group relative isolate overflow-hidden bg-white px-6 py-10 text-center sm:px-8 dark:bg-slate-950"
+                  className="group relative isolate overflow-hidden bg-white px-6 py-8 text-center sm:px-8 sm:py-10 dark:bg-slate-950"
                 >
                   {/* A wash of color rises from the bottom on hover. */}
                   <span
