@@ -56,6 +56,18 @@ class FakeRedis:
     def sismember(self, key: str, value: str) -> bool:
         return value in self.sets.get(key, set())
 
+    def get(self, key: str) -> Any:
+        return self.values.get(key)
+
+    # HyperLogLogs, exact here: a set per key.
+    def pfadd(self, key: str, *values: str) -> int:
+        before = len(self.sets.get(key, set()))
+        self.sets.setdefault(key, set()).update(values)
+        return int(len(self.sets[key]) > before)
+
+    def pfcount(self, *keys: str) -> int:
+        return len(set().union(*(self.sets.get(key, set()) for key in keys)))
+
 
 class FakePipeline:
     def __init__(self, redis: FakeRedis) -> None:

@@ -6,6 +6,7 @@ import {
   BadgeCheck,
   Check,
   CircleDollarSign,
+  Eye,
   LogOut,
   Repeat,
   RefreshCw,
@@ -35,10 +36,12 @@ import {
   type Plan,
   type PlanId,
   type UserStatus,
+  type VisitorSummary,
 } from "@/lib/api";
 import { formatDate } from "@/lib/documents";
 
 const STATUSES: UserStatus[] = ["pending", "active", "rejected", "suspended"];
+const FILTERS: UserStatus[] = [...STATUSES, "deleted"];
 const STATUS_TONE = { active: "green", pending: "amber", rejected: "red", suspended: "red", deleted: "slate" } as const;
 const SUBSCRIPTION_TONE = { ACTIVE: "green", APPROVED: "amber", SUSPENDED: "red" } as const;
 const PAYMENT_TONE: Record<string, "green" | "red" | "amber"> = { COMPLETED: "green", REFUNDED: "red", REVERSED: "red" };
@@ -218,7 +221,7 @@ function UserCard({
             ))}
           </div>
         </div>
-        {!user.email_verified && user.status !== "pending" && (
+        {!user.email_verified && user.status !== "pending" && user.status !== "deleted" && (
           <Button size="sm" variant="outline" onClick={() => save({ email_verified: true })} loading={saving} icon={<BadgeCheck className="size-4" />}>
             Mark email verified
           </Button>
@@ -258,6 +261,11 @@ function UserCard({
         ))}
       </div>
 
+      {user.status === "deleted" ? (
+        <p className="mt-4 text-xs text-slate-500">
+          Erased account: personal data and documents are gone; the row stays only so payment records keep their owner.
+        </p>
+      ) : (
       <details className="group mt-4">
         <summary className="cursor-pointer text-sm font-semibold text-brand-600 dark:text-brand-400">Edit status, plan and privileges</summary>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -315,16 +323,60 @@ function UserCard({
             Save changes
           </Button>
         </div>
-        {user.status !== "deleted" && (
-          <div className="mt-6 flex flex-col gap-3 border-t border-rose-200 pt-4 sm:flex-row sm:items-center sm:justify-between dark:border-rose-500/30">
-            <p className="text-sm text-slate-600 dark:text-slate-400">
-              <span className="font-semibold text-rose-700 dark:text-rose-300">Delete account.</span> Cancels any subscription,
-              erases documents and personal data, keeps payment records, and emails the owner. It cannot be undone.
-            </p>
-            <ConfirmButton label="Delete account" confirmLabel="Yes, delete it" onConfirm={erase} />
-          </div>
-        )}
+        <div className="mt-6 flex flex-col gap-3 border-t border-rose-200 pt-4 sm:flex-row sm:items-center sm:justify-between dark:border-rose-500/30">
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            <span className="font-semibold text-rose-700 dark:text-rose-300">Delete account.</span> Cancels any subscription,
+            erases documents and personal data, keeps payment records, and emails the owner. It cannot be undone.
+          </p>
+          <ConfirmButton label="Delete account" confirmLabel="Yes, delete it" onConfirm={erase} />
+        </div>
       </details>
+      )}
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------- visitors
+
+function Visitors({ summary }: { summary: VisitorSummary }) {
+  const peak = Math.max(1, ...summary.days.map((d) => d.visitors));
+  return (
+    <Card className="mb-3 p-5">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="flex items-center gap-2 text-sm font-semibold">
+            <Eye className="size-4 text-brand-500" /> Unique visitors
+          </p>
+          <p className="mt-0.5 text-xs text-slate-500">Counted without cookies; days in UTC; the admin panel is not counted.</p>
+        </div>
+        <div className="flex flex-wrap gap-6">
+          {[
+            ["Today", summary.today],
+            ["Last 7 days", summary.last_7_days],
+            ["Last 30 days", summary.last_30_days],
+            ["Page views (30 d)", summary.views_30_days],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <p className="text-2xl font-bold">{value}</p>
+              <p className="text-xs text-slate-500">{label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="mt-5 flex h-20 items-end gap-0.5" role="img" aria-label="Unique visitors per day, last 30 days">
+        {summary.days.map((d) => (
+          <div
+            key={d.day}
+            title={`${d.day}: ${d.visitors} visitors · ${d.views} page views`}
+            className="flex-1 bg-brand-500/80 transition-colors hover:bg-brand-400"
+            style={{ height: `${Math.max(2, (d.visitors / peak) * 100)}%` }}
+          />
+        ))}
+      </div>
+      <div className="mt-1 flex justify-between text-[11px] text-slate-500">
+        <span>{summary.days[0]?.day}</span>
+        <span>today</span>
+      </div>
     </Card>
   );
 }
@@ -485,9 +537,14 @@ export default function AdminPage() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+        {stats?.visitors && <Visitors summary={stats.visitors} />}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {[
-            { icon: Users, label: "Accounts", value: Object.values(stats?.users_by_status ?? {}).reduce((a, b) => a + (b ?? 0), 0) },
+            {
+              icon: Users,
+              label: "Accounts",
+              value: Object.entries(stats?.users_by_status ?? {}).reduce((sum, [s, n]) => sum + (s === "deleted" ? 0 : (n ?? 0)), 0),
+            },
             { icon: ShieldX, label: "Pending approval", value: pendingCount, highlight: pendingCount > 0 },
             { icon: UserX, label: "Deletion requests", value: deletionCount, highlight: deletionCount > 0 },
             { icon: Upload, label: "Pages last 24 h", value: `${stats?.pages_24h ?? 0} · ${stats?.uploads_24h ?? 0} PDFs` },
@@ -539,7 +596,7 @@ export default function AdminPage() {
                 />
               </div>
               <div className="flex gap-1.5 overflow-x-auto">
-                {["", ...STATUSES].map((s) => (
+                {["", ...FILTERS].map((s) => (
                   <button
                     key={s || "all"}
                     onClick={() => setStatus(s)}

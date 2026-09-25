@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import { ToastProvider } from "@/components/toast";
+import { VisitBeacon } from "@/components/visit-beacon";
 import { AuthProvider } from "@/lib/auth";
 import { I18nProvider } from "@/lib/i18n";
 import { PREFERENCES_SCRIPT } from "@/lib/preferences";
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <I18nProvider>
           <AuthProvider>
             <ToastProvider>{children}</ToastProvider>
+            <VisitBeacon />
           </AuthProvider>
         </I18nProvider>
       </body>

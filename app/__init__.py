@@ -24,6 +24,7 @@ from app.web.paypal import PayPalClient
 from app.web.queue import CeleryTaskQueue, TaskQueue
 from app.web.routes import MAX_FILES_PER_UPLOAD, api
 from app.web.security import ApiError, RateLimiter, UploadLock, same_origin
+from app.web.visits import VisitCounter, visits
 
 SESSION_LIFETIME = timedelta(days=14)
 
@@ -63,6 +64,7 @@ def create_app(
     app.extensions["task_ownership"] = ownership or RedisTaskOwnership(client, ttl_seconds=settings.result_ttl_seconds)
     app.extensions["rate_limiter"] = RateLimiter(client)
     app.extensions["upload_lock"] = UploadLock(client)
+    app.extensions["visit_counter"] = VisitCounter(client, settings.secret_key.get_secret_value())
     if google is None and settings.google_client_id and settings.google_client_secret:
         google = GoogleOAuth(
             client_id=settings.google_client_id,
@@ -80,7 +82,7 @@ def create_app(
     app.extensions["paypal"] = paypal
     app.extensions["mailer"] = mailer or build_mailer(settings)
 
-    for blueprint in (api, auth, admin, billing_api):
+    for blueprint in (api, auth, admin, billing_api, visits):
         app.register_blueprint(blueprint)
 
     @app.before_request

@@ -12,4 +12,5 @@
 | Feature: Nginx + certbot at the edge (replaced Caddy) | `02-DOCS/wiki/ftd/nginx-edge.md` |
 | Feature: email verification, passwords, subscriptions, webhooks | `02-DOCS/wiki/ftd/account-lifecycle-billing.md` |
 | Feature: per-page pricing, page packs, i18n, themes, landing redesign | `02-DOCS/wiki/ftd/pages-i18n-redesign.md` |
+| Feature: unique visitor counter, real visitor addresses behind the host's Nginx | `02-DOCS/wiki/ftd/visitors-real-ip.md` |
 | Production deployment guide | `docs/DEPLOY.md` |

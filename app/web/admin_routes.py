@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 from typing import Any, Literal
 
-from flask import Blueprint, request, session
+from flask import Blueprint, current_app, request, session
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -23,6 +23,7 @@ from app.plans import PLANS
 from app.schemas import summarize_validation_error
 from app.web.auth_routes import erase_account
 from app.web.security import ApiError, client_ip, rate_limit, settings
+from app.web.visits import VisitCounter
 
 admin = Blueprint("admin", __name__, url_prefix="/api/admin")
 Body = tuple[dict[str, Any], int]
@@ -107,7 +108,7 @@ def list_users() -> Body:
     query = (request.args.get("q") or "").strip().lower()
     with session_scope() as db:
         stmt = select(User).order_by(User.created_at.desc()).limit(500)
-        if status in ("pending", "active", "rejected", "suspended"):
+        if status in ("pending", "active", "rejected", "suspended", "deleted"):
             stmt = stmt.where(User.status == status)
         if query:
             like = f"%{query}%"
@@ -244,6 +245,8 @@ def list_payments() -> Body:
 @admin_required
 def stats() -> Body:
     now = utcnow()
+    counter: VisitCounter = current_app.extensions["visit_counter"]
+    visitor_summary = counter.summary(now)
     with session_scope() as db:
         by_status = dict(db.execute(select(User.status, func.count()).group_by(User.status)).tuples().all())
         by_plan = dict(db.execute(select(User.plan, func.count()).group_by(User.plan)).tuples().all())
@@ -263,6 +266,7 @@ def stats() -> Body:
     return {
         "active_subscriptions": active_subscriptions or 0,
         "pending_deletions": pending_deletions or 0,
+        "visitors": visitor_summary,
         "users_by_status": by_status,
         "users_by_plan": by_plan,
         "uploads_24h": uploads_24h or 0,
