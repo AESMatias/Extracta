@@ -3,7 +3,7 @@
 # ---------------------------------------------------------------------------
 # Stage 1: build the static site (Next.js "output: export" -> /app/out).
 # ---------------------------------------------------------------------------
-FROM node:22-alpine AS build
+FROM node:25-alpine AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1 \
     NODE_OPTIONS=--max-old-space-size=1024
