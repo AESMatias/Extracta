@@ -13,6 +13,7 @@ from app.config import Settings, get_settings
 PROCESS_DOCUMENT_TASK = "process_document"
 SWEEP_ORPHANS_TASK = "sweep_orphan_uploads"
 RECONCILE_SUBSCRIPTIONS_TASK = "reconcile_subscriptions"
+DATABASE_HEARTBEAT_TASK = "database_heartbeat"
 
 
 def celery_config(settings: Settings) -> dict[str, Any]:
@@ -36,6 +37,9 @@ def celery_config(settings: Settings) -> dict[str, Any]:
         "beat_schedule": {
             "sweep-orphan-uploads": {"task": SWEEP_ORPHANS_TASK, "schedule": 30 * 60},
             "reconcile-subscriptions": {"task": RECONCILE_SUBSCRIPTIONS_TASK, "schedule": 6 * 3600},
+            # Every 6 hours rather than daily: the schedule restarts with the worker (e.g. on each
+            # deploy), and a short interval keeps a write well within every day anyway.
+            "database-heartbeat": {"task": DATABASE_HEARTBEAT_TASK, "schedule": 6 * 3600},
         },
     }
 
