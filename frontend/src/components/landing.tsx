@@ -177,10 +177,7 @@ function DocumentTypes() {
       <div className="absolute -right-40 -bottom-40 size-[32rem] rotate-12 bg-gradient-to-tr from-brand-600/25 via-cyan-500/10 to-emerald-500/20 blur-3xl" />
       <div className="relative mx-auto max-w-6xl px-4 text-center sm:px-6">
         <Reveal className="mx-auto max-w-2xl">
-          <p className="flex items-center justify-center gap-2 text-sm font-semibold tracking-wide text-emerald-300 uppercase">
-            <span className="size-2 bg-accent" /> {d.eyebrow}
-          </p>
-          <h2 className="mt-2 text-3xl font-bold tracking-tight text-balance sm:text-4xl">{d.title}</h2>
+          <h2 className="text-3xl font-bold tracking-tight text-balance sm:text-4xl">{d.title}</h2>
           <p className="mt-4 text-lg text-slate-400">{d.subtitle}</p>
         </Reveal>
         <ul className="mt-14 grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-3 lg:grid-cols-5">

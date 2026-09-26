@@ -12,15 +12,18 @@ import { formatPages, PACKS, planFeatures, planTagline, PLANS } from "@/lib/plan
 export type PricingMode = "payg" | "subscription";
 export const DEFAULT_PACK = (PACKS[3] ?? PACKS[0]) as PagePack;
 
-/** The five plans side by side. Phones: a row that snaps card by card. Desktop: one row of five. */
+/**
+ * The five plans. Phones: a row that snaps card by card. From sm up the cards wrap two, three or
+ * five per row, and an incomplete last row is centered.
+ */
 export function PlanGrid({ children }: { children: ReactNode }) {
   return (
     <div
       className={clsx(
         "-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pt-4 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         "*:w-[72vw] *:max-w-[17rem] *:shrink-0 *:snap-center",
-        "sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:*:w-auto sm:*:max-w-none",
-        "lg:grid-cols-3 xl:grid-cols-5",
+        "sm:mx-0 sm:flex-wrap sm:justify-center sm:overflow-visible sm:px-0 sm:*:max-w-none sm:*:w-[calc((100%-0.75rem)/2)]",
+        "lg:*:w-[calc((100%-1.5rem)/3)] xl:*:w-[calc((100%-3rem)/5)]",
       )}
     >
       {children}
