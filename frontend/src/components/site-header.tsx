@@ -13,18 +13,32 @@ import { Logo } from "./logo";
 import { Byline, LanguageSwitch, ThemeToggle } from "./preferences";
 import { Button, ButtonLink } from "./ui";
 
-/** A link whose hover slides a slanted block behind it and flips its color. */
-export function SlantLink({ href, children, onClick }: { href: string; children: React.ReactNode; onClick?: () => void }) {
+/** Classes for a nav item whose hover slides a slanted block behind it and flips its color. */
+export function slantItem(active = false) {
+  return clsx(
+    "group relative isolate inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium transition-colors duration-300 ease-out",
+    active ? "text-white dark:text-slate-900" : "text-slate-600 hover:text-white dark:text-slate-300 dark:hover:text-slate-900",
+  );
+}
+
+/** The slanted block itself; always shown for the current page. */
+export function SlantBlock({ active = false }: { active?: boolean }) {
   return (
-    <Link
-      href={href}
-      onClick={onClick}
-      className="group relative isolate px-3.5 py-2 text-sm font-medium text-slate-600 transition-colors duration-300 ease-out hover:text-white dark:text-slate-300 dark:hover:text-slate-900"
-    >
-      <span
-        aria-hidden
-        className="absolute inset-y-0.5 -inset-x-1 -z-10 origin-center -skew-x-12 scale-x-0 bg-slate-900 transition-transform duration-300 ease-out group-hover:scale-x-100 dark:bg-white"
-      />
+    <span
+      aria-hidden
+      className={clsx(
+        "absolute inset-y-0.5 -inset-x-1 -z-10 origin-center -skew-x-12 bg-slate-900 transition-transform duration-300 ease-out group-hover:scale-x-100 dark:bg-white",
+        active ? "scale-x-100" : "scale-x-0",
+      )}
+    />
+  );
+}
+
+/** A link whose hover slides a slanted block behind it and flips its color. */
+export function SlantLink({ href, children, onClick, active = false }: { href: string; children: React.ReactNode; onClick?: () => void; active?: boolean }) {
+  return (
+    <Link href={href} onClick={onClick} className={slantItem(active)} aria-current={active ? "page" : undefined}>
+      <SlantBlock active={active} />
       {children}
     </Link>
   );

@@ -205,6 +205,10 @@ Values that matter in this setup (every variable is explained inside `.env`):
 | `PAYPAL_*` | see [Payments](docs/DEPLOY.md#9-optional-payments-with-paypal) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | optional: Sign in with Google |
 
+Containers read `.env` only when they are created. **After any later change to `.env`** (SMTP,
+PayPal or Google keys...), apply it with `docker compose up -d --force-recreate web worker` and
+check with `docker compose exec web printenv | grep SMTP_HOST`; no rebuild is needed.
+
 ### 4. Start it
 
 ```bash
@@ -274,6 +278,23 @@ In GitHub → **Settings → Secrets and variables → Actions**: secrets `DEPLO
 `rm ~/.ssh/extracta_deploy`. From then on: push or merge to `main`, and **Actions** shows the
 tests and **Deploy to production**; **Deployments → production** keeps the history.
 
+### Everyday commands on the server
+
+Run them in the project folder (`cd ~/Extracta`).
+
+| Task | Command |
+|---|---|
+| Status of every container | `docker compose ps` |
+| Apply a change to `.env` (no rebuild) | `docker compose up -d --force-recreate web worker` |
+| Restart everything | `docker compose restart` |
+| Start everything again (after `down`, or if something is stopped) | `docker compose up -d` |
+| Stop everything (volumes and data are kept) | `docker compose down` |
+| Deploy the latest `main` by hand | `./deploy/deploy.sh` (`--force` to rebuild anyway) |
+| Follow the logs | `docker compose logs -f web worker frontend` |
+| Emails sent or failed | `docker compose logs web \| grep -i -E "email\|smtp"` |
+| Memory and disk | `docker stats --no-stream` and `df -h /` |
+| After a server reboot | nothing: containers restart on their own (`restart: unless-stopped`) and the server's Nginx is enabled |
+
 ### Troubleshooting
 
 | Symptom | Fix |
@@ -285,6 +306,9 @@ tests and **Deploy to production**; **Deployments → production** keeps the his
 | Every visitor has a `172.x` address in `docker compose logs frontend` | `REAL_IP_FROM` is missing from `.env`. |
 | Pay button: "PayPal is not available right now" | Run the check in [docs/DEPLOY.md](docs/DEPLOY.md#9-optional-payments-with-paypal); `PAYEE_ACCOUNT_RESTRICTED` means PayPal has not finished verifying your business account. |
 | The build stops with `Killed` | Not enough memory: turn on swap (step 1). |
+| A change to `.env` has no effect (e.g. Resend shows no logs at all) | The containers still use the old values: `docker compose up -d --force-recreate web worker`. |
+| Google says `Error 400: redirect_uri_mismatch`, or email links point to `localhost` | `PUBLIC_BASE_URL` in `.env` is still the local value: set `https://your-domain` (no trailing slash), recreate `web` and `worker`, and check with `curl -s -o /dev/null -w '%{redirect_url}\n' https://your-domain/api/auth/google/login \| grep -o 'redirect_uri=[^&]*'`. It must match the redirect URI in Google Cloud exactly. |
+| Confirmation or password emails never arrive | Run the email check in [docs/DEPLOY.md](docs/DEPLOY.md#7-email-required-in-production): it sends one message and prints the provider's answer. |
 
 ---
 

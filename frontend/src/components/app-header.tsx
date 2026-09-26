@@ -10,6 +10,7 @@ import { useI18n } from "@/lib/i18n";
 
 import { Logo } from "./logo";
 import { ThemeToggle } from "./preferences";
+import { SlantBlock, SlantLink, slantItem } from "./site-header";
 
 /** Header for signed-in pages. On phones the links move to a bottom tab bar. */
 export function AppHeader() {
@@ -33,20 +34,11 @@ export function AppHeader() {
       <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl dark:border-slate-800/70 dark:bg-slate-950/75">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <Logo travel />
-          <nav className="hidden items-center gap-1 sm:flex" aria-label="App">
+          <nav className="hidden items-center gap-2 sm:flex" aria-label="App">
             {LINKS.map(({ href, label, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                className={clsx(
-                  "inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition",
-                  pathname === href
-                    ? "bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300"
-                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white",
-                )}
-              >
+              <SlantLink key={href} href={href} active={pathname === href}>
                 <Icon className="size-4" /> {label}
-              </Link>
+              </SlantLink>
             ))}
           </nav>
           <div className="flex items-center gap-2">
@@ -56,10 +48,8 @@ export function AppHeader() {
                 {user.email}
               </span>
             )}
-            <button
-              onClick={signOut}
-              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
-            >
+            <button onClick={signOut} className={slantItem()}>
+              <SlantBlock />
               <LogOut className="size-4" /> <span className="hidden sm:inline">{m.common.signOut}</span>
             </button>
           </div>

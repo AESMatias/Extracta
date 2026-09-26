@@ -209,6 +209,39 @@ confirm their address.
 4. Apply: `docker compose up -d`, register a test account and check the email arrives. If it
    does not: `docker compose logs web | grep -i email`.
 
+With **Resend**: add the domain you send from (e.g. `extracta.example.com`, click and open
+tracking off), add its DNS records where the domain's nameservers are (Cloudflare, if it manages
+the DNS, not the registrar), wait for **Verified**, create an API key with sending access, and set
+`SMTP_HOST=smtp.resend.com`, `SMTP_PORT=587`, `SMTP_SECURITY=starttls`, `SMTP_USERNAME=resend`,
+`SMTP_PASSWORD=` the API key and `MAIL_FROM=Extracta <no-reply@extracta.example.com>` (the same
+verified domain).
+
+**Check the configuration** by sending one email right now and seeing the provider's answer
+(replace the address; the password is never printed):
+
+```bash
+docker compose exec -T web python - <<'EOF'
+from email.message import EmailMessage
+from app.config import Settings
+from app.mail import SmtpMailer
+s = Settings()
+print("SMTP_HOST:", repr(s.smtp_host), "| port:", s.smtp_port, "| security:", s.smtp_security, "| user:", s.smtp_username, "| password set:", bool(s.smtp_password), "| from:", s.mail_from)
+msg = EmailMessage()
+msg["From"], msg["To"], msg["Subject"] = s.mail_from, "you@example.com", "Extracta email test"
+msg.set_content("If you can read this, Extracta can send email.")
+SmtpMailer(host=s.smtp_host or "", port=s.smtp_port, username=s.smtp_username, password=s.smtp_password.get_secret_value() if s.smtp_password else None, security=s.smtp_security).send(msg)
+print("sent OK")
+EOF
+```
+
+| Result | Meaning |
+|---|---|
+| `SMTP_HOST: None` or `''` | `.env` has no SMTP settings, or the containers were not recreated: `docker compose up -d`. |
+| `535 ... authentication` | Wrong username or API key (with Resend the username is literally `resend`). |
+| `450`/`550`/`403` mentioning the domain | `MAIL_FROM` does not use a verified domain, or the domain is not verified yet. |
+| `TimeoutError` / `Connection refused` | The server provider blocks port 587: try `SMTP_PORT=465` with `SMTP_SECURITY=ssl`. |
+| `sent OK` but nothing arrives | Look in spam, and in the provider's log (Resend → Emails) for bounces. |
+
 `REQUIRE_EMAIL_VERIFICATION=true` (the default) means users confirm their email before
 uploading or paying. From `/admin` you can mark an address as verified by hand.
 
