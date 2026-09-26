@@ -90,7 +90,6 @@ export const es: Messages = {
     ],
   },
   documentTypes: {
-    eyebrow: "Tipos de documento",
     title: "Sabe lo que está leyendo",
     subtitle:
       "Primero clasifica cada PDF y luego extrae los campos que importan para ese tipo: totales y detalle en una factura, partes y renovación en un contrato, saldos en una cartola.",
@@ -133,7 +132,8 @@ export const es: Messages = {
   },
   pricing: {
     title: "Paga por lo que lees, o suscríbete y ahorra",
-    subtitle: "Cada página cuenta una vez. Compra páginas que no vencen, o suscríbete al mes con el precio por página más bajo.",
+    subtitle:
+      "Cada página cuenta una vez. Compra páginas que no vencen, o suscríbete al mes con el precio por página más bajo. Nuestros precios están entre los más competitivos del mercado.",
     payg: "Pago por uso",
     paygHint: "las páginas no vencen",
     subscription: "Suscripción",

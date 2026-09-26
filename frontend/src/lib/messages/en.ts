@@ -90,7 +90,6 @@ export const en = {
     ],
   },
   documentTypes: {
-    eyebrow: "Document types",
     title: "It knows what it is reading",
     subtitle:
       "Each PDF is classified first, then the fields that matter for that type are extracted: totals and line items for an invoice, parties and renewal terms for a contract, balances for a statement.",
@@ -133,7 +132,8 @@ export const en = {
   },
   pricing: {
     title: "Pay for what you read, or subscribe and save",
-    subtitle: "Every page counts once. Buy pages that never expire, or subscribe monthly for the lowest price per page.",
+    subtitle:
+      "Every page counts once. Buy pages that never expire, or subscribe monthly for the lowest price per page. Our prices are among the most competitive on the market.",
     payg: "Pay as you go",
     paygHint: "pages never expire",
     subscription: "Subscription",
