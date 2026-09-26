@@ -359,3 +359,23 @@ def test_a_bomb_that_reaches_the_worker_fails_cleanly(env: Any, settings: Settin
 
     assert result.failed() and "DecompressionBombError" in type(result.result).__name__
     assert extractor.calls == 0 and not path.exists()
+
+
+def test_beat_writes_a_database_heartbeat_every_6_hours(settings: Settings) -> None:
+    schedule = celery_module.celery_config(settings)["beat_schedule"]
+
+    assert schedule["database-heartbeat"] == {"task": "database_heartbeat", "schedule": 6 * 3600}
+
+
+def test_heartbeat_task_records_a_beat(env: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    session = env(FakeExtractor(VALID_DOC))
+    seen: list[Any] = []
+
+    def beat(db: Any, now: Any) -> int:
+        seen.append((db, now))
+        return 7
+
+    monkeypatch.setattr(tasks.heartbeat, "beat", beat)
+
+    assert tasks.database_heartbeat.apply().get() == 7
+    assert seen and seen[0][0] is session

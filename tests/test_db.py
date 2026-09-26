@@ -122,3 +122,18 @@ def test_document_round_trip_with_its_owner(supabase: Engine) -> None:
 
     with session_scope() as db:
         assert db.get(Document, task_id) is None
+
+
+def test_heartbeat_rewrites_a_single_row(db_engine: Engine) -> None:
+    from app import heartbeat
+    from app.models import Heartbeat
+
+    first = datetime(2026, 9, 26, 6, tzinfo=UTC)
+    with session_scope() as db:
+        assert heartbeat.beat(db, first) == 1
+    with session_scope() as db:
+        assert heartbeat.beat(db, first + timedelta(hours=6)) == 2
+    with session_scope() as db:
+        rows = db.scalars(select(Heartbeat)).all()
+        assert len(rows) == 1
+        assert (rows[0].beats, rows[0].beat_at) == (2, first + timedelta(hours=6))

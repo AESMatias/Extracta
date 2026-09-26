@@ -118,6 +118,11 @@ flowchart LR
 | Payments / sign-in | PayPal Orders v2 + Subscriptions + webhooks, Google OAuth 2.0 (PKCE) | Optional; enabled by `.env` |
 | Email | Any SMTP provider (logs locally) | Verification, password reset, security notices |
 
+**Periodic tasks** (Celery beat, inside the worker): every 30 minutes, delete orphan uploads;
+every 6 hours, re-check PayPal subscriptions a lost webhook missed; every 6 hours, rewrite the one
+row of the `heartbeat` table, so the database always shows recent activity even on days when
+nobody uses the site (`SELECT * FROM heartbeat` shows the last beat and the count).
+
 **Memory on a 2 GB server** (limits in `docker-compose.yml`): frontend 64 MB, web 384 MB,
 worker 768 MB, redis 128 MB, plus certbot 128 MB in production: 1344 MB locally, 1472 MB in
 production. Measured under load: ~4 / 210 / 240 / 14 MB.
@@ -456,6 +461,7 @@ rest by hand or with `ruff check --fix`).
 │   ├── migrations/, migrate.py  Alembic migrations (run on start)
 │   ├── schemas.py               DocumentSchema: what the LLM must return
 │   ├── storage.py               Streaming uploads, orphan sweep
+│   ├── heartbeat.py             Periodic write that keeps the database active
 │   ├── pdf_text.py              Text extraction (pdfplumber)
 │   ├── llm/                     Gemini, OpenAI and the provider selector
 │   ├── celery_app.py, tasks.py  Queue and the processing task

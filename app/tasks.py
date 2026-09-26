@@ -18,8 +18,14 @@ from celery import Task
 from celery.signals import worker_process_init
 from sqlalchemy.exc import OperationalError
 
-from app import accounts, billing
-from app.celery_app import PROCESS_DOCUMENT_TASK, RECONCILE_SUBSCRIPTIONS_TASK, SWEEP_ORPHANS_TASK, celery_app
+from app import accounts, billing, heartbeat
+from app.celery_app import (
+    DATABASE_HEARTBEAT_TASK,
+    PROCESS_DOCUMENT_TASK,
+    RECONCILE_SUBSCRIPTIONS_TASK,
+    SWEEP_ORPHANS_TASK,
+    celery_app,
+)
 from app.config import get_settings
 from app.db import session_scope, utcnow
 from app.llm import DocumentExtractor, LLMTransientError, build_extractor
@@ -170,3 +176,10 @@ def reconcile_subscriptions() -> int:
     )
     with session_scope() as db:
         return billing.reconcile_subscriptions(db, client, utcnow())
+
+
+@celery_app.task(name=DATABASE_HEARTBEAT_TASK)
+def database_heartbeat() -> int:
+    """Periodic write (see beat_schedule) so the database never looks idle, even with no users."""
+    with session_scope() as db:
+        return heartbeat.beat(db, utcnow())

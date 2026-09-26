@@ -8,6 +8,8 @@
 - webhook_events: PayPal events already processed, so a redelivered event is applied once.
 - deletion_requests: account deletions asked for from the public form, listed in /admin so the
   owner can finish them by hand if the confirmation email never arrives.
+- heartbeat: one row the scheduler rewrites several times a day, so the database always shows
+  recent activity even when nobody uses the site.
 - documents: results of persistent-mode tasks only. Task status lives in Celery's Redis result
   backend for both modes, so this table only ever holds completed extractions.
 
@@ -136,6 +138,16 @@ class PayPalPlan(Base):
     paypal_product_id: Mapped[str] = mapped_column(String(64))
     paypal_plan_id: Mapped[str] = mapped_column(String(64), unique=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utcnow)
+
+
+class Heartbeat(Base):
+    """A single row (id 1) rewritten by the periodic database_heartbeat task."""
+
+    __tablename__ = "heartbeat"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    beat_at: Mapped[datetime] = mapped_column(UTCDateTime())
+    beats: Mapped[int] = mapped_column(BigInteger, default=0)
 
 
 DELETION_STATUSES = ("pending", "completed", "dismissed")
