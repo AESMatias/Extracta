@@ -4,9 +4,17 @@ The `openai` SDK is an optional Poetry extra, so it is imported only when this
 provider is actually used:  docker compose build --build-arg POETRY_EXTRAS=openai
 """
 
+import base64
 from typing import Any
 
-from app.llm.base import SYSTEM_PROMPT, LLMExtractionError, LLMTransientError, build_user_prompt, parse_response
+from app.llm.base import (
+    FILE_PROMPT,
+    SYSTEM_PROMPT,
+    LLMExtractionError,
+    LLMTransientError,
+    build_user_prompt,
+    parse_response,
+)
 from app.schemas import DocumentSchema
 
 
@@ -28,13 +36,25 @@ class OpenAIExtractor:
         self._client = client or _import_openai().OpenAI(api_key=api_key)  # tests pass a fake client
 
     def extract(self, text: str) -> DocumentSchema:
+        return self._parse(build_user_prompt(text))
+
+    def extract_file(self, data: bytes, mime_type: str) -> DocumentSchema:
+        url = f"data:{mime_type};base64,{base64.b64encode(data).decode()}"
+        attachment: dict[str, Any] = (
+            {"type": "file", "file": {"filename": "document.pdf", "file_data": url}}
+            if mime_type == "application/pdf"
+            else {"type": "image_url", "image_url": {"url": url}}
+        )
+        return self._parse([attachment, {"type": "text", "text": FILE_PROMPT}])
+
+    def _parse(self, content: Any) -> DocumentSchema:
         openai = _import_openai()
         try:
             completion = self._client.chat.completions.parse(
                 model=self.model,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": build_user_prompt(text)},
+                    {"role": "user", "content": content},
                 ],
                 response_format=DocumentSchema,  # structured output in OpenAI's strict mode
                 temperature=0,

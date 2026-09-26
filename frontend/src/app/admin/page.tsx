@@ -246,7 +246,7 @@ function UserCard({
           ["MB per file", p.max_file_mb],
           ["Files / upload", p.max_files_per_upload],
           ["Save to DB", p.can_save_to_db ? "Yes" : "No"],
-          ["Used (24 h)", `${user.pages_24h} p · ${user.uploads_24h} PDFs`],
+          ["Used (24 h)", `${user.pages_24h} p · ${user.uploads_24h} docs`],
           ["Total uploads", user.uploads_total],
           ["Paid", `$${user.paid_total_usd}`],
           ["Plan until", user.raw_plan_expires_at ? formatDate(user.raw_plan_expires_at) : user.assigned_plan === "free" ? "—" : "No expiry"],
@@ -547,7 +547,7 @@ export default function AdminPage() {
             },
             { icon: ShieldX, label: "Pending approval", value: pendingCount, highlight: pendingCount > 0 },
             { icon: UserX, label: "Deletion requests", value: deletionCount, highlight: deletionCount > 0 },
-            { icon: Upload, label: "Pages last 24 h", value: `${stats?.pages_24h ?? 0} · ${stats?.uploads_24h ?? 0} PDFs` },
+            { icon: Upload, label: "Pages last 24 h", value: `${stats?.pages_24h ?? 0} · ${stats?.uploads_24h ?? 0} documents` },
             { icon: Repeat, label: "Active subscriptions", value: stats?.active_subscriptions ?? 0 },
             { icon: CircleDollarSign, label: "Revenue (USD)", value: `$${stats?.revenue_usd ?? "0.00"}` },
           ].map(({ icon: Icon, label, value, highlight }) => (

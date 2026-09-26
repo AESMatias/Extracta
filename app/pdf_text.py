@@ -33,6 +33,7 @@ class ExtractedText:
     page_count: int
     pages_read: int
     truncated: bool
+    pages_without_text: int = 0  # scanned pages inside the part that was read
 
 
 def extract_text(path: Path, *, max_chars: int = MAX_TEXT_CHARS) -> ExtractedText:
@@ -41,6 +42,7 @@ def extract_text(path: Path, *, max_chars: int = MAX_TEXT_CHARS) -> ExtractedTex
     content_chars = 0  # visible characters of the document itself, page markers excluded
     truncated = False
     pages_read = 0
+    pages_without_text = 0
 
     try:
         with pdfplumber.open(path) as pdf:
@@ -50,7 +52,8 @@ def extract_text(path: Path, *, max_chars: int = MAX_TEXT_CHARS) -> ExtractedTex
                 page.close()  # release the parsed page objects before reading the next one
                 pages_read += 1
                 if not page_text:
-                    continue  # blank or image-only page
+                    pages_without_text += 1  # blank or image-only page
+                    continue
                 content_chars += sum(not c.isspace() for c in page_text)
 
                 block = (_SEPARATOR if blocks else "") + f"--- Page {pages_read} ---\n{page_text}"
@@ -66,4 +69,10 @@ def extract_text(path: Path, *, max_chars: int = MAX_TEXT_CHARS) -> ExtractedTex
     text = "".join(blocks)
     if content_chars < MIN_TEXT_CHARS:
         raise NoTextLayerError("no extractable text: the PDF looks scanned and would need OCR")
-    return ExtractedText(text=text, page_count=page_count, pages_read=pages_read, truncated=truncated)
+    return ExtractedText(
+        text=text,
+        page_count=page_count,
+        pages_read=pages_read,
+        truncated=truncated,
+        pages_without_text=pages_without_text,
+    )

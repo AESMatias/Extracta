@@ -32,8 +32,18 @@ class FakeExtractor:
     def __init__(self, *outcomes: DocumentSchema | Exception) -> None:
         self.outcomes = list(outcomes)
         self.calls = 0
+        self.texts: list[str] = []
+        self.files: list[tuple[bytes, str]] = []  # (data, mime type) sent for the model's vision
 
     def extract(self, text: str) -> DocumentSchema:
+        self.texts.append(text)
+        return self._next()
+
+    def extract_file(self, data: bytes, mime_type: str) -> DocumentSchema:
+        self.files.append((data, mime_type))
+        return self._next()
+
+    def _next(self) -> DocumentSchema:
         self.calls += 1
         outcome = self.outcomes.pop(0) if len(self.outcomes) > 1 else self.outcomes[0]
         if isinstance(outcome, Exception):
@@ -129,17 +139,37 @@ def test_persistent_mode_saves_the_row_and_returns_the_data(env: Any, settings: 
     assert not path.exists()
 
 
-def test_scanned_pdf_fails_and_the_file_is_still_deleted(env: Any, settings: Settings, make_pdf: MakePdf) -> None:
+def test_a_scanned_pdf_is_read_by_the_models_vision(env: Any, settings: Settings, make_pdf: MakePdf) -> None:
     extractor = FakeExtractor(VALID_DOC)
     env(extractor)
     path = upload(settings, make_pdf, pages=["", ""])
+    sent = path.read_bytes()
 
     result = run(path, save_to_db=False)
 
-    assert result.failed()
-    assert "scanned" in str(result.result)
-    assert extractor.calls == 0  # the LLM was never paid for an empty document
+    assert result.successful(), result.result
+    assert (result.result["source"], result.result["page_count"]) == ("scan", 2)
+    assert extractor.texts == [] and extractor.files == [(sent, "application/pdf")]  # the whole file
     assert not path.exists()
+
+
+def test_a_pdf_whose_pages_are_mostly_scans_is_read_by_vision(env: Any, settings: Settings, make_pdf: MakePdf) -> None:
+    extractor = FakeExtractor(VALID_DOC)
+    env(extractor)
+
+    result = run(upload(settings, make_pdf, pages=[INVOICE_TEXT, "", ""]), save_to_db=False)
+
+    assert result.result["source"] == "scan" and extractor.files[0][1] == "application/pdf"
+
+
+def test_a_pdf_with_text_is_still_read_as_text(env: Any, settings: Settings, make_pdf: MakePdf) -> None:
+    extractor = FakeExtractor(VALID_DOC)
+    env(extractor)
+
+    result = run(upload(settings, make_pdf, pages=[INVOICE_TEXT, INVOICE_TEXT, ""]), save_to_db=False)
+
+    assert result.result["source"] == "text" and extractor.files == []
+    assert "Page 1" in extractor.texts[0]
 
 
 def test_invalid_llm_output_fails_without_retrying(env: Any, settings: Settings, make_pdf: MakePdf) -> None:
@@ -293,13 +323,13 @@ def test_failed_documents_give_their_pages_back(
         return 1
 
     monkeypatch.setattr(tasks.accounts, "refund_usage", refund_usage)
-    env(FakeExtractor(VALID_DOC))
+    env(FakeExtractor(LLMExtractionError("not an invoice"), VALID_DOC))
 
-    scanned = run(upload(settings, make_pdf, pages=[""]), save_to_db=False)
+    failed = run(upload(settings, make_pdf), save_to_db=False)
     ok = run(upload(settings, make_pdf), save_to_db=False)
 
-    assert scanned.failed() and ok.successful()
-    assert refunded == [scanned.id]  # only the failed one
+    assert failed.failed() and ok.successful()
+    assert refunded == [failed.id]  # only the failed one
 
 
 def test_a_refund_problem_never_hides_the_processing_error(
@@ -309,11 +339,11 @@ def test_a_refund_problem_never_hides_the_processing_error(
         raise RuntimeError("database down")
 
     monkeypatch.setattr(tasks.accounts, "refund_usage", broken)
-    env(FakeExtractor(VALID_DOC))
+    env(FakeExtractor(LLMExtractionError("not an invoice")))
 
-    result = run(upload(settings, make_pdf, pages=[""]), save_to_db=False)
+    result = run(upload(settings, make_pdf), save_to_db=False)
 
-    assert result.failed() and "scanned" in str(result.result)
+    assert result.failed() and "not an invoice" in str(result.result)
 
 
 def test_worker_children_get_a_memory_ceiling(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -379,3 +409,56 @@ def test_heartbeat_task_records_a_beat(env: Any, monkeypatch: pytest.MonkeyPatch
 
     assert tasks.database_heartbeat.apply().get() == 7
     assert seen and seen[0][0] is session
+
+
+def stored(settings: Settings, data: bytes, name: str) -> Path:
+    return save_stream(io.BytesIO(data), name, upload_dir=settings.upload_dir, max_bytes=10**7).path
+
+
+def test_an_xml_e_invoice_is_sent_as_clean_text(env: Any, settings: Settings) -> None:
+    extractor = FakeExtractor(VALID_DOC)
+    env(extractor)
+    xml = b"<?xml version='1.0'?><Invoice><Total>980560</Total><Signature><Value>abc</Value></Signature></Invoice>"
+    path = stored(settings, xml, "factura.xml")
+
+    result = run(path, save_to_db=False)
+
+    assert result.successful(), result.result
+    assert (result.result["source"], result.result["page_count"]) == ("xml", 1)
+    assert "<Total>980560</Total>" in extractor.texts[0] and "Signature" not in extractor.texts[0]
+    assert not path.exists()
+
+
+def test_a_photo_is_sent_to_the_models_vision_as_a_clean_jpeg(env: Any, settings: Settings) -> None:
+    from PIL import Image
+
+    extractor = FakeExtractor(VALID_DOC)
+    env(extractor)
+    buffer = io.BytesIO()
+    Image.new("RGB", (300, 200), "white").save(buffer, "PNG")
+    path = stored(settings, buffer.getvalue(), "boleta.png")
+
+    result = run(path, save_to_db=False)
+
+    assert (result.result["source"], result.result["page_count"]) == ("image", 1)
+    [(data, mime)] = extractor.files
+    assert mime == "image/jpeg" and data.startswith(b"\xff\xd8\xff")
+    assert not path.exists()
+
+
+def test_a_broken_photo_fails_and_gives_its_page_back(
+    env: Any, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    refunded: list[str] = []
+
+    def refund_usage(db: Any, task_id: str) -> int:
+        refunded.append(task_id)
+        return 1
+
+    monkeypatch.setattr(tasks.accounts, "refund_usage", refund_usage)
+    extractor = FakeExtractor(VALID_DOC)
+    env(extractor)
+
+    result = run(stored(settings, b"\xff\xd8\xff" + b"garbage" * 200, "boleta.jpg"), save_to_db=False)
+
+    assert result.failed() and refunded == [result.id] and extractor.calls == 0

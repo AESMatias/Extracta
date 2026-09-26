@@ -14,4 +14,5 @@
 | Feature: per-page pricing, page packs, i18n, themes, landing redesign | `02-DOCS/wiki/ftd/pages-i18n-redesign.md` |
 | Feature: unique visitor counter, real visitor addresses behind the host's Nginx | `02-DOCS/wiki/ftd/visitors-real-ip.md` |
 | Feature: continuous deployment (push to main → server, with rollback) | `02-DOCS/wiki/ftd/continuous-deployment.md` |
+| Feature: XML e-invoices, photos and scanned PDFs (vision) | `02-DOCS/wiki/ftd/xml-photos-scans.md` |
 | Production deployment guide | `docs/DEPLOY.md` |

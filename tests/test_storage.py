@@ -9,7 +9,7 @@ import pytest
 from app import storage
 from app.storage import (
     CHUNK_SIZE,
-    NotAPdfError,
+    UnsupportedFileError,
     UploadTooLargeError,
     delete_file,
     display_name,
@@ -66,16 +66,16 @@ def test_creates_the_upload_dir_if_missing(tmp_path: Path) -> None:
     assert stored.path.parent == upload_dir
 
 
-def test_rejects_a_file_that_is_not_a_pdf(tmp_path: Path) -> None:
-    # A renamed image or script: the extension says .pdf, the bytes do not.
-    with pytest.raises(NotAPdfError):
-        save_stream(io.BytesIO(b"\x89PNG\r\n fake"), "photo.pdf", upload_dir=tmp_path, max_bytes=MB)
+def test_rejects_a_file_of_an_unsupported_type(tmp_path: Path) -> None:
+    # A renamed script: the extension says .pdf, the bytes do not.
+    with pytest.raises(UnsupportedFileError, match="not supported"):
+        save_stream(io.BytesIO(b"#!/bin/sh\nrm -rf /\n"), "invoice.pdf", upload_dir=tmp_path, max_bytes=MB)
 
     assert files_in(tmp_path) == []
 
 
 def test_rejects_an_empty_file(tmp_path: Path) -> None:
-    with pytest.raises(NotAPdfError):
+    with pytest.raises(UnsupportedFileError):
         save_stream(io.BytesIO(b""), "empty.pdf", upload_dir=tmp_path, max_bytes=MB)
 
     assert files_in(tmp_path) == []
@@ -161,17 +161,19 @@ def test_sweep_removes_only_old_uploads_created_by_this_module(tmp_path: Path) -
     import uuid as uuid_module
 
     old_pdf = tmp_path / f"{uuid_module.uuid4()}.pdf"
-    old_part = tmp_path / f"{uuid_module.uuid4()}.pdf.part"
+    old_xml = tmp_path / f"{uuid_module.uuid4()}.xml"
+    old_photo = tmp_path / f"{uuid_module.uuid4()}.jpg"
+    old_part = tmp_path / f"{uuid_module.uuid4()}.part"
     fresh = tmp_path / f"{uuid_module.uuid4()}.pdf"
     foreign = tmp_path / "notes.pdf"  # not a name save_stream() creates: never touched
-    for path in (old_pdf, old_part, fresh, foreign):
+    for path in (old_pdf, old_xml, old_photo, old_part, fresh, foreign):
         path.write_bytes(PDF_BYTES)
-    for path in (old_pdf, old_part, foreign):
+    for path in (old_pdf, old_xml, old_photo, old_part, foreign):
         os.utime(path, (1_000, 1_000))
 
     removed = sweep_orphans(tmp_path, max_age_seconds=3600, now=1_000 + 7200)
 
-    assert sorted(removed) == sorted([old_pdf, old_part])
+    assert sorted(removed) == sorted([old_pdf, old_xml, old_photo, old_part])
     assert fresh.exists() and foreign.exists()
 
 

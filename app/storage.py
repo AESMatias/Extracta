@@ -1,8 +1,9 @@
 """Upload storage on the shared `/tmp_uploads` volume.
 
 `save_stream()` copies an upload to disk in fixed-size chunks, so a 50 MB PDF
-never sits in RAM (2 GB server). Files get server-generated names; the user's
-filename is kept only for display, never used to build a path.
+never sits in RAM (2 GB server). Its format (PDF, image or XML, see app/formats.py)
+comes from the first bytes and sets the extension. Files get server-generated names; the
+user's filename is kept only for display, never used to build a path.
 `check_expansion()` rejects decompression bombs before any PDF parser touches the file.
 `count_pages()` reads only the page tree, so the quota is known before any processing.
 `delete_file()` is what the worker calls when a task finishes.
@@ -17,9 +18,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from app.formats import EXTENSIONS, MAX_XML_BYTES, SUPPORTED, Format, sniff
+
 CHUNK_SIZE = 64 * 1024  # 64 KB per read/write: constant memory whatever the file size
-_HEADER_WINDOW = 1024  # the PDF spec allows the header anywhere in the first 1024 bytes
-_PDF_MAGIC = b"%PDF-"
+_HEADER_WINDOW = 1024  # enough to recognise every accepted format (a PDF header may sit anywhere in it)
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 _MAX_NAME_LENGTH = 255  # matches documents.filename in the database
 
@@ -28,7 +30,7 @@ class UploadError(ValueError):
     """Base class for uploads the user must fix (shown back to them)."""
 
 
-class NotAPdfError(UploadError):
+class UnsupportedFileError(UploadError):
     pass
 
 
@@ -63,45 +65,50 @@ class StoredFile:
     path: Path
     original_name: str
     size_bytes: int
+    format: Format
 
 
 def save_stream(stream: ReadableStream, filename: str | None, *, upload_dir: Path, max_bytes: int) -> StoredFile:
-    """Write `stream` to `upload_dir` chunk by chunk, validating size and PDF header on the way."""
+    """Write `stream` to `upload_dir` chunk by chunk, checking its size and format on the way."""
     upload_dir.mkdir(parents=True, exist_ok=True)
     file_id = uuid.uuid4()
-    final_path = upload_dir / f"{file_id}.pdf"
     # Write to ".part" first and rename at the end, so the worker never sees a half-written file.
-    part_path = upload_dir / f"{file_id}.pdf.part"
+    part_path = upload_dir / f"{file_id}.part"
 
     size = 0
     head = b""
-    header_checked = False
+    fmt: Format | None = None
+    limit = max_bytes
     try:
         with part_path.open("xb") as out:
             while chunk := stream.read(CHUNK_SIZE):
                 size += len(chunk)
-                if size > max_bytes:
-                    raise UploadTooLargeError(f"file is larger than {max_bytes // (1024 * 1024)} MB")
-                if not header_checked:
+                if fmt is None:
                     head += chunk[: _HEADER_WINDOW - len(head)]
                     if len(head) >= _HEADER_WINDOW:
-                        _require_pdf_header(head)
-                        header_checked = True
+                        fmt = _require_format(head)
+                        if fmt == "xml":
+                            limit = min(limit, MAX_XML_BYTES)
+                if size > limit:
+                    raise UploadTooLargeError(f"file is larger than {limit // (1024 * 1024)} MB")
                 out.write(chunk)
-        if not header_checked:  # files shorter than the header window
-            _require_pdf_header(head)
+        if fmt is None:  # files shorter than the header window
+            fmt = _require_format(head)
+        final_path = upload_dir / f"{file_id}{EXTENSIONS[fmt]}"
         part_path.rename(final_path)
     except BaseException:
         part_path.unlink(missing_ok=True)  # never leave partial or rejected files behind
         raise
 
-    return StoredFile(id=file_id, path=final_path, original_name=display_name(filename), size_bytes=size)
+    return StoredFile(id=file_id, path=final_path, original_name=display_name(filename), size_bytes=size, format=fmt)
 
 
-def _require_pdf_header(head: bytes) -> None:
-    # Check the bytes, not the extension: a renamed image or script still ends in ".pdf".
-    if _PDF_MAGIC not in head:
-        raise NotAPdfError("file is not a PDF")
+def _require_format(head: bytes) -> Format:
+    # Check the bytes, not the extension: a renamed script still ends in ".pdf".
+    fmt = sniff(head)
+    if fmt is None:
+        raise UnsupportedFileError(f"this file type is not supported: send {SUPPORTED}")
+    return fmt
 
 
 def display_name(filename: str | None) -> str:
@@ -126,14 +133,15 @@ def delete_file(path: Path, *, upload_dir: Path) -> bool:
 def sweep_orphans(upload_dir: Path, *, max_age_seconds: float, now: float | None = None) -> list[Path]:
     """Delete uploads older than `max_age_seconds` (e.g. left behind by a worker killed mid-task).
 
-    Only files this module creates (`<uuid>.pdf` and `<uuid>.pdf.part`) are touched.
+    Only files this module creates (`<uuid>.<format>` and `<uuid>.part`) are touched.
     """
     if not upload_dir.is_dir():
         return []
     cutoff = (time.time() if now is None else now) - max_age_seconds
     removed: list[Path] = []
+    ours = (*EXTENSIONS.values(), ".part")
     for path in upload_dir.iterdir():
-        if not (path.name.endswith(".pdf") or path.name.endswith(".pdf.part")) or not path.is_file():
+        if not path.name.endswith(ours) or not path.is_file():
             continue
         try:
             uuid.UUID(path.name.split(".", 1)[0])

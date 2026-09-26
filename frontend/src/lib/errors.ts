@@ -15,7 +15,7 @@ const EXACT_ES: Record<string, string> = {
   "Payments are not configured yet.": "Los pagos aún no están configurados.",
   "Saving documents to the database is available on paid plans and page packs.":
     "Guardar documentos en el historial está disponible en los planes de pago y con paquetes de páginas.",
-  "Send at least one PDF in the 'files' field.": "Envía al menos un PDF.",
+  "Send at least one file in the 'files' field.": "Envía al menos un archivo.",
   "Sign in to continue.": "Inicia sesión para continuar.",
   "The password cannot be your email address.": "La contraseña no puede ser tu email.",
   "This PDF could not be opened (damaged or password-protected).": "No se pudo abrir este PDF (dañado o protegido con contraseña).",
@@ -29,7 +29,16 @@ const EXACT_ES: Record<string, string> = {
   "Your account is waiting for approval by the administrator.": "Tu cuenta espera la aprobación del administrador.",
   "Your current password is not correct.": "Tu contraseña actual no es correcta.",
   "No pages left": "No quedan páginas",
-  "file is not a PDF": "el archivo no es un PDF",
+  "this file type is not supported: send a PDF, an image (JPG, PNG, WebP, HEIC) or an XML e-invoice":
+    "este tipo de archivo no se soporta: envía un PDF, una imagen (JPG, PNG, WebP, HEIC) o una factura electrónica XML",
+  "This XML declares a DTD or entities, which are not allowed.": "Este XML declara un DTD o entidades, que no están permitidos.",
+  "This XML file is damaged and cannot be read.": "Este archivo XML está dañado y no se puede leer.",
+  "This XML file is empty.": "Este archivo XML está vacío.",
+  "This XML file is nested too deeply to read.": "Este archivo XML tiene demasiados niveles anidados para leerlo.",
+  "This image could not be read.": "No se pudo leer esta imagen.",
+  "This file could not be read (damaged, or not a valid XML or image).":
+    "No se pudo leer este archivo (está dañado, o no es un XML o una imagen válidos).",
+  "This PDF has no readable content.": "Este PDF no tiene contenido legible.",
   "The upload is too large. Send fewer or smaller files.": "La subida es muy grande. Envía menos archivos o más livianos.",
   "Cross-site request refused.": "Solicitud rechazada por seguridad.",
   "PayPal is not available right now. Try again in a moment.": "PayPal no está disponible ahora. Inténtalo en un momento.",
@@ -43,8 +52,6 @@ const EXACT_ES: Record<string, string> = {
   "You have no active subscription.": "No tienes una suscripción activa.",
   "Order not found.": "Orden no encontrada.",
   "Subscription not found.": "Suscripción no encontrada.",
-  "This PDF has no text layer (it looks scanned). Scanned documents need OCR, not supported yet.":
-    "Este PDF no tiene capa de texto (parece escaneado). Los escaneos necesitan OCR, que aún no se soporta.",
   "This PDF is damaged or password-protected and cannot be read.": "Este PDF está dañado o protegido con contraseña y no se puede leer.",
   "The AI service is busy right now. Please upload the document again in a few minutes.":
     "El servicio de IA está ocupado. Vuelve a subir el documento en unos minutos.",
@@ -52,9 +59,9 @@ const EXACT_ES: Record<string, string> = {
   "The file waited too long in the queue and was removed. Upload it again.": "El archivo esperó demasiado en la cola y se eliminó. Súbelo de nuevo.",
   "This PDF expands to an unsafe size when opened (a possible decompression bomb) and was rejected.":
     "Este PDF se expande a un tamaño inseguro al abrirse (una posible bomba de descompresión) y fue rechazado.",
-  "This PDF is too complex to process safely and was rejected.": "Este PDF es demasiado complejo para procesarlo de forma segura y fue rechazado.",
-  "This PDF took too long to read and was stopped.": "Este PDF tardó demasiado en leerse y se detuvo.",
-  "This PDF could not be processed safely and was rejected.": "Este PDF no se pudo procesar de forma segura y fue rechazado.",
+  "This file is too complex to process safely and was rejected.": "Este archivo es demasiado complejo para procesarlo de forma segura y fue rechazado.",
+  "This file took too long to read and was stopped.": "Este archivo tardó demasiado en leerse y se detuvo.",
+  "This file could not be processed safely and was rejected.": "Este archivo no se pudo procesar de forma segura y fue rechazado.",
   "This password is too common. Choose one that is harder to guess.": "Esta contraseña es muy común. Elige una más difícil de adivinar.",
   "Use more than one or two different characters.": "Usa más de uno o dos caracteres distintos.",
   "Avoid simple sequences like 1234567890 or abcdefghij.": "Evita secuencias simples como 1234567890 o abcdefghij.",
@@ -69,10 +76,14 @@ const EXACT_ES: Record<string, string> = {
 
 const PATTERNS_ES: [RegExp, string][] = [
   [/^Use a password between (\d+) and (\d+) characters\.$/, "Usa una contraseña de entre $1 y $2 caracteres."],
-  [/^Your (\w+) plan allows (\d+) files per upload\.$/, "Tu plan $1 permite $2 archivos por subida."],
+  [/^Your (\w+) plan allows (\d+) documents per upload\.$/, "Tu plan $1 permite $2 documentos por subida."],
   [/^(\d+) pages: only (\d+) pages left\.$/, "$1 páginas: solo quedan $2."],
   [/^(\d+) pages: your plan reads up to (\d+) pages per PDF\.$/, "$1 páginas: tu plan lee hasta $2 páginas por PDF."],
   [/^file is larger than (\d+) MB$/, "el archivo pesa más de $1 MB"],
+  [
+    /^This image is too large \((\d+) x (\d+) pixels; the limit is 60 megapixels\)\.$/,
+    "Esta imagen es demasiado grande ($1 x $2 píxeles; el límite es 60 megapíxeles).",
+  ],
   [
     /^You used your (\d+) pages for these 24 hours\. (.*)$/,
     "Usaste tus $1 páginas de estas 24 horas. Compra un paquete de páginas o mejora tu plan para seguir.",

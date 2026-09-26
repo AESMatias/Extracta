@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { FileText, UploadCloud, X } from "lucide-react";
+import { FileCode, FileText, Image as ImageIcon, UploadCloud, X } from "lucide-react";
 import { useId, useState, type DragEvent } from "react";
 import { fill, useI18n } from "@/lib/i18n";
 
@@ -12,20 +12,42 @@ export interface Picked {
   error: string | null;
 }
 
+// What the server accepts (app/formats.py). It checks the real bytes; this is only quick feedback.
+const ACCEPT = "application/pdf,.pdf,application/xml,text/xml,.xml,image/jpeg,image/png,image/webp,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.heic,.heif";
+const XML_MAX_MB = 2; // e-invoices are small: the server caps XML at 2 MB whatever the plan
+
+export type FileKind = "pdf" | "xml" | "image";
+
+export function fileKind(file: File): FileKind | null {
+  const name = file.name.toLowerCase();
+  if (file.type === "application/pdf" || name.endsWith(".pdf")) return "pdf";
+  if (file.type.endsWith("/xml") || name.endsWith(".xml")) return "xml";
+  if (file.type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif)$/.test(name)) return "image";
+  return null;
+}
+
 export function validateFiles(
   files: File[],
   existing: Picked[],
   maxFileMb: number,
-  texts: { notPdf: string; tooLarge: string },
+  texts: { unsupported: string; tooLarge: string },
 ): Picked[] {
   const next = [...existing];
   for (const file of files) {
     if (next.some((p) => p.file.name === file.name && p.file.size === file.size)) continue;
-    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-    const error = !isPdf ? texts.notPdf : file.size > maxFileMb * 1024 * 1024 ? fill(texts.tooLarge, { mb: maxFileMb }) : null;
+    const kind = fileKind(file);
+    const limitMb = kind === "xml" ? Math.min(XML_MAX_MB, maxFileMb) : maxFileMb;
+    const error = !kind ? texts.unsupported : file.size > limitMb * 1024 * 1024 ? fill(texts.tooLarge, { mb: limitMb }) : null;
     next.push({ file, error });
   }
   return next;
+}
+
+const KIND_ICON = { pdf: FileText, xml: FileCode, image: ImageIcon } as const;
+
+function KindIcon({ file, error }: { file: File; error: boolean }) {
+  const Icon = KIND_ICON[fileKind(file) ?? "pdf"];
+  return <Icon className={clsx("size-5 shrink-0", error ? "text-rose-500" : "text-brand-500")} />;
 }
 
 export function Dropzone({ onFiles, disabled, hint }: { onFiles: (files: File[]) => void; disabled?: boolean; hint: string }) {
@@ -60,7 +82,7 @@ export function Dropzone({ onFiles, disabled, hint }: { onFiles: (files: File[])
       <input
         id={inputId}
         type="file"
-        accept="application/pdf,.pdf"
+        accept={ACCEPT}
         multiple
         disabled={disabled}
         className="sr-only"
@@ -101,7 +123,7 @@ export function PickedList({ items, onRemove }: { items: Picked[]; onRemove: (in
               : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900",
           )}
         >
-          <FileText className={clsx("size-5 shrink-0", item.error ? "text-rose-500" : "text-brand-500")} />
+          <KindIcon file={item.file} error={Boolean(item.error)} />
           <div className="min-w-0 flex-1">
             <p className="line-clamp-2 [overflow-wrap:anywhere] text-sm font-medium" title={item.file.name}>
               {item.file.name}

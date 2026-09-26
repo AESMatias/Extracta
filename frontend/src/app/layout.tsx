@@ -13,9 +13,9 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: { default: "Extracta · Turn PDFs into structured data", template: "%s · Extracta" },
+  title: { default: "Extracta · Turn documents into structured data", template: "%s · Extracta" },
   description:
-    "Upload invoices, receipts, contracts, bank statements and more. Extracta reads them with AI and gives you clean data, charts and Excel, CSV or JSON exports.",
+    "Upload invoices, receipts, contracts, bank statements and more, as PDFs, images or XML e-invoices. Extracta reads them with AI and gives you clean data, charts and Excel, CSV or JSON exports.",
   applicationName: "Extracta",
   icons: { icon: "/icon.svg" },
 };

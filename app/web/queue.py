@@ -24,7 +24,8 @@ _STATUS_BY_STATE: dict[str, Status] = {
 
 # Keyed by exception class name: Celery rebuilds exceptions from JSON, so match by name.
 _USER_MESSAGES = {
-    "NoTextLayerError": "This PDF has no text layer (it looks scanned). Scanned documents need OCR, not supported yet.",
+    "NoTextLayerError": "This PDF has no readable content.",
+    "UnreadableFileError": "This file could not be read (damaged, or not a valid XML or image).",
     "UnreadablePdfError": "This PDF is damaged or password-protected and cannot be read.",
     "LLMTransientError": "The AI service is busy right now. Please upload the document again in a few minutes.",
     "LLMExtractionError": "The document could not be converted into structured data.",
@@ -32,10 +33,10 @@ _USER_MESSAGES = {
     "DecompressionBombError": (
         "This PDF expands to an unsafe size when opened (a possible decompression bomb) and was rejected."
     ),
-    "MemoryError": "This PDF is too complex to process safely and was rejected.",
-    "SoftTimeLimitExceeded": "This PDF took too long to read and was stopped.",
-    "TimeLimitExceeded": "This PDF took too long to read and was stopped.",
-    "WorkerLostError": "This PDF could not be processed safely and was rejected.",
+    "MemoryError": "This file is too complex to process safely and was rejected.",
+    "SoftTimeLimitExceeded": "This file took too long to read and was stopped.",
+    "TimeLimitExceeded": "This file took too long to read and was stopped.",
+    "WorkerLostError": "This file could not be processed safely and was rejected.",
 }
 DEFAULT_ERROR = "Unexpected error while processing the document."
 
