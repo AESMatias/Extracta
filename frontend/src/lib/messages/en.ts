@@ -40,7 +40,8 @@ export const en = {
     closeMenu: "Close menu",
   },
   footer: {
-    tagline: "Turn PDFs into clean, structured data with AI. Invoices, contracts, statements and more, in any language.",
+    tagline:
+      "Turn PDFs, XML e-invoices and photos into clean, structured data with AI. Invoices, contracts, statements and more, in any language.",
     product: "Product",
     documentTypes: "Document types",
     accountTitle: "Account",
@@ -66,7 +67,7 @@ export const en = {
   steps: {
     title: "Steps",
     items: [
-      { title: "Upload", text: "Drop one PDF or dozens" },
+      { title: "Upload", text: "PDFs, XML or photos" },
       { title: "AI reads", text: "Classified and extracted" },
       { title: "Export", text: "Excel, CSV or JSON" },
     ],
@@ -84,7 +85,7 @@ export const en = {
       { title: "10 document types", text: "Invoices, receipts, orders, quotes, bank statements, contracts, payslips, resumes, reports and more." },
       { title: "Any language", text: "Spanish, English, Portuguese… Dates, amounts and currencies always come back in one clean format." },
       { title: "Live charts", text: "Watch totals by currency and documents by type build up while your batch is processed." },
-      { title: "Batch processing", text: "Drop dozens of PDFs at once. They are queued and processed one by one, reliably." },
+      { title: "Batch processing", text: "Drop dozens of files at once. They are queued and processed one by one, reliably." },
       { title: "Private by design", text: "Process-only mode never stores your data. Bank accounts keep just the last 4 digits." },
       { title: "Validated output", text: "Every result is checked against a strict schema before it reaches you. No broken data." },
     ],
@@ -113,7 +114,10 @@ export const en = {
     items: [
       { title: "Never used to train AI", text: "Extracta never trains AI models with your documents or your data." },
       { title: "Encrypted in transit", text: "Every connection uses HTTPS (TLS 1.2+) with HSTS. Nothing travels in plain text." },
-      { title: "PDFs deleted at once", text: "Your file is erased from our server as soon as it is read. Process-only results expire in 1 hour." },
+      {
+        title: "Files deleted at once",
+        text: "Your file is erased from our server as soon as it is read, and photos lose their location data first. Process-only results expire in 1 hour.",
+      },
       { title: "Your data stays yours", text: "Row Level Security in the database: each account only ever reaches its own documents." },
       { title: "Payments by PayPal", text: "We never see or store card numbers. PayPal handles the whole payment." },
       { title: "Minimal by default", text: "Bank account numbers keep only their last 4 digits. We ask for what we need, nothing more." },
@@ -199,12 +203,12 @@ export const en = {
     title: "Questions, answered",
     items: [
       {
-        q: "Which PDFs work?",
-        a: "Digital PDFs with a text layer: those created by accounting systems, banks, e-invoicing or exported from Word. Scanned images are not supported yet.",
+        q: "Which files work?",
+        a: "PDFs (digital or scanned), XML e-invoices (such as Chile's DTE, Mexico's CFDI or UBL) and photos in JPG, PNG, WebP or HEIC, straight from your phone.",
       },
       {
         q: "How are pages counted?",
-        a: "Every page of every PDF counts once. A 1-page receipt uses 1 page and a 12-page contract uses 12. If a document cannot be processed, its pages are given back.",
+        a: "Every page of every PDF counts once: a 1-page receipt uses 1 page and a 12-page contract uses 12. An XML file or a photo counts as 1 page. If a document cannot be processed, its pages are given back.",
       },
       {
         q: "What does the free plan include?",
@@ -212,7 +216,7 @@ export const en = {
       },
       {
         q: "Do you keep my documents?",
-        a: "The PDF file is deleted right after processing. In process-only mode the extracted data lives for 1 hour and is never written to a database. You can choose to save results to your history.",
+        a: "The file is deleted right after processing. In process-only mode the extracted data lives for 1 hour and is never written to a database. You can choose to save results to your history.",
       },
       {
         q: "How do payments work?",
@@ -323,7 +327,7 @@ export const en = {
     upload: "Upload documents",
     hintVerify: "Confirm your email address to start uploading.",
     hintEmpty: "No pages left. Buy a page pack or wait for your allowance to return.",
-    hint: "Up to {files} files · {mb} MB and {pages} pages each · digital PDFs",
+    hint: "PDF, XML or photos · up to {files} files · {mb} MB each · {pages} pages per PDF",
     modeTitle: "What should happen with the results?",
     processOnly: "Process only",
     processOnlyText: "Nothing is stored. Results expire after 1 hour.",
@@ -332,13 +336,13 @@ export const en = {
     paid: "PAID",
     tooMany: "Your plan allows {files} files per upload. Remove some or upgrade.",
     uploading: "Uploading {percent}%",
-    processMany: "Process {count} PDFs",
-    processOne: "Process PDF",
+    processMany: "Process {count} files",
+    processOne: "Process file",
     clear: "Clear",
     tipsTitle: "Tips for best results",
     tips: [
-      "Use digital PDFs (exported or e-invoices). Scans are not supported yet.",
-      "One document per PDF gives the cleanest data.",
+      "Digital PDFs, e-invoice XML files, scans and phone photos all work. For photos, use good light and a flat page.",
+      "One document per file gives the cleanest data.",
       "Every page counts: remove blank or unneeded pages first.",
       "Always review important totals before using them.",
     ],
@@ -349,13 +353,13 @@ export const en = {
     downloadBatch: "Download the whole batch",
     clearFinished: "Clear finished",
     emptyTitle: "Your processed documents will appear here",
-    emptyText: "Upload a PDF above and watch it go from queued to completed in a few seconds.",
+    emptyText: "Upload a document above and watch it go from queued to completed in a few seconds.",
     ephemeral: "Process-only results are not stored: they expire after 1 hour. Download them to keep them.",
     charts: "Charts",
     saved: "Saved documents",
     downloadSaved: "Download all saved documents",
     savedEmpty: "Choose “Save to history” when uploading to keep documents here.",
-    queued: "{count} PDF(s) queued",
+    queued: "{count} file(s) queued",
     queuedPages: "{pages} pages. Results appear below as soon as they are ready.",
     rejected: "{count} file(s) rejected",
     uploadFailed: "Upload failed",
@@ -366,10 +370,10 @@ export const en = {
     expired: "The result expired or is no longer available.",
   },
   dropzone: {
-    drag: "Drag your PDFs here or ",
+    drag: "Drag PDFs, XML or photos here or ",
     browse: "browse your files",
-    tap: "Tap to choose PDFs",
-    notPdf: "Not a PDF",
+    tap: "Tap to choose files or take a photo",
+    unsupported: "Not a PDF, XML or photo",
     tooLarge: "Larger than {mb} MB",
     selected: "Selected files",
     remove: "Remove {name}",

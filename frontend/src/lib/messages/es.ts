@@ -40,7 +40,8 @@ export const es: Messages = {
     closeMenu: "Cerrar menú",
   },
   footer: {
-    tagline: "Convierte PDFs en datos limpios y estructurados con IA. Facturas, contratos, cartolas y más, en cualquier idioma.",
+    tagline:
+      "Convierte PDFs, facturas electrónicas XML y fotos en datos limpios y estructurados con IA. Facturas, contratos, cartolas y más, en cualquier idioma.",
     product: "Producto",
     documentTypes: "Tipos de documento",
     accountTitle: "Cuenta",
@@ -66,7 +67,7 @@ export const es: Messages = {
   steps: {
     title: "Pasos",
     items: [
-      { title: "Sube", text: "Uno o decenas de PDFs" },
+      { title: "Sube", text: "PDFs, XML o fotos" },
       { title: "La IA lee", text: "Clasifica y extrae" },
       { title: "Exporta", text: "Excel, CSV o JSON" },
     ],
@@ -84,7 +85,7 @@ export const es: Messages = {
       { title: "10 tipos de documento", text: "Facturas, boletas, órdenes, cotizaciones, cartolas, contratos, liquidaciones, CVs, informes y más." },
       { title: "Cualquier idioma", text: "Español, inglés, portugués… Fechas, montos y monedas siempre vuelven en un formato limpio." },
       { title: "Gráficos en vivo", text: "Mira cómo se arman los totales por moneda y los documentos por tipo mientras se procesa tu lote." },
-      { title: "Procesamiento en lote", text: "Sube decenas de PDFs a la vez. Se ponen en cola y se procesan uno a uno, de forma confiable." },
+      { title: "Procesamiento en lote", text: "Sube decenas de archivos a la vez. Se ponen en cola y se procesan uno a uno, de forma confiable." },
       { title: "Privado por diseño", text: "El modo solo procesar nunca guarda tus datos. De las cuentas bancarias solo quedan los últimos 4 dígitos." },
       { title: "Resultados validados", text: "Cada resultado se revisa contra un esquema estricto antes de llegarte. Nada de datos rotos." },
     ],
@@ -113,7 +114,10 @@ export const es: Messages = {
     items: [
       { title: "Nunca entrena IA", text: "Extracta nunca entrena modelos de IA con tus documentos ni con tus datos." },
       { title: "Cifrado en tránsito", text: "Toda conexión usa HTTPS (TLS 1.2+) con HSTS. Nada viaja en texto plano." },
-      { title: "PDFs borrados al instante", text: "Tu archivo se elimina del servidor apenas se lee. Los resultados de solo procesar vencen en 1 hora." },
+      {
+        title: "Archivos borrados al instante",
+        text: "Tu archivo se elimina del servidor apenas se lee, y a las fotos se les quita antes su ubicación. Los resultados de solo procesar vencen en 1 hora.",
+      },
       { title: "Tus datos son tuyos", text: "Seguridad a nivel de fila en la base de datos: cada cuenta solo llega a sus propios documentos." },
       { title: "Pagos con PayPal", text: "Nunca vemos ni guardamos números de tarjeta. PayPal se encarga de todo el pago." },
       { title: "Mínimo por defecto", text: "De las cuentas bancarias solo quedan los últimos 4 dígitos. Pedimos lo necesario, nada más." },
@@ -199,12 +203,12 @@ export const es: Messages = {
     title: "Preguntas frecuentes",
     items: [
       {
-        q: "¿Qué PDFs funcionan?",
-        a: "PDFs digitales con capa de texto: los que generan los sistemas contables, bancos, la facturación electrónica o los exportados desde Word. Las imágenes escaneadas aún no se soportan.",
+        q: "¿Qué archivos funcionan?",
+        a: "PDFs (digitales o escaneados), facturas electrónicas XML (como el DTE chileno, el CFDI mexicano o UBL) y fotos en JPG, PNG, WebP o HEIC, directo desde tu celular.",
       },
       {
         q: "¿Cómo se cuentan las páginas?",
-        a: "Cada página de cada PDF cuenta una vez. Una boleta de 1 página usa 1 página y un contrato de 12 usa 12. Si un documento no se puede procesar, sus páginas se devuelven.",
+        a: "Cada página de cada PDF cuenta una vez: una boleta de 1 página usa 1 página y un contrato de 12 usa 12. Un archivo XML o una foto cuenta como 1 página. Si un documento no se puede procesar, sus páginas se devuelven.",
       },
       {
         q: "¿Qué incluye el plan gratis?",
@@ -212,7 +216,7 @@ export const es: Messages = {
       },
       {
         q: "¿Guardan mis documentos?",
-        a: "El archivo PDF se borra apenas se procesa. En modo solo procesar, los datos extraídos viven 1 hora y nunca se escriben en una base de datos. Puedes elegir guardar resultados en tu historial.",
+        a: "El archivo se borra apenas se procesa. En modo solo procesar, los datos extraídos viven 1 hora y nunca se escriben en una base de datos. Puedes elegir guardar resultados en tu historial.",
       },
       {
         q: "¿Cómo funcionan los pagos?",
@@ -323,7 +327,7 @@ export const es: Messages = {
     upload: "Subir documentos",
     hintVerify: "Confirma tu email para empezar a subir.",
     hintEmpty: "No te quedan páginas. Compra un paquete o espera a que vuelva tu cupo.",
-    hint: "Hasta {files} archivos · {mb} MB y {pages} páginas cada uno · PDFs digitales",
+    hint: "PDF, XML o fotos · hasta {files} archivos · {mb} MB cada uno · {pages} páginas por PDF",
     modeTitle: "¿Qué hacemos con los resultados?",
     processOnly: "Solo procesar",
     processOnlyText: "No se guarda nada. Los resultados vencen en 1 hora.",
@@ -332,13 +336,13 @@ export const es: Messages = {
     paid: "PAGO",
     tooMany: "Tu plan permite {files} archivos por subida. Quita algunos o mejora tu plan.",
     uploading: "Subiendo {percent}%",
-    processMany: "Procesar {count} PDFs",
-    processOne: "Procesar PDF",
+    processMany: "Procesar {count} archivos",
+    processOne: "Procesar archivo",
     clear: "Limpiar",
     tipsTitle: "Consejos para mejores resultados",
     tips: [
-      "Usa PDFs digitales (exportados o facturas electrónicas). Los escaneos aún no se soportan.",
-      "Un documento por PDF da los datos más limpios.",
+      "Funcionan PDFs digitales, facturas electrónicas XML, escaneos y fotos del celular. En las fotos, usa buena luz y la hoja bien plana.",
+      "Un documento por archivo da los datos más limpios.",
       "Cada página cuenta: quita primero las páginas en blanco o innecesarias.",
       "Revisa siempre los totales importantes antes de usarlos.",
     ],
@@ -349,13 +353,13 @@ export const es: Messages = {
     downloadBatch: "Descargar todo el lote",
     clearFinished: "Limpiar terminados",
     emptyTitle: "Aquí aparecerán tus documentos procesados",
-    emptyText: "Sube un PDF arriba y míralo pasar de en cola a completado en pocos segundos.",
+    emptyText: "Sube un documento arriba y míralo pasar de en cola a completado en pocos segundos.",
     ephemeral: "Los resultados de solo procesar no se guardan: vencen en 1 hora. Descárgalos para conservarlos.",
     charts: "Gráficos",
     saved: "Documentos guardados",
     downloadSaved: "Descargar todos los documentos guardados",
     savedEmpty: "Elige «Guardar en historial» al subir para conservar documentos aquí.",
-    queued: "{count} PDF(s) en cola",
+    queued: "{count} archivo(s) en cola",
     queuedPages: "{pages} páginas. Los resultados aparecen abajo apenas estén listos.",
     rejected: "{count} archivo(s) rechazado(s)",
     uploadFailed: "Falló la subida",
@@ -366,10 +370,10 @@ export const es: Messages = {
     expired: "El resultado venció o ya no está disponible.",
   },
   dropzone: {
-    drag: "Arrastra tus PDFs aquí o ",
+    drag: "Arrastra PDFs, XML o fotos aquí o ",
     browse: "busca en tus archivos",
-    tap: "Toca para elegir PDFs",
-    notPdf: "No es un PDF",
+    tap: "Toca para elegir archivos o sacar una foto",
+    unsupported: "No es un PDF, XML ni foto",
     tooLarge: "Pesa más de {mb} MB",
     selected: "Archivos seleccionados",
     remove: "Quitar {name}",

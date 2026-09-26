@@ -1,7 +1,8 @@
-"""Document API: upload PDFs, follow their tasks, list saved documents and download exports.
+"""Document API: upload documents, follow their tasks, list saved documents and download exports.
 
-Every route needs a signed-in account. Uploads are limited by the account's plan: files per
-upload, size per file, persistent mode, and PDFs per rolling 24 hours.
+Every route needs a signed-in account. Uploads (PDFs, XML e-invoices and photos) are limited by
+the account's plan: files per upload, size per file, pages per PDF, persistent mode and pages
+per period. An XML file or a photo counts as one page.
 """
 
 import re
@@ -27,6 +28,7 @@ from app.export import (
     unified_json,
     unified_xlsx,
 )
+from app.formats import UnreadableFileError, check_image, check_xml
 from app.models import Document, User
 from app.schemas import summarize_validation_error
 from app.storage import UploadError, check_expansion, count_pages, delete_file, display_name, save_stream
@@ -94,7 +96,7 @@ def upload() -> Body:
 
     files = [file for file in request.files.getlist("files") if file.filename]
     if not files:
-        raise ApiError(400, "Send at least one PDF in the 'files' field.")
+        raise ApiError(400, "Send at least one file in the 'files' field.")
     max_files = int(privileges["max_files_per_upload"])
     if len(files) > min(max_files, MAX_FILES_PER_UPLOAD):
         raise ApiError(400, f"Your {plan.name} plan allows {max_files} files per upload.", upgrade=True)
@@ -121,14 +123,24 @@ def upload() -> Body:
                 continue
             try:
                 stored = save_stream(file.stream, file.filename, upload_dir=config.upload_dir, max_bytes=max_bytes)
-            except UploadError as exc:  # not a PDF, too large: report it and keep going with the rest
+            except UploadError as exc:  # unsupported type, too large: report it and keep going with the rest
                 rejected.append({"filename": name, "error": str(exc)})
                 continue
             try:
-                check_expansion(stored.path)  # before any PDF parser opens it
-                pages = count_pages(stored.path)
-                if pages > max_pages:
-                    raise UploadError(f"{pages} pages: your plan reads up to {max_pages} pages per PDF.")
+                if stored.format == "pdf":
+                    check_expansion(stored.path)  # before any PDF parser opens it
+                    pages = count_pages(stored.path)
+                    if pages > max_pages:
+                        raise UploadError(f"{pages} pages: your plan reads up to {max_pages} pages per PDF.")
+                else:
+                    try:  # refuse a malformed or hostile file now, not after it waited in the queue
+                        if stored.format == "xml":
+                            check_xml(stored.path)
+                        else:
+                            check_image(stored.path)
+                    except UnreadableFileError as exc:
+                        raise UploadError(str(exc)) from None
+                    pages = 1
                 split = accounts.split_charge(pages, plan_left=plan_left, credits_left=credits_left)
                 if split is None:
                     raise UploadError(f"{pages} pages: only {plan_left + credits_left} pages left.")
@@ -289,7 +301,9 @@ def export_individual(fmt: str) -> Response:
     except ValidationError as exc:
         raise _invalid(exc) from None
 
-    stem = re.sub(r"\.pdf$", "", display_name(item.filename), flags=re.IGNORECASE) or "document"
+    stem = (
+        re.sub(r"\.(pdf|xml|jpe?g|png|webp|heic)$", "", display_name(item.filename), flags=re.IGNORECASE) or "document"
+    )
     content: Iterator[str] | bytes
     if fmt == "csv":
         content = individual_csv(item.document, filename=item.filename)

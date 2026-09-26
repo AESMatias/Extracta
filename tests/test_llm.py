@@ -17,6 +17,7 @@ from app.llm import (
     build_extractor,
     parse_response,
 )
+from app.llm.base import FILE_PROMPT
 from app.llm.gemini import GeminiExtractor
 from app.llm.openai import OpenAIExtractor
 from app.schemas import DocumentSchema, DocumentType
@@ -238,3 +239,45 @@ def test_factory_builds_openai_from_settings() -> None:
 
     assert isinstance(extractor, OpenAIExtractor)
     assert (extractor.provider, extractor.model) == ("openai", "some-model")
+
+
+# --------------------------------------------------------------------------- files (photos, scans)
+
+
+def test_gemini_reads_small_files_inline() -> None:
+    extractor, models = gemini_with(json.dumps(VALID_INVOICE))
+
+    extractor.extract_file(b"\xff\xd8\xffjpeg", "image/jpeg")
+
+    part, prompt = models.calls[0]["contents"]
+    assert (part.inline_data.data, part.inline_data.mime_type) == (b"\xff\xd8\xffjpeg", "image/jpeg")
+    assert prompt == FILE_PROMPT
+
+
+def test_gemini_sends_big_scans_through_the_files_api_and_deletes_them(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.llm import gemini
+
+    monkeypatch.setattr(gemini, "INLINE_LIMIT_BYTES", 10)
+    models = FakeGeminiModels(json.dumps(VALID_INVOICE))
+    uploaded = SimpleNamespace(name="files/abc")
+    files = SimpleNamespace(uploads=[], deleted=[])
+    files.upload = lambda file, config: files.uploads.append((file.read(), config.mime_type)) or uploaded
+    files.delete = lambda name: files.deleted.append(name)
+    extractor = GeminiExtractor(api_key="t", model="m", client=SimpleNamespace(models=models, files=files))
+
+    extractor.extract_file(b"%PDF-" + b"x" * 100, "application/pdf")
+
+    assert files.uploads == [(b"%PDF-" + b"x" * 100, "application/pdf")]
+    assert models.calls[0]["contents"] == [uploaded, FILE_PROMPT]
+    assert files.deleted == ["files/abc"]
+
+
+def test_openai_reads_photos_and_scans() -> None:
+    extractor, completions = openai_with((json.dumps(VALID_INVOICE), None))
+
+    extractor.extract_file(b"img", "image/jpeg")
+    extractor.extract_file(b"%PDF-", "application/pdf")
+
+    photo, scan = (call["messages"][1]["content"][0] for call in completions.calls)
+    assert photo == {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,aW1n"}}
+    assert scan["type"] == "file" and scan["file"]["file_data"] == "data:application/pdf;base64,JVBERi0="

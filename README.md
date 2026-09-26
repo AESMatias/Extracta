@@ -46,8 +46,9 @@ subscriptions or one-time passes, and an admin panel to approve accounts and ass
 
 | Area | What you get |
 |---|---|
+| **Input formats** | PDFs (digital or scanned), XML e-invoices (Chile's DTE, Mexico's CFDI, UBL for Colombia, Peru, Ecuador and Peppol, and any other XML) and photos (JPG, PNG, WebP, HEIC). Scans and photos are read by Gemini's vision, so the server runs no OCR. An XML file or a photo counts as one page. |
 | **Extraction** | 10 document types in any language: invoices, receipts, purchase orders, quotes, bank statements, contracts, payslips, resumes, reports and "other". Amounts as numbers, dates as `YYYY-MM-DD`, currencies as ISO 4217. |
-| **Processing modes** | *Process only*: nothing is stored, results expire after 1 hour. *Save to history* (paid plans): results are kept in the account. The PDF file is deleted right after processing in both modes. |
+| **Processing modes** | *Process only*: nothing is stored, results expire after 1 hour. *Save to history* (paid plans): results are kept in the account. The uploaded file is deleted right after processing in both modes. |
 | **Exports** | Excel (XLSX with typed numbers and dates), CSV (UTF-8 with BOM) and JSON, per document or for the whole batch. |
 | **Dashboard** | Drag and drop, upload progress, live status per document, detail view, charts by type and by currency, saved history. |
 | **Accounts** | Email + password or Google sign-in, email verification, forgot/reset/change password. Optional manual approval of new accounts. |
@@ -462,6 +463,7 @@ rest by hand or with `ruff check --fix`).
 │   ├── schemas.py               DocumentSchema: what the LLM must return
 │   ├── storage.py               Streaming uploads, orphan sweep
 │   ├── heartbeat.py             Periodic write that keeps the database active
+│   ├── formats.py               Accepted formats: detection, safe XML, photo preparation
 │   ├── pdf_text.py              Text extraction (pdfplumber)
 │   ├── llm/                     Gemini, OpenAI and the provider selector
 │   ├── celery_app.py, tasks.py  Queue and the processing task
@@ -499,8 +501,13 @@ rest by hand or with `ruff check --fix`).
 - **Payments**: the server sets the price, then verifies owner, plan, amount and currency before
   capturing, and owner and billing plan before activating a subscription; captures are
   idempotent. Webhooks are verified with PayPal using the raw body and applied exactly once.
-- **Uploads**: streamed to disk in 64 KB chunks, checked by content (`%PDF-`), stored under
-  server-generated names, deleted after processing; a periodic sweep removes orphans.
+- **Uploads**: streamed to disk in 64 KB chunks, their format recognised from the first bytes
+  (never the file name), stored under server-generated names, deleted after processing; a
+  periodic sweep removes orphans. PDFs are checked for decompression bombs before any parser
+  opens them. XML is parsed with `defusedxml` and DTDs forbidden (no entity expansion, no
+  external references), capped at 2 MB, and loses its signatures and base64 blobs before the
+  LLM. Photos are refused above 60 megapixels, then turned upright, shrunk to 2048 px and
+  re-encoded as JPEG, which drops every metadata block, including GPS location.
 - **LLM output** is validated against a strict schema; document content never reaches error
   messages; bank accounts keep only their last 4 digits.
 - **Exports**: CSV cells that look like formulas are escaped; XLSX writes text as text.

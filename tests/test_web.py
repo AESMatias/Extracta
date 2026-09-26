@@ -183,11 +183,13 @@ def test_bad_files_are_rejected_without_blocking_the_others(harness: Harness, ma
     client = harness.signed_up(**paid())  # Starter: 20 MB per file
     too_big = (io.BytesIO(b"%PDF-1.4\n" + b"0" * (21 * 1024 * 1024)), "huge.pdf")
 
-    body = upload(client, [pdf(make_pdf, "ok.pdf"), (io.BytesIO(b"\x89PNG"), "photo.pdf"), too_big]).get_json()
+    script = (io.BytesIO(b"#!/bin/sh\necho hi\n"), "script.pdf")
+
+    body = upload(client, [pdf(make_pdf, "ok.pdf"), script, too_big]).get_json()
 
     assert [t["filename"] for t in body["tasks"]] == ["ok.pdf"]
     assert {r["filename"]: r["error"] for r in body["rejected"]} == {
-        "photo.pdf": "file is not a PDF",
+        "script.pdf": "this file type is not supported: send a PDF, an XML e-invoice or a photo (JPG, PNG, WebP, HEIC)",
         "huge.pdf": "file is larger than 20 MB",
     }
     assert body["usage"]["used"] == 1  # rejected files do not count against the quota
@@ -386,3 +388,30 @@ def test_decompression_bombs_are_rejected_before_parsing(harness: Harness) -> No
     assert body["tasks"] == []
     assert "decompression bomb" in body["rejected"][0]["error"]
     assert harness.upload_dir_files() == []  # deleted at once
+
+
+def test_xml_invoices_and_photos_count_one_page_each(harness: Harness, make_pdf: MakePdf) -> None:
+    from PIL import Image
+
+    client = harness.signed_up()
+    buffer = io.BytesIO()
+    Image.new("RGB", (640, 480), "white").save(buffer, "JPEG")
+    xml = (io.BytesIO(b"<?xml version='1.0'?><Invoice><Total>100</Total></Invoice>"), "factura.xml")
+
+    body = upload(client, [xml, (io.BytesIO(buffer.getvalue()), "boleta.jpg")]).get_json()
+
+    assert [(t["filename"], t["pages"]) for t in body["tasks"]] == [("factura.xml", 1), ("boleta.jpg", 1)]
+    assert body["usage"]["used"] == 2 and body["rejected"] == []
+    assert sorted(p.suffix for p in harness.upload_dir_files()) == [".jpg", ".xml"]
+
+
+def test_hostile_xml_and_broken_photos_are_refused_on_upload(harness: Harness) -> None:
+    client = harness.signed_up()
+    bomb = b'<?xml version="1.0"?><!DOCTYPE a [<!ENTITY x "xx">]><a>&x;</a>'
+
+    body = upload(client, [(io.BytesIO(bomb), "a.xml"), (io.BytesIO(b"\x89PNG\r\n\x1a\nbroken"), "b.png")]).get_json()
+
+    assert body["tasks"] == [] and body["usage"]["used"] == 0
+    errors = {r["filename"]: r["error"] for r in body["rejected"]}
+    assert "DTD" in errors["a.xml"] and "could not be read" in errors["b.png"]
+    assert harness.upload_dir_files() == []  # nothing is left on disk

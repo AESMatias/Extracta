@@ -1,8 +1,9 @@
-"""The background task that processes one uploaded PDF (the Celery app lives in app/celery_app.py).
+"""The background task that processes one upload (the Celery app lives in app/celery_app.py).
 
-Pipeline: extract text -> LLM -> save to Supabase only if `save_to_db` -> return the data.
+Pipeline: read the file (PDF text, cleaned XML, or the photo or scanned PDF itself for the LLM's
+vision; see app/formats.py) -> LLM -> save to the database only if `save_to_db` -> return the data.
 Celery stores the returned data in the Redis result backend for RESULT_TTL_SECONDS, in both
-modes, so the web app can show and export it. The PDF is deleted when the task finishes,
+modes, so the web app can show and export it. The file is deleted when the task finishes,
 whatever the outcome; only a pending retry keeps it.
 
 Worker (see docker-compose.yml):  celery -A app.tasks:celery_app worker --beat --concurrency=1
@@ -28,10 +29,11 @@ from app.celery_app import (
 )
 from app.config import get_settings
 from app.db import session_scope, utcnow
+from app.formats import IMAGE_FORMATS, format_of, prepare_image, xml_text
 from app.llm import DocumentExtractor, LLMTransientError, build_extractor
 from app.models import Document
-from app.pdf_text import extract_text
-from app.storage import check_expansion, delete_file, sweep_orphans
+from app.pdf_text import MAX_TEXT_CHARS, NoTextLayerError, extract_text
+from app.storage import check_expansion, count_pages, delete_file, sweep_orphans
 
 log = logging.getLogger(__name__)
 
@@ -72,9 +74,26 @@ def run_pipeline(
 ) -> dict[str, Any]:
     if not path.exists():
         raise UploadExpiredError("the uploaded file is no longer on disk")
-    check_expansion(path)  # defense in depth: the upload already checked it
-    extracted = extract_text(path)  # raises NoTextLayerError before any LLM cost for scans
-    document = extractor.extract(extracted.text)
+    fmt = format_of(path)
+    truncated = False
+    if fmt == "xml":
+        text, truncated = xml_text(path, max_chars=MAX_TEXT_CHARS)
+        document, page_count, source = extractor.extract(text), 1, "xml"
+    elif fmt in IMAGE_FORMATS:
+        document, page_count, source = extractor.extract_file(prepare_image(path), "image/jpeg"), 1, "photo"
+    else:
+        check_expansion(path)  # defense in depth: the upload already checked it
+        try:
+            extracted = extract_text(path)
+        except NoTextLayerError:
+            extracted = None
+        # A scan, or a PDF whose pages are mostly images: the model reads the file itself.
+        if extracted is None or 2 * extracted.pages_without_text > extracted.pages_read:
+            page_count = extracted.page_count if extracted else count_pages(path)
+            document, source = extractor.extract_file(path.read_bytes(), "application/pdf"), "scan"
+        else:
+            page_count, truncated = extracted.page_count, extracted.truncated
+            document, source = extractor.extract(extracted.text), "text"
 
     if save_to_db:
         row = Document.from_extraction(
@@ -92,8 +111,9 @@ def run_pipeline(
         "task_id": str(task_id),
         "filename": filename,
         "saved_to_db": save_to_db,
-        "page_count": extracted.page_count,
-        "truncated": extracted.truncated,
+        "page_count": page_count,
+        "truncated": truncated,
+        "source": source,  # text, xml, photo or scan
         "llm_provider": extractor.provider,
         "llm_model": extractor.model,
         "document": document.model_dump(mode="json"),

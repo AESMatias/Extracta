@@ -41,7 +41,7 @@ def test_failure_carries_a_user_message_not_the_exception() -> None:
 @pytest.mark.parametrize(
     ("error", "fragment"),
     [
-        (NoTextLayerError("x"), "scanned"),
+        (NoTextLayerError("x"), "no readable content"),
         (UnreadablePdfError("x"), "damaged"),
         (LLMTransientError("x"), "busy"),
         (LLMExtractionError("x"), "structured data"),

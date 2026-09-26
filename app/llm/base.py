@@ -7,9 +7,10 @@ from pydantic import ValidationError
 from app.schemas import DocumentSchema, summarize_validation_error
 
 SYSTEM_PROMPT = (
-    "You are a document data extraction engine. You receive the text of one PDF document, "
-    "extracted page by page and marked with '--- Page N ---'. Classify the document and extract "
-    "its data into the provided JSON schema, following each field's description.\n"
+    "You are a document data extraction engine. You receive one document: either its text "
+    "(a PDF read page by page and marked with '--- Page N ---', or an XML e-invoice), or the file "
+    "itself (a photo, or a scanned PDF). Classify the document and extract its data into the "
+    "provided JSON schema, following each field's description.\n"
     "Rules:\n"
     "- Use only information present in the text. Never invent values: use null when absent.\n"
     "- The document may be in any language; keep names and identifiers exactly as written.\n"
@@ -27,13 +28,21 @@ class LLMTransientError(LLMExtractionError):
     """Rate limit, provider outage or network error. The same call may succeed later."""
 
 
+# Sent with a file instead of text. The file itself is the untrusted document.
+FILE_PROMPT = "Extract the data of the attached document (a photo or a scanned PDF)."
+
+
 class DocumentExtractor(Protocol):
-    """Any provider: give it the document text, get back a validated DocumentSchema."""
+    """Any provider: give it the document text, or the file itself, get back a validated DocumentSchema."""
 
     provider: str
     model: str
 
     def extract(self, text: str) -> DocumentSchema: ...
+
+    def extract_file(self, data: bytes, mime_type: str) -> DocumentSchema:
+        """Read a photo (image/jpeg) or a scanned PDF (application/pdf) with the model's vision."""
+        ...
 
 
 def build_user_prompt(text: str) -> str:
