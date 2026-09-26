@@ -1,7 +1,7 @@
 """Upload storage on the shared `/tmp_uploads` volume.
 
 `save_stream()` copies an upload to disk in fixed-size chunks, so a 50 MB PDF
-never sits in RAM (2 GB server). Its format (PDF, XML or a photo, see app/formats.py)
+never sits in RAM (2 GB server). Its format (PDF, image or XML, see app/formats.py)
 comes from the first bytes and sets the extension. Files get server-generated names; the
 user's filename is kept only for display, never used to build a path.
 `check_expansion()` rejects decompression bombs before any PDF parser touches the file.

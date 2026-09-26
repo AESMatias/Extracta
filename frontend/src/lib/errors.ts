@@ -29,8 +29,8 @@ const EXACT_ES: Record<string, string> = {
   "Your account is waiting for approval by the administrator.": "Tu cuenta espera la aprobación del administrador.",
   "Your current password is not correct.": "Tu contraseña actual no es correcta.",
   "No pages left": "No quedan páginas",
-  "this file type is not supported: send a PDF, an XML e-invoice or a photo (JPG, PNG, WebP, HEIC)":
-    "este tipo de archivo no se soporta: envía un PDF, una factura electrónica XML o una foto (JPG, PNG, WebP, HEIC)",
+  "this file type is not supported: send a PDF, an image (JPG, PNG, WebP, HEIC) or an XML e-invoice":
+    "este tipo de archivo no se soporta: envía un PDF, una imagen (JPG, PNG, WebP, HEIC) o una factura electrónica XML",
   "This XML declares a DTD or entities, which are not allowed.": "Este XML declara un DTD o entidades, que no están permitidos.",
   "This XML file is damaged and cannot be read.": "Este archivo XML está dañado y no se puede leer.",
   "This XML file is empty.": "Este archivo XML está vacío.",
@@ -76,7 +76,7 @@ const EXACT_ES: Record<string, string> = {
 
 const PATTERNS_ES: [RegExp, string][] = [
   [/^Use a password between (\d+) and (\d+) characters\.$/, "Usa una contraseña de entre $1 y $2 caracteres."],
-  [/^Your (\w+) plan allows (\d+) files per upload\.$/, "Tu plan $1 permite $2 archivos por subida."],
+  [/^Your (\w+) plan allows (\d+) documents per upload\.$/, "Tu plan $1 permite $2 documentos por subida."],
   [/^(\d+) pages: only (\d+) pages left\.$/, "$1 páginas: solo quedan $2."],
   [/^(\d+) pages: your plan reads up to (\d+) pages per PDF\.$/, "$1 páginas: tu plan lee hasta $2 páginas por PDF."],
   [/^file is larger than (\d+) MB$/, "el archivo pesa más de $1 MB"],

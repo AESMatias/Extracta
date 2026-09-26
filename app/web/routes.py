@@ -1,8 +1,8 @@
 """Document API: upload documents, follow their tasks, list saved documents and download exports.
 
 Every route needs a signed-in account. Uploads (PDFs, XML e-invoices and photos) are limited by
-the account's plan: files per upload, size per file, pages per PDF, persistent mode and pages
-per period. An XML file or a photo counts as one page.
+the account's plan: documents per upload, size per document, pages per PDF, persistent mode and
+pages per period. An image or an XML e-invoice counts as one page.
 """
 
 import re
@@ -99,7 +99,7 @@ def upload() -> Body:
         raise ApiError(400, "Send at least one file in the 'files' field.")
     max_files = int(privileges["max_files_per_upload"])
     if len(files) > min(max_files, MAX_FILES_PER_UPLOAD):
-        raise ApiError(400, f"Your {plan.name} plan allows {max_files} files per upload.", upgrade=True)
+        raise ApiError(400, f"Your {plan.name} plan allows {max_files} documents per upload.", upgrade=True)
     raw_mode = request.args.get("save_to_db") or request.form.get("save_to_db") or ""
     save_to_db = raw_mode.strip().lower() in _TRUE_VALUES  # default: process only
     if save_to_db and not privileges["can_save_to_db"]:

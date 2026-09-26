@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 from app.db import session_scope, utcnow
+from app.formats import SUPPORTED
 from app.models import Document, UsageEvent, User
 from app.schemas import DocumentSchema
 from app.web.queue import TaskStatus
@@ -67,7 +68,7 @@ def test_free_plan_allows_two_files_per_upload(harness: Harness, make_pdf: MakeP
     response = upload(harness.signed_up(), [pdf(make_pdf, f"{i}.pdf") for i in range(3)])
 
     assert response.status_code == 400
-    assert "2 files per upload" in response.get_json()["error"]
+    assert "2 documents per upload" in response.get_json()["error"]
     assert response.get_json()["upgrade"] is True
 
 
@@ -189,7 +190,7 @@ def test_bad_files_are_rejected_without_blocking_the_others(harness: Harness, ma
 
     assert [t["filename"] for t in body["tasks"]] == ["ok.pdf"]
     assert {r["filename"]: r["error"] for r in body["rejected"]} == {
-        "script.pdf": "this file type is not supported: send a PDF, an XML e-invoice or a photo (JPG, PNG, WebP, HEIC)",
+        "script.pdf": f"this file type is not supported: send {SUPPORTED}",
         "huge.pdf": "file is larger than 20 MB",
     }
     assert body["usage"]["used"] == 1  # rejected files do not count against the quota

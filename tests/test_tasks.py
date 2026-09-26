@@ -440,7 +440,7 @@ def test_a_photo_is_sent_to_the_models_vision_as_a_clean_jpeg(env: Any, settings
 
     result = run(path, save_to_db=False)
 
-    assert (result.result["source"], result.result["page_count"]) == ("photo", 1)
+    assert (result.result["source"], result.result["page_count"]) == ("image", 1)
     [(data, mime)] = extractor.files
     assert mime == "image/jpeg" and data.startswith(b"\xff\xd8\xff")
     assert not path.exists()

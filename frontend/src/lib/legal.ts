@@ -34,7 +34,7 @@ const terms: Record<Locale, LegalDocument> = {
       {
         title: "2. The service",
         paragraphs: [
-          "Extracta reads the documents you upload (PDFs, XML e-invoices and photos), classifies them and extracts their data with an AI model, and lets you view it, chart it and export it to Excel, CSV or JSON.",
+          "Extracta reads the documents you upload (PDFs, images and XML e-invoices), classifies them and extracts their data with an AI model, and lets you view it, chart it and export it to Excel, CSV or JSON.",
           "Results are produced automatically and may contain errors or omissions. You are responsible for reviewing them before relying on them, especially amounts, dates and tax identifiers. Extracta is not an accounting, tax or legal service, and its results are not advice.",
         ],
       },
@@ -60,14 +60,14 @@ const terms: Record<Locale, LegalDocument> = {
         title: "5. Your content",
         paragraphs: [
           "You keep every right over your documents and the data extracted from them. You give us only the permission needed to process them and show you the results. The Extracta software, brand and site remain ours; third-party tools and services keep their own licences.",
-          "The uploaded file is deleted from our servers right after processing, and photos lose their metadata (including location) before they are read. Extracted data is stored only if you choose to save it to your history, until you delete it or close your account. We do not use your documents to train AI models. Make sure you have the rights to every document you upload.",
+          "The uploaded file is deleted from our servers right after processing, and images lose their metadata (including location) before they are read. Extracted data is stored only if you choose to save it to your history, until you delete it or close your account. We do not use your documents to train AI models. Make sure you have the rights to every document you upload.",
         ],
       },
       {
         title: "6. Plans, pages and payments",
         paragraphs: [],
         bullets: [
-          "Usage is measured in pages: every page of every processed PDF counts once, and an XML file or a photo counts as one page. If a document cannot be processed, its pages are given back.",
+          "Usage is measured in pages: every page of every processed PDF counts once, and an image or an XML e-invoice counts as one page. If a document cannot be processed, its pages are given back.",
           "The Free plan includes a limited number of pages every 24 hours.",
           "Subscriptions give a number of pages every 30 days and renew automatically every month until you cancel them.",
           "Page packs are prepaid pages that do not expire while the service operates. They are used after your plan's pages.",
@@ -139,7 +139,7 @@ const terms: Record<Locale, LegalDocument> = {
       {
         title: "2. El servicio",
         paragraphs: [
-          "Extracta lee los documentos que subes (PDFs, facturas electrónicas XML y fotos), los clasifica y extrae sus datos con un modelo de IA, y te permite verlos, graficarlos y exportarlos a Excel, CSV o JSON.",
+          "Extracta lee los documentos que subes (PDFs, imágenes y facturas electrónicas XML), los clasifica y extrae sus datos con un modelo de IA, y te permite verlos, graficarlos y exportarlos a Excel, CSV o JSON.",
           "Los resultados se generan de forma automática y pueden contener errores u omisiones. Eres responsable de revisarlos antes de usarlos, en especial montos, fechas e identificadores tributarios. Extracta no es un servicio contable, tributario ni legal, y sus resultados no son asesoría.",
         ],
       },
@@ -165,14 +165,14 @@ const terms: Record<Locale, LegalDocument> = {
         title: "5. Tu contenido",
         paragraphs: [
           "Conservas todos los derechos sobre tus documentos y los datos extraídos de ellos. Solo nos das el permiso necesario para procesarlos y mostrarte los resultados. El software, la marca y el sitio de Extracta siguen siendo nuestros; las herramientas y servicios de terceros mantienen sus propias licencias.",
-          "El archivo subido se borra de nuestros servidores apenas se procesa, y a las fotos se les quitan sus metadatos (incluida la ubicación) antes de leerlas. Los datos extraídos se guardan solo si eliges guardarlos en tu historial, hasta que los borres o cierres tu cuenta. No usamos tus documentos para entrenar modelos de IA. Asegúrate de tener los derechos sobre cada documento que subas.",
+          "El archivo subido se borra de nuestros servidores apenas se procesa, y a las imágenes se les quitan sus metadatos (incluida la ubicación) antes de leerlas. Los datos extraídos se guardan solo si eliges guardarlos en tu historial, hasta que los borres o cierres tu cuenta. No usamos tus documentos para entrenar modelos de IA. Asegúrate de tener los derechos sobre cada documento que subas.",
         ],
       },
       {
         title: "6. Planes, páginas y pagos",
         paragraphs: [],
         bullets: [
-          "El uso se mide en páginas: cada página de cada PDF procesado cuenta una vez, y un archivo XML o una foto cuenta como una página. Si un documento no se puede procesar, sus páginas se devuelven.",
+          "El uso se mide en páginas: cada página de cada PDF procesado cuenta una vez, y una imagen o una factura electrónica XML cuenta como una página. Si un documento no se puede procesar, sus páginas se devuelven.",
           "El plan Free incluye una cantidad limitada de páginas cada 24 horas.",
           "Las suscripciones entregan una cantidad de páginas cada 30 días y se renuevan automáticamente cada mes hasta que las canceles.",
           "Los paquetes de páginas son páginas prepagadas que no vencen mientras el servicio opere. Se usan después de las páginas de tu plan.",
@@ -250,7 +250,7 @@ const privacy: Record<Locale, LegalDocument> = {
         paragraphs: [],
         bullets: [
           "Your account: email, name, a one-way hash of your password (never the password itself) and, if you use Google sign-in, your Google account identifier.",
-          "Your documents: the files you upload (PDFs, XML e-invoices and photos, which lose their metadata, including location, before they are read), deleted right after processing, and the data extracted from them. In process-only mode that data is kept for 1 hour and never written to a database; it is stored only if you choose to save it to your history.",
+          "Your documents: the files you upload (PDFs, images and XML e-invoices; images lose their metadata, including location, before they are read), deleted right after processing, and the data extracted from them. In process-only mode that data is kept for 1 hour and never written to a database; it is stored only if you choose to save it to your history.",
           "Usage and payments: the pages you process and when, your plan, the page packs you buy, and for each payment the status, amount, currency and PayPal's reference numbers. Card details are entered in PayPal's window and never reach our servers.",
           "Technical data: your IP address, used for a short time (up to one hour) in server memory to limit sign-in attempts and prevent abuse, and not stored in our database; and the standard request logs of our servers, kept for security and troubleshooting.",
         ],
@@ -364,7 +364,7 @@ const privacy: Record<Locale, LegalDocument> = {
         paragraphs: [],
         bullets: [
           "Tu cuenta: email, nombre, un hash irreversible de tu contraseña (nunca la contraseña) y, si usas el acceso con Google, el identificador de tu cuenta de Google.",
-          "Tus documentos: los archivos que subes (PDFs, facturas electrónicas XML y fotos, a las que se les quitan los metadatos, incluida la ubicación, antes de leerlas), que se borran apenas se procesan, y los datos extraídos de ellos. En modo solo procesar esos datos se conservan 1 hora y nunca se escriben en una base de datos; solo se guardan si eliges guardarlos en tu historial.",
+          "Tus documentos: los archivos que subes (PDFs, imágenes y facturas electrónicas XML; a las imágenes se les quitan los metadatos, incluida la ubicación, antes de leerlas), que se borran apenas se procesan, y los datos extraídos de ellos. En modo solo procesar esos datos se conservan 1 hora y nunca se escriben en una base de datos; solo se guardan si eliges guardarlos en tu historial.",
           "Uso y pagos: las páginas que procesas y cuándo, tu plan, los paquetes de páginas que compras y, de cada pago, el estado, el monto, la moneda y los números de referencia de PayPal. Los datos de tu tarjeta se ingresan en la ventana de PayPal y nunca llegan a nuestros servidores.",
           "Datos técnicos: tu dirección IP, usada por poco tiempo (hasta una hora) en la memoria del servidor para limitar intentos de acceso y evitar abusos, y que no se guarda en nuestra base de datos; y los registros estándar de solicitudes de nuestros servidores, conservados por seguridad y para resolver problemas.",
         ],

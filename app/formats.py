@@ -6,11 +6,11 @@
   and no DTDs at all, so entity expansion ("billion laughs") and external references (reading
   server files) are impossible; digital signatures and base64 blobs (certificates, embedded PDFs)
   are dropped, since they cost tokens and hold nothing to extract.
-- Photos (JPEG, PNG, WebP, HEIC): decoded under a pixel cap (no decompression bombs), turned
+- Images (JPEG, PNG, WebP, HEIC), e.g. phone photos: decoded under a pixel cap (no decompression bombs), turned
   upright, shrunk to at most 2048 px and re-encoded as JPEG, which also drops every metadata block
   (EXIF, including the GPS position phones store).
 
-The type comes from the file's first bytes, never from its name. XML files and photos count as
+The type comes from the file's first bytes, never from its name. Images and XML files count as
 one page each.
 """
 
@@ -35,7 +35,7 @@ EXTENSIONS: dict[Format, str] = {
     "heic": ".heic",
 }
 IMAGE_FORMATS: frozenset[Format] = frozenset({"jpeg", "png", "webp", "heic"})
-SUPPORTED = "a PDF, an XML e-invoice or a photo (JPG, PNG, WebP, HEIC)"
+SUPPORTED = "a PDF, an image (JPG, PNG, WebP, HEIC) or an XML e-invoice"
 
 MAX_XML_BYTES = 2 * 1024 * 1024  # e-invoices weigh 10-200 KB; anything bigger is not one
 MAX_IMAGE_PIXELS = 60_000_000  # 60 MP covers any phone photo; a bomb claims billions
@@ -51,7 +51,7 @@ _BLOB_NOTE = "[binary data removed]"
 
 
 class UnreadableFileError(ValueError):
-    """An XML file or a photo that cannot be parsed, or that is unsafe to parse."""
+    """An image or an XML file that cannot be parsed, or that is unsafe to parse."""
 
 
 def sniff(head: bytes) -> Format | None:
@@ -142,7 +142,7 @@ def _is_blob(value: str) -> bool:
     return " " not in value and bool(_BASE64.fullmatch(re.sub(r"\s", "", value)))
 
 
-# --------------------------------------------------------------------------- photos
+# --------------------------------------------------------------------------- images
 
 
 def _open_image(path: Path) -> "PILImage":
@@ -163,7 +163,7 @@ def _open_image(path: Path) -> "PILImage":
 
 
 def check_image(path: Path) -> None:
-    """Refuse a photo that cannot be opened or claims too many pixels (called on upload)."""
+    """Refuse an image that cannot be opened or claims too many pixels (called on upload)."""
     _open_image(path).close()
 
 

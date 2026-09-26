@@ -1,6 +1,6 @@
 """The background task that processes one upload (the Celery app lives in app/celery_app.py).
 
-Pipeline: read the file (PDF text, cleaned XML, or the photo or scanned PDF itself for the LLM's
+Pipeline: read the file (PDF text, cleaned XML, or the image or scanned PDF itself for the LLM's
 vision; see app/formats.py) -> LLM -> save to the database only if `save_to_db` -> return the data.
 Celery stores the returned data in the Redis result backend for RESULT_TTL_SECONDS, in both
 modes, so the web app can show and export it. The file is deleted when the task finishes,
@@ -80,7 +80,7 @@ def run_pipeline(
         text, truncated = xml_text(path, max_chars=MAX_TEXT_CHARS)
         document, page_count, source = extractor.extract(text), 1, "xml"
     elif fmt in IMAGE_FORMATS:
-        document, page_count, source = extractor.extract_file(prepare_image(path), "image/jpeg"), 1, "photo"
+        document, page_count, source = extractor.extract_file(prepare_image(path), "image/jpeg"), 1, "image"
     else:
         check_expansion(path)  # defense in depth: the upload already checked it
         try:
@@ -113,7 +113,7 @@ def run_pipeline(
         "saved_to_db": save_to_db,
         "page_count": page_count,
         "truncated": truncated,
-        "source": source,  # text, xml, photo or scan
+        "source": source,  # text, xml, image or scan
         "llm_provider": extractor.provider,
         "llm_model": extractor.model,
         "document": document.model_dump(mode="json"),

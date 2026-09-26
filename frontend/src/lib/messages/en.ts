@@ -41,7 +41,7 @@ export const en = {
   },
   footer: {
     tagline:
-      "Turn PDFs, XML e-invoices and photos into clean, structured data with AI. Invoices, contracts, statements and more, in any language.",
+      "Turn documents (PDFs, images or XML e-invoices) into clean, structured data with AI. Invoices, contracts, statements and more, in any language.",
     product: "Product",
     documentTypes: "Document types",
     accountTitle: "Account",
@@ -52,10 +52,10 @@ export const en = {
     note: "Data is extracted by AI and may contain errors: review it before use.",
   },
   hero: {
-    title: "Turn any PDF into",
+    title: "Turn any document into",
     highlight: "clean, structured data",
     subtitle:
-      "Drop your invoices, receipts, contracts or bank statements. Extracta reads them with AI and hands you tidy tables, live charts and one-click Excel, CSV or JSON exports.",
+      "Drop your invoices, receipts, contracts or bank statements as a PDF, an image or an XML e-invoice. Extracta reads them with AI and hands you tidy tables, live charts and one-click Excel, CSV or JSON exports.",
     cta: "Start free — 10 pages a day",
     secondary: "See plans",
     note: "No credit card required · Pay only for the pages you read",
@@ -67,7 +67,7 @@ export const en = {
   steps: {
     title: "Steps",
     items: [
-      { title: "Upload", text: "PDFs, XML or photos" },
+      { title: "Upload", text: "PDF, image or XML" },
       { title: "AI reads", text: "Classified and extracted" },
       { title: "Export", text: "Excel, CSV or JSON" },
     ],
@@ -79,13 +79,13 @@ export const en = {
     ],
   },
   features: {
-    title: "Everything you need to get data out of PDFs",
+    title: "Everything you need to get data out of your documents",
     subtitle: "Built for freelancers, accountants and teams that are tired of copying numbers by hand.",
     items: [
       { title: "10 document types", text: "Invoices, receipts, orders, quotes, bank statements, contracts, payslips, resumes, reports and more." },
       { title: "Any language", text: "Spanish, English, Portuguese… Dates, amounts and currencies always come back in one clean format." },
       { title: "Live charts", text: "Watch totals by currency and documents by type build up while your batch is processed." },
-      { title: "Batch processing", text: "Drop dozens of files at once. They are queued and processed one by one, reliably." },
+      { title: "Batch processing", text: "Drop dozens of documents at once. They are queued and processed one by one, reliably." },
       { title: "Private by design", text: "Process-only mode never stores your data. Bank accounts keep just the last 4 digits." },
       { title: "Validated output", text: "Every result is checked against a strict schema before it reaches you. No broken data." },
     ],
@@ -93,7 +93,7 @@ export const en = {
   documentTypes: {
     title: "It knows what it is reading",
     subtitle:
-      "Each PDF is classified first, then the fields that matter for that type are extracted: totals and line items for an invoice, parties and renewal terms for a contract, balances for a statement.",
+      "Each document is classified first, then the fields that matter for that type are extracted: totals and line items for an invoice, parties and renewal terms for a contract, balances for a statement.",
     types: {
       invoice: { label: "Invoice", examples: "Invoices, utility bills" },
       receipt: { label: "Receipt", examples: "Receipts, sales tickets" },
@@ -115,8 +115,8 @@ export const en = {
       { title: "Never used to train AI", text: "Extracta never trains AI models with your documents or your data." },
       { title: "Encrypted in transit", text: "Every connection uses HTTPS (TLS 1.2+) with HSTS. Nothing travels in plain text." },
       {
-        title: "Files deleted at once",
-        text: "Your file is erased from our server as soon as it is read, and photos lose their location data first. Process-only results expire in 1 hour.",
+        title: "Documents deleted at once",
+        text: "Your document is erased from our server as soon as it is read, and images lose their location data first. Process-only results expire in 1 hour.",
       },
       { title: "Your data stays yours", text: "Row Level Security in the database: each account only ever reaches its own documents." },
       { title: "Payments by PayPal", text: "We never see or store card numbers. PayPal handles the whole payment." },
@@ -186,8 +186,8 @@ export const en = {
     pagesDay: "{pages} pages every 24 hours",
     pagesMonth: "{pages} pages every month",
     maxPages: "PDFs up to {pages} pages",
-    maxMb: "Up to {mb} MB per file",
-    files: "{files} files per upload",
+    maxMb: "Up to {mb} MB per document",
+    files: "{files} documents per upload",
     exports: "Excel, CSV and JSON exports",
     charts: "Live charts and 10 document types",
     history: "Save documents to your history",
@@ -203,12 +203,12 @@ export const en = {
     title: "Questions, answered",
     items: [
       {
-        q: "Which files work?",
-        a: "PDFs (digital or scanned), XML e-invoices (such as Chile's DTE, Mexico's CFDI or UBL) and photos in JPG, PNG, WebP or HEIC, straight from your phone.",
+        q: "Which documents work?",
+        a: "Three kinds: PDFs (digital or scanned), images (JPG, PNG, WebP or HEIC, straight from your phone's camera) and XML e-invoices (such as Chile's DTE, Mexico's CFDI or UBL).",
       },
       {
         q: "How are pages counted?",
-        a: "Every page of every PDF counts once: a 1-page receipt uses 1 page and a 12-page contract uses 12. An XML file or a photo counts as 1 page. If a document cannot be processed, its pages are given back.",
+        a: "Every page of every PDF counts once: a 1-page receipt uses 1 page and a 12-page contract uses 12. An image or an XML e-invoice counts as 1 page. If a document cannot be processed, its pages are given back.",
       },
       {
         q: "What does the free plan include?",
@@ -216,7 +216,7 @@ export const en = {
       },
       {
         q: "Do you keep my documents?",
-        a: "The file is deleted right after processing. In process-only mode the extracted data lives for 1 hour and is never written to a database. You can choose to save results to your history.",
+        a: "Your document is deleted right after processing. In process-only mode the extracted data lives for 1 hour and is never written to a database. You can choose to save results to your history.",
       },
       {
         q: "How do payments work?",
@@ -230,12 +230,12 @@ export const en = {
   },
   cta: {
     title: "Stop copying numbers by hand",
-    subtitle: "Create your free account and extract your first PDFs in under a minute.",
+    subtitle: "Create your free account and extract your first documents in under a minute.",
     button: "Create free account",
   },
   auth: {
     shellPoints: ["10 document types, any language", "Excel, CSV and JSON exports", "Live charts for every batch", "Free plan: 10 pages every day"],
-    shellTitle1: "Your PDFs,",
+    shellTitle1: "Your documents,",
     shellTitle2: "finally readable",
     shellTitle3: "by your spreadsheets.",
     shellNote: "Data is extracted by AI. Review important figures before using them.",
@@ -250,7 +250,7 @@ export const en = {
     passwordPlaceholder: "At least 10 characters",
     login: {
       title: "Welcome back",
-      subtitle: "Sign in to process your PDFs.",
+      subtitle: "Sign in to process your documents.",
       forgot: "Forgot your password?",
       submit: "Sign in",
       newHere: "New to Extracta?",
@@ -311,7 +311,7 @@ export const en = {
       resend: "Resend email",
       sent: "Sent",
       sentText: "A new link is on its way to {email}. Check your spam folder too.",
-      required: "We sent a link to {email}. Open it to start uploading PDFs and to buy plans.",
+      required: "We sent a link to {email}. Open it to start uploading documents and to buy plans.",
       optional: "We sent a link to {email}. Confirming it helps you recover your account.",
       sendFailed: "The email could not be sent. Try again later.",
     },
@@ -319,29 +319,29 @@ export const en = {
   app: {
     hi: "Hi, {name}",
     title: "Your dashboard",
-    subtitle: "Upload PDFs and get their data in seconds.",
+    subtitle: "Upload documents and get their data in seconds.",
     pendingTitle: "Your account is waiting for approval",
-    pendingText: "The administrator reviews new accounts manually. You will be able to upload PDFs as soon as it is approved.",
+    pendingText: "The administrator reviews new accounts manually. You will be able to upload documents as soon as it is approved.",
     seePlans: "See plans",
     nextSlot: "Your next free pages come back in {time}.",
     upload: "Upload documents",
     hintVerify: "Confirm your email address to start uploading.",
     hintEmpty: "No pages left. Buy a page pack or wait for your allowance to return.",
-    hint: "PDF, XML or photos · up to {files} files · {mb} MB each · {pages} pages per PDF",
+    hint: "PDF, image or XML · up to {files} documents · {mb} MB each · {pages} pages per PDF",
     modeTitle: "What should happen with the results?",
     processOnly: "Process only",
     processOnlyText: "Nothing is stored. Results expire after 1 hour.",
     save: "Save to history",
     saveText: "Keep results in your account to export later.",
     paid: "PAID",
-    tooMany: "Your plan allows {files} files per upload. Remove some or upgrade.",
+    tooMany: "Your plan allows {files} documents per upload. Remove some or upgrade.",
     uploading: "Uploading {percent}%",
-    processMany: "Process {count} files",
-    processOne: "Process file",
+    processMany: "Process {count} documents",
+    processOne: "Process document",
     clear: "Clear",
     tipsTitle: "Tips for best results",
     tips: [
-      "Digital PDFs, e-invoice XML files, scans and phone photos all work. For photos, use good light and a flat page.",
+      "PDFs (digital or scanned), images and XML e-invoices all work. For images from your phone, use good light and a flat page.",
       "One document per file gives the cleanest data.",
       "Every page counts: remove blank or unneeded pages first.",
       "Always review important totals before using them.",
@@ -359,9 +359,9 @@ export const en = {
     saved: "Saved documents",
     downloadSaved: "Download all saved documents",
     savedEmpty: "Choose “Save to history” when uploading to keep documents here.",
-    queued: "{count} file(s) queued",
+    queued: "{count} document(s) queued",
     queuedPages: "{pages} pages. Results appear below as soon as they are ready.",
-    rejected: "{count} file(s) rejected",
+    rejected: "{count} document(s) rejected",
     uploadFailed: "Upload failed",
     exportFailed: "Export failed",
     deleteConfirm: "Delete \"{name}\" from your history?",
@@ -370,12 +370,12 @@ export const en = {
     expired: "The result expired or is no longer available.",
   },
   dropzone: {
-    drag: "Drag PDFs, XML or photos here or ",
+    drag: "Drag your documents (PDF, image or XML) here or ",
     browse: "browse your files",
-    tap: "Tap to choose files or take a photo",
-    unsupported: "Not a PDF, XML or photo",
+    tap: "Tap to choose documents or take a photo",
+    unsupported: "Not a PDF, image or XML",
     tooLarge: "Larger than {mb} MB",
-    selected: "Selected files",
+    selected: "Selected documents",
     remove: "Remove {name}",
   },
   results: {
