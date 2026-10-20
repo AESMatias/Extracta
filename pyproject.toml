@@ -13,7 +13,7 @@ dependencies = [
     "sqlalchemy>=2.0.54,<2.1",
     "psycopg[binary]>=3.3.6,<4",
     # Default LLM provider (Gemini).
-    "google-genai>=2.25.0,<3",
+    "google-genai>=2.31.0,<3",
     "xlsxwriter (>=3.2,<4)",
     "alembic (>=1.20,<2)",
     "defusedxml (>=0.7.1,<0.8)",
