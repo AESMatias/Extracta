@@ -15,7 +15,7 @@ RUN npm run build
 # ---------------------------------------------------------------------------
 # Stage 2: Nginx serves the files and proxies /api. No Node.js at runtime.
 # ---------------------------------------------------------------------------
-FROM nginx:1.30-alpine
+FROM nginx:1.31-alpine
 # apk upgrade: Alpine security patches on every build. openssl: the temporary self-signed
 # certificate used only until certbot gets the real one (see nginx/40-extracta-site.sh).
 RUN apk upgrade --no-cache \
