@@ -12,12 +12,26 @@ import "./globals.css";
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
+// Full URL for the preview image shown by LinkedIn and WhatsApp
+const SITE_URL = process.env.SITE_URL ?? "https://pdf.rapidmov.online";
+const SHARE_TITLE = "Extracta · Turn documents into structured data";
+const SHARE_DESCRIPTION =
+  "Upload invoices, receipts, contracts, bank statements and more, as PDFs, images or XML e-invoices. Extracta reads them with AI and gives you clean data, charts and Excel, CSV or JSON exports.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: { default: "Extracta · Turn documents into structured data", template: "%s · Extracta" },
-  description:
-    "Upload invoices, receipts, contracts, bank statements and more, as PDFs, images or XML e-invoices. Extracta reads them with AI and gives you clean data, charts and Excel, CSV or JSON exports.",
+  description: SHARE_DESCRIPTION,
   applicationName: "Extracta",
   icons: { icon: "/icon.svg" },
+  openGraph: {
+    type: "website",
+    siteName: "Extracta",
+    title: SHARE_TITLE,
+    description: SHARE_DESCRIPTION,
+    images: [{ url: "/og-image.png", width: 1200, height: 627, alt: "Extracta turns PDFs, images and XML e-invoices into structured data" }],
+  },
+  twitter: { card: "summary_large_image", title: SHARE_TITLE, description: SHARE_DESCRIPTION, images: ["/og-image.png"] },
 };
 
 export const viewport: Viewport = {
