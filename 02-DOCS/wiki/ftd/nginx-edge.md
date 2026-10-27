@@ -12,7 +12,7 @@ branch: feat/project-skeleton
 The owner prefers Nginx, the industry-standard web server, over Caddy. Nginx must do everything
 Caddy did: serve the static Next.js site, proxy `/api` to Flask with the same forwarded headers,
 send the same security headers, and serve HTTPS in production with certificates that renew by
-themselves. Constitution amended to v4.0.0 (principles 33-35).
+themselves.
 
 ## Scope
 

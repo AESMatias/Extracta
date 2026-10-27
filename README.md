@@ -478,7 +478,7 @@ rest by hand or with `ruff check --fix`).
 ├── docs/DEPLOY.md               Production deployment guide
 ├── deploy/deploy.sh             Pull, build, restart, health-check and roll back (run by CI on main)
 ├── scripts/docker-cleanup.sh    Free disk space after builds
-└── 02-DOCS/wiki/                Constitution, decisions and roadmaps
+└── 02-DOCS/wiki/                Decision log and roadmaps
 ```
 
 ---
