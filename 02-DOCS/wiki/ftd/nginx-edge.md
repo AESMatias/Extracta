@@ -46,7 +46,7 @@ themselves. Constitution amended to v4.0.0 (principles 33-35).
 | 3 | Full flow through Nginx | Accounts end-to-end script: registration, Free-plan limits, 2 PDFs processed in 5.6 s, ownership isolation, admin, upgrade, save to DB, cross-site POST 403 | ✅ |
 | 4 | Certificate hand-over | Simulated certbot writing a certificate into the shared volume: Nginx installed it and reloaded by itself within 60 s | ✅ |
 | 5 | Images scanned | Trivy, fixable HIGH/CRITICAL: frontend 0; official certbot 8 → 0 after `apk upgrade`, patched `msgpack`/`setuptools` and removing pip | ✅ |
-| 6 | Docs | `.env.sample`, `docs/DEPLOY.md` (HTTPS step by step, troubleshooting), README, constitution v4.0.0, decisions log | ✅ |
+| 6 | Docs | `.env.sample`, `docs/DEPLOY.md` (HTTPS step by step, troubleshooting), README, decision log | ✅ |
 | 7 | Real certificate | Needs the owner's domain and server | ⏳ |
 
 ## Evidence

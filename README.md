@@ -20,7 +20,7 @@ subscriptions or one-time passes, and an admin panel to approve accounts and ass
 - **Deploy it**: [docs/DEPLOY.md](docs/DEPLOY.md) — from an empty VPS to HTTPS, step by step.
 - **Progress and decisions**: [roadmap](02-DOCS/wiki/ftd/idp-mvp.md),
   [accounts and billing](02-DOCS/wiki/ftd/accounts-billing-nextjs.md),
-  [decision log](02-DOCS/wiki/sdd/decisions.md).
+  [decision log](02-DOCS/wiki/decisions.md).
 
 ---
 
@@ -525,8 +525,4 @@ rest by hand or with `ruff check --fix`).
 - Work happens on branches and reaches `main` through pull requests after CI passes.
 - Commits follow [Conventional Commits](https://www.conventionalcommits.org) with a descriptive
   subject that starts with an imperative verb, no emoji.
-- Significant decisions are logged in [`02-DOCS/wiki/sdd/decisions.md`](02-DOCS/wiki/sdd/decisions.md).
-
-The repository also carries an [rsc-harness](https://ericrisco.github.io/rsc-harness/)
-configuration for AI assistants (Claude Code and Gemini CLI); regenerate its local files after
-cloning with `npx @ericrisco/rsc@latest sync`.
+- Significant decisions are logged in [`02-DOCS/wiki/decisions.md`](02-DOCS/wiki/decisions.md).

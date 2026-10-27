@@ -10,7 +10,7 @@ __pycache__/
 .coverage
 tmp_uploads/
 
-# Harness and docs are not needed at runtime.
+# Local tooling, docs and tests are not needed at runtime.
 .rsc/
 .rsc.json
 .claude/

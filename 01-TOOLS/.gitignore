@@ -1,4 +1,4 @@
-# Escrito por rsc: la capa de herramientas guarda credenciales.
+# Tool credentials stay local.
 */.env
 */.env.*
 !*/.env.example

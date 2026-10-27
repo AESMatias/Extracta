@@ -34,7 +34,7 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
 
 | # | Step | Files | Proof it is done | Status |
 |---|------|-------|------------------|--------|
-| 0 | Harness + local tooling | `.rsc.json`, Colima/Docker | `RSC_ONBOARDING_READY`; `docker compose version` | ✅ |
+| 0 | Local tooling | Colima/Docker | `docker compose version` | ✅ |
 | 1 | Base configuration | `pyproject.toml`, `docker-compose.yml`, `.env.sample` | `docker compose config` OK | ✅ Add Poetry config, Docker Compose stack and env sample |
 | 2 | Docker image | `docker/Dockerfile`, `.dockerignore`, `poetry.lock` | Dependency stage builds and imports; Trivy scan reviewed | ✅ Add multi-stage Dockerfile, .dockerignore and poetry.lock |
 | 3 | Settings | `app/config.py` + test | Missing/invalid `.env` values fail at startup with a clear error | ✅ Add validated settings loaded from .env |
@@ -53,12 +53,12 @@ Each step = one file (or a tiny group) + its tests, reviewed and committed befor
 
 ## Evidence
 
-- Step 0: `RSC_ONBOARDING_READY 63371e3d…`; Docker 29.8.1 / Compose 5.5.1 on Colima (2 CPU, 2 GB).
+- Step 0: Docker 29.8.1 / Compose 5.5.1 on Colima (2 CPU, 2 GB).
 - Step 1: `docker compose config` → OK; limits web 384M, worker 768M, redis 128M (sum 1280M).
 - Step 2: builder stage imports Flask 3.1.3, Celery 5.6.3, Pydantic 2.13.5, google-genai;
   `POETRY_EXTRAS=openai` adds openai 3.19.2. Trivy on `poetry.lock`: 0 vulnerabilities.
   Trivy on `python:3.12-slim` (Debian 13.7): HIGH findings only in OS packages with no fix
-  released upstream — see decision 2026-09-24 in `02-DOCS/wiki/sdd/decisions.md`.
+  released upstream — see decision 2026-09-24 in `02-DOCS/wiki/decisions.md`.
 
 - Step 3: TDD red (`ModuleNotFoundError: app`) → green: 11 tests pass, `app/config.py` 100%
   coverage; ruff format/check clean; mypy clean. Added a `dev` Docker stage (pytest, ruff,
