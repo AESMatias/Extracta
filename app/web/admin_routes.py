@@ -22,7 +22,7 @@ from app.models import DeletionRequest, Payment, Subscription, UsageEvent, User
 from app.plans import PLANS
 from app.schemas import summarize_validation_error
 from app.web.auth_routes import erase_account
-from app.web.security import ApiError, client_ip, rate_limit, settings
+from app.web.security import ApiError, assess_login_risk, client_ip, mark_known_device, settings
 from app.web.visits import VisitCounter
 
 admin = Blueprint("admin", __name__, url_prefix="/api/admin")
@@ -58,12 +58,26 @@ def admin_login() -> Body:
     config = settings()
     if config.admin_password is None:
         raise ApiError(404, "Administration is disabled: set ADMIN_PASSWORD.")
-    rate_limit(f"admin-login:{client_ip()}", limit=5, window_seconds=900)  # 5 attempts per 15 minutes
     payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        payload = {}
+    assess_login_risk(
+        ip_key=f"admin-login:{client_ip()}",
+        ip_limit=5,
+        target_key="admin-login-global",
+        target_limit=15,
+        window_seconds=900,
+        pow_challenge=str(payload.get("pow_challenge") or "") or None,
+        pow_nonce=str(payload.get("pow_nonce") or "") or None,
+    )
     password = str(payload.get("password", ""))
-    if not hmac.compare_digest(password.encode(), config.admin_password.get_secret_value().encode()):
+    password_bytes = password.encode("utf-8")
+    if len(password_bytes) > accounts.MAX_PASSWORD_BYTES or not hmac.compare_digest(
+        password_bytes, config.admin_password.get_secret_value().encode("utf-8")
+    ):
         raise ApiError(401, "Wrong administrator password.")
     session[_ADMIN_KEY] = (utcnow() + ADMIN_SESSION).timestamp()
+    mark_known_device()
     return {"authenticated": True, "expires_in_seconds": int(ADMIN_SESSION.total_seconds())}, 200
 
 

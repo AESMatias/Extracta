@@ -264,6 +264,52 @@ async function request<T>(path: string, { method = "GET", json }: RequestOptions
   return (await response.json()) as T;
 }
 
+function hasLeadingZeroBits(bytes: Uint8Array, bits: number): boolean {
+  const fullBytes = Math.floor(bits / 8);
+  const remBits = bits % 8;
+  for (let i = 0; i < fullBytes; i++) {
+    if (bytes[i] !== 0) return false;
+  }
+  if (remBits > 0) {
+    const mask = (0xff << (8 - remBits)) & 0xff;
+    if (((bytes[fullBytes] ?? 0xff) & mask) !== 0) return false;
+  }
+  return true;
+}
+
+async function solvePowChallenge(challenge: string): Promise<string> {
+  const parts = challenge.split(".");
+  const bits = Number.parseInt(parts[2] ?? "15", 10) || 15;
+  const encoder = new TextEncoder();
+  for (let n = 0; n < 2_000_000; n++) {
+    const nonce = n.toString(36);
+    const digest = await crypto.subtle.digest("SHA-256", encoder.encode(`${challenge}:${nonce}`));
+    if (hasLeadingZeroBits(new Uint8Array(digest), bits)) return nonce;
+  }
+  return "0";
+}
+
+async function requestWithPow<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  try {
+    return await request<T>(path, { method: "POST", json: body });
+  } catch (err) {
+    if (
+      err instanceof ApiError &&
+      err.data.challenge_required === true &&
+      typeof err.data.pow_challenge === "string" &&
+      typeof crypto !== "undefined" &&
+      crypto.subtle
+    ) {
+      const nonce = await solvePowChallenge(err.data.pow_challenge);
+      return await request<T>(path, {
+        method: "POST",
+        json: { ...body, pow_challenge: err.data.pow_challenge, pow_nonce: nonce },
+      });
+    }
+    throw err;
+  }
+}
+
 function uploadWithProgress(files: File[], saveToDb: boolean, onProgress: (fraction: number) => void): Promise<UploadResponse> {
   // XMLHttpRequest instead of fetch: it reports upload progress for the progress bar.
   return new Promise((resolve, reject) => {
@@ -317,7 +363,7 @@ export const api = {
   providers: () => request<{ google: boolean; manual_approval: boolean; email_verification: boolean }>("/api/auth/providers"),
   register: (body: { email: string; password: string; name: string }) =>
     request<{ user: User }>("/api/auth/register", { method: "POST", json: body }),
-  login: (body: { email: string; password: string }) => request<{ user: User }>("/api/auth/login", { method: "POST", json: body }),
+  login: (body: { email: string; password: string }) => requestWithPow<{ user: User }>("/api/auth/login", body),
   logout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
   verifyEmail: (token: string) => request<{ verified: boolean }>("/api/auth/email/verify", { method: "POST", json: { token } }),
   resendVerification: () => request<{ sent: boolean; already_verified?: boolean }>("/api/auth/email/resend", { method: "POST" }),
@@ -353,7 +399,7 @@ export const api = {
 
   admin: {
     session: () => request<{ enabled: boolean; authenticated: boolean }>("/api/admin/session"),
-    login: (password: string) => request<{ authenticated: boolean }>("/api/admin/login", { method: "POST", json: { password } }),
+    login: (password: string) => requestWithPow<{ authenticated: boolean }>("/api/admin/login", { password }),
     logout: () => request<{ authenticated: boolean }>("/api/admin/logout", { method: "POST" }),
     users: (params: { status?: string; q?: string }) => {
       const query = new URLSearchParams(Object.entries(params).filter(([, v]) => v) as [string, string][]);

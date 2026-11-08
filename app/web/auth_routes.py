@@ -13,7 +13,6 @@ from flask import Blueprint, current_app, redirect, request, session
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from werkzeug.security import check_password_hash
 from werkzeug.wrappers import Response
 
 from app import accounts, billing, emails, tokens
@@ -22,7 +21,18 @@ from app.mail import Mailer
 from app.models import DeletionRequest, Subscription, User
 from app.web.google import GoogleAuthError, GoogleOAuth, new_code_verifier, new_state
 from app.web.paypal import PayPalClient, PayPalError
-from app.web.security import ApiError, client_ip, current_user, rate_limit, require_user, settings, sign_in
+from app.web.security import (
+    ApiError,
+    assess_login_risk,
+    client_ip,
+    current_user,
+    is_known_device,
+    mark_known_device,
+    rate_limit,
+    require_user,
+    settings,
+    sign_in,
+)
 
 auth = Blueprint("auth", __name__, url_prefix="/api/auth")
 Body = tuple[dict[str, Any], int]
@@ -97,8 +107,15 @@ def register() -> Body:
 def login() -> Body:
     data = _json()
     email = str(data.get("email", "")).strip().lower()
-    rate_limit(f"login-ip:{client_ip()}", limit=30, window_seconds=900)
-    rate_limit(f"login-email:{email}", limit=10, window_seconds=900)  # slows password guessing per account
+    assess_login_risk(
+        ip_key=f"login-ip:{client_ip()}",
+        ip_limit=30,
+        target_key=f"login-email:{email}",
+        target_limit=10,
+        window_seconds=900,
+        pow_challenge=str(data.get("pow_challenge") or "") or None,
+        pow_nonce=str(data.get("pow_nonce") or "") or None,
+    )
     now = utcnow()
     try:
         with session_scope() as db:
@@ -112,7 +129,10 @@ def login() -> Body:
 
 @auth.post("/logout")
 def logout() -> Body:
+    known = is_known_device()
     session.clear()
+    if known:
+        mark_known_device()
     return {"ok": True}, 200
 
 
@@ -323,7 +343,7 @@ def delete_my_account() -> Body:
         user = require_user(db)
         rate_limit(f"account-delete:{user.id}", limit=5, window_seconds=900)
         if user.password_hash is not None:
-            if not check_password_hash(user.password_hash, str(data.get("password") or "")):
+            if not accounts.verify_password_hash(user.password_hash, str(data.get("password") or "")):
                 raise ApiError(401, "Your current password is not correct.")
         elif str(data.get("email") or "").strip().lower() != user.email:
             raise ApiError(400, "Type the email of your account to confirm.")

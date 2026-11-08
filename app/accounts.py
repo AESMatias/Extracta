@@ -9,6 +9,7 @@ Framework-free: routes call these functions with an open SQLAlchemy session.
 """
 
 import re
+import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -25,6 +26,10 @@ from app.plans import PREPAID_PRIVILEGES, Plan, effective_plan
 
 PASSWORD_MIN_LENGTH = passwords.MIN_LENGTH
 PASSWORD_MAX_LENGTH = passwords.MAX_LENGTH
+MAX_PASSWORD_BYTES = 256
+# Cap concurrent PBKDF2-SHA256 (600k iterations) calls per worker so a login burst never starves
+# all 4 Gunicorn threads on a worker process.
+_HASH_SEMAPHORE = threading.BoundedSemaphore(3)
 QUOTA_WINDOW = timedelta(hours=24)  # the admin's "last 24 hours" figures
 # PBKDF2-SHA256 with 600k iterations (OWASP 2023). scrypt would need ~32 MB of RAM per login.
 HASH_METHOD = "pbkdf2:sha256:600000"
@@ -49,6 +54,23 @@ class InvalidCredentialsError(AccountError):
 
 class AccountBlockedError(AccountError):
     status_code = 403
+
+
+class ServerBusyError(AccountError):
+    status_code = 503
+
+
+def verify_password_hash(stored_hash: str, password: str) -> bool:
+    """Layer 3: bound input size (<= 256 UTF-8 bytes) and cap concurrent PBKDF2-SHA256 threads."""
+    raw = password or ""
+    if len(raw.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        return False
+    if not _HASH_SEMAPHORE.acquire(timeout=1.5):
+        raise ServerBusyError("Server is busy verifying credentials. Please retry in a moment.")
+    try:
+        return check_password_hash(stored_hash, raw)
+    finally:
+        _HASH_SEMAPHORE.release()
 
 
 @dataclass(frozen=True)
@@ -122,7 +144,7 @@ def authenticate(db: Session, *, email: str, password: str) -> User:
         email = ""
     user = db.scalar(select(User).where(User.email == email)) if email else None
     stored_hash = user.password_hash if user is not None and user.password_hash else _DUMMY_HASH
-    password_ok = check_password_hash(stored_hash, password or "")
+    password_ok = verify_password_hash(stored_hash, password or "")
     if user is None or user.password_hash is None or not password_ok:
         raise InvalidCredentialsError("Incorrect email or password.")
     ensure_can_sign_in(user)
@@ -137,7 +159,7 @@ def set_password(user: User, password: str) -> None:
 
 def change_password(user: User, *, current_password: str | None, new_password: str) -> None:
     """Accounts with a password must confirm it; Google-only accounts can add one."""
-    if user.password_hash is not None and not check_password_hash(user.password_hash, current_password or ""):
+    if user.password_hash is not None and not verify_password_hash(user.password_hash, current_password or ""):
         raise InvalidCredentialsError("Your current password is not correct.")
     set_password(user, new_password)
 

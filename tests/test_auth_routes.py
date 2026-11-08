@@ -82,6 +82,76 @@ def test_login_is_rate_limited_per_account(harness: Harness) -> None:
     blocked = client.post("/api/auth/login", json={"email": "ana@example.com", "password": USER_PASSWORD})
 
     assert blocked.status_code == 429  # even the right password waits once the account is under attack
+    assert blocked.get_json()["challenge_required"] is True
+
+
+def test_three_layer_login_defense_bot_drop_known_device_and_pow(harness: Harness) -> None:
+    import hashlib
+
+    from app.web.security import _has_leading_zero_bits, create_pow_challenge
+
+    owner = harness.signed_up()
+    owner.post("/api/auth/logout")  # logs out, but keeps the known-device marker in the cookie
+
+    bot = harness.client()
+    bot_res = bot.post(
+        "/api/auth/login",
+        json={"email": "ana@example.com", "password": USER_PASSWORD},
+        headers={"User-Agent": "python-requests/2.32.0"},
+    )
+    assert bot_res.status_code == 429
+
+    # Overlong (> 256 bytes) passwords are rejected in Layer 3 without running 600k PBKDF2 rounds.
+    overlong = harness.client().post(
+        "/api/auth/login",
+        json={"email": "ana@example.com", "password": "X" * 400},
+    )
+    assert overlong.status_code == 401
+
+    # Attacker floods ana@example.com with 10 failed attempts from a different IP.
+    attacker = harness.client()
+    for _ in range(10):
+        attacker.post(
+            "/api/auth/login",
+            json={"email": "ana@example.com", "password": "wrong password"},
+            environ_base={"REMOTE_ADDR": "198.51.100.77"},
+        )
+
+    # Known device (owner) is NOT globally locked out by the attacker's flood.
+    owner_login = owner.post("/api/auth/login", json={"email": "ana@example.com", "password": USER_PASSWORD})
+    assert owner_login.status_code == 200
+
+    # New unknown browser receives a PoW challenge and signs in after solving it.
+    new_browser = harness.client()
+    challenged = new_browser.post(
+        "/api/auth/login",
+        json={"email": "ana@example.com", "password": USER_PASSWORD},
+        environ_base={"REMOTE_ADDR": "203.0.113.55"},
+        headers={"User-Agent": "Mozilla/5.0 TestBrowser"},
+    )
+    assert challenged.status_code == 429
+    assert challenged.get_json()["challenge_required"] is True
+
+    challenge = create_pow_challenge("k" * 32, "203.0.113.55", "Mozilla/5.0 TestBrowser", bits=10)
+    nonce = "0"
+    for idx in range(200_000):
+        candidate = format(idx, "x")
+        digest = hashlib.sha256(f"{challenge}:{candidate}".encode()).digest()
+        if _has_leading_zero_bits(digest, 10):
+            nonce = candidate
+            break
+    solved = new_browser.post(
+        "/api/auth/login",
+        json={
+            "email": "ana@example.com",
+            "password": USER_PASSWORD,
+            "pow_challenge": challenge,
+            "pow_nonce": nonce,
+        },
+        environ_base={"REMOTE_ADDR": "203.0.113.55"},
+        headers={"User-Agent": "Mozilla/5.0 TestBrowser"},
+    )
+    assert solved.status_code == 200
 
 
 def test_suspending_an_account_ends_its_sessions(harness: Harness) -> None:

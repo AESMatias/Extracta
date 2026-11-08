@@ -486,9 +486,10 @@ rest by hand or with `ruff check --fix`).
 ## Security
 
 - **Secrets** only in `.env` (git- and Docker-ignored); `SecretStr` keeps them out of logs.
-- **Passwords**: PBKDF2-SHA256 with 600,000 iterations; unknown emails take as long as wrong
-  passwords; login, registration, password reset and the admin password are rate limited.
-  Changing a password signs out every other session.
+- **Passwords & 3-Layer Login Defense**:
+  - **Layer 1 — Sub-Millisecond Pre-Hash Risk Scoring (`~0.1 ms`)**: [`app/web/security.py`](app/web/security.py) evaluates every `/api/auth/login` and `/api/admin/login` request before touching PostgreSQL or `PBKDF2-SHA256`, scoring bot `User-Agent` signatures, missing browser fetch metadata (`Sec-Fetch-*` / `Sec-CH-UA` / `Accept-Language`), per-IP and `/24` subnet failure velocity, and a signed known-device marker (`kd`) preserved in the `HttpOnly` session cookie so an attacker's credential-stuffing wave never locks out a real user's known browser.
+  - **Layer 2 — Proportional Response & Stateless SHA-256 Proof-of-Work**: Automated scrapers and flooded IPs are dropped immediately (`429`); suspicious traffic or unknown browsers signing into an account under attack receive a stateless HMAC-signed SHA-256 Proof-of-Work challenge (`15` leading zero bits, solved automatically via WebCrypto in [`frontend/src/lib/api.ts`](frontend/src/lib/api.ts)) before any database query or password hash runs.
+  - **Layer 3 — Bounded PBKDF2-SHA256 Execution**: Passwords use PBKDF2-SHA256 with 600,000 iterations; unknown emails take as long as wrong passwords; inputs exceeding `256` UTF-8 bytes are rejected in `< 0.01 ms`, and a per-worker `BoundedSemaphore(3)` in [`app/accounts.py`](app/accounts.py) prevents concurrent login bursts from starving all Gunicorn worker threads. Changing a password signs out every other session.
 - **Email links**: signed and expiring (verification 3 days, reset 1 hour and single-use); the
   token travels after `#`, so it never reaches a server log. "Forgot password" answers the same
   whether the account exists or not, and emails leave on a background thread so timing does not
